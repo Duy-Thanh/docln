@@ -1,3 +1,3 @@
 # docln
 
-A new Flutter project.
+Light Novel Reader written in Flutter (for Android and iOS)
