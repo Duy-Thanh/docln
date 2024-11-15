@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../modules/announcement.dart';
 import '../services/crawler_service.dart';
 import '../screens/custom_toast.dart';
+import '../screens/webview_screen.dart';
 
 class LibraryScreen extends StatefulWidget {
   @override
@@ -68,7 +69,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           children: const [
             CircularProgressIndicator(),
             SizedBox(height: 20),
-            Text('Loading...', style: TextStyle(fontSize: 16)),
+            Text('Fetching data, please be patient...', style: TextStyle(fontSize: 16)),
           ],
         ),
       ),
@@ -138,7 +139,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
       children: [
         const SizedBox(height: 16),
         const Text(
-          'Thông báo',
+          'Library',
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
@@ -173,7 +174,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
       padding: const EdgeInsets.all(4),
       child: InkWell(
         onTap: () {
-          // Handle announcement tap
+          // Navigate to the WebViewScreen with the announcement URL
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => WebViewScreen(url: announcement.url), // Assuming announcement has a url property
+            ),
+          );
         },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,

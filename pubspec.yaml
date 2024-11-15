@@ -1,5 +1,5 @@
 name: docln
-description: "A new Flutter project."
+description: "Light Novel Reader written in Flutter (for Android and iOS)"
 publish_to: 'none'
 version: 0.1.0
 
@@ -13,6 +13,7 @@ dependencies:
   html: ^0.15.5
   shared_preferences: ^2.3.3
   fluttertoast: ^8.2.2
+  webview_flutter: ^4.0.0
 
 dev_dependencies:
   flutter_test:
