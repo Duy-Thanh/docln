@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../screens/LibraryScreen.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -9,7 +10,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
   final List<Widget> _screens = [
-    Center(child: Text('Library')),
+    LibraryScreen(),
     Center(child: Text('Search')),
     Center(child: Text('Bookmarks')),
     Center(child: Text('History')),

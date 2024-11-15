@@ -33,7 +33,7 @@ class CrawlerService {
       }
     }
   }
-
+  
   Future<List<Announcement>> getAnnouncements() async {
     try {
       final workingServer = await _getWorkingServer();
@@ -51,11 +51,11 @@ class CrawlerService {
 
       if (response.statusCode == 200) {
         final document = parser.parse(response.body);
-        final annoucementsDiv = document.getElementById('announcements');
+        final announcementsDiv = document.getElementById('announcements');
 
-        if (annoucementsDiv != null) {
-          final announcements = annoucementsDiv
-            .getElementsByClassName('announcement-item')
+        if (announcementsDiv != null) {
+          final announcements = announcementsDiv
+            .getElementsByClassName('annoucement-item')
             .map((element) {
               final anchorTag = element.getElementsByTagName('a').first;
               return Announcement(
