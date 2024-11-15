@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../modules/announcement.dart';
 import '../services/crawler_service.dart';
+import '../screens/custom_toast.dart';
 
 class LibraryScreen extends StatefulWidget {
   @override
@@ -26,7 +27,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         error = null;
       });
 
-      final fetchedAnnouncements = await _crawlerService.getAnnouncements();
+      final fetchedAnnouncements = await _crawlerService.getAnnouncements(context);
       
       setState(() {
         announcements = fetchedAnnouncements;
@@ -34,9 +35,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
       });
     } catch (e) {
       setState(() {
-        error = 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.';
+        error = e.toString();
         isLoading = false;
       });
+      CustomToast.show(context, error!);
     }
   }
 
@@ -46,97 +48,165 @@ class _LibraryScreenState extends State<LibraryScreen> {
       body: RefreshIndicator(
         onRefresh: _loadAnnouncements,
         child: ListView(
-          padding: EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16),
           children: [
-            isLoading 
-              ? Center(child: CircularProgressIndicator())
-              : error != null
-                ? Column(
-                    children: [
-                      Text(
-                        error!,
-                        style: TextStyle(color: Colors.red, fontSize: 16),
-                      ),
-                      SizedBox(height: 8),
-                      ElevatedButton(
-                        onPressed: _loadAnnouncements,
-                        child: Text('Thử lại'),
-                      ),
-                    ],
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Thông báo',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: 8), // Reduced space
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200], // Light background color
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        padding: EdgeInsets.all(4), // Reduced padding
-                        child: Column(
-                          children: [
-                            ...announcements.map((announcement) => 
-                              Container(
-                                margin: EdgeInsets.symmetric(vertical: 2), // Reduced margin
-                                padding: EdgeInsets.all(4), // Reduced padding
-                                child: InkWell(
-                                  onTap: () {
-                                    // Handle announcement tap
-                                  },
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.center, // Center align text
-                                    children: [
-                                      Text(
-                                        announcement.title,
-                                        style: TextStyle(
-                                          fontSize: 14, // Smaller font size
-                                          color: _getColorFromString(announcement.color),
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                        textAlign: TextAlign.center, // Center text
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ).toList(),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+            if (isLoading) _buildLoadingIndicator(),
+            if (error != null) _buildErrorCard(),
+            if (!isLoading && error == null) _buildAnnouncementsList(),
           ],
         ),
       ),
     );
   }
 
-  // Helper function to convert color string to Color
+  Widget _buildLoadingIndicator() {
+    return SizedBox(
+      height: MediaQuery.of(context).size.height - 200, // Adjust height to center
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            CircularProgressIndicator(),
+            SizedBox(height: 20),
+            Text('Loading...', style: TextStyle(fontSize: 16)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorCard() {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 20),
+      elevation: 10,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.redAccent, Colors.red],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error, color: Colors.white, size: 30),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    error!,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 15),
+            ElevatedButton(
+              onPressed: _loadAnnouncements,
+              child: const Text('Try again'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.blue,
+                elevation: 6,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAnnouncementsList() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        const SizedBox(height: 16),
+        const Text(
+          'Thông báo',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Card(
+          elevation: 4,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              children: [
+                ...announcements.map((announcement) => _buildAnnouncementItem(announcement)).toList(),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAnnouncementItem(Announcement announcement) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.all(4),
+      child: InkWell(
+        onTap: () {
+          // Handle announcement tap
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              announcement.title,
+              style: TextStyle(
+                fontSize: 14,
+                color: _getColorFromString(announcement.color),
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Color _getColorFromString(String? colorString) {
     if (colorString == null || colorString.isEmpty) {
       return Colors.black; // Default color
     }
 
-    // Check for named colors
     if (colorString.trim() == 'red') {
       return Colors.red;
     } else if (colorString.trim() == 'blue') {
       return Colors.blue;
     }
 
-    // Check if the color string starts with '#' and has the correct length
     if (colorString.startsWith('#') && (colorString.length == 7 || colorString.length == 9)) {
       return Color(int.parse(colorString.replaceAll('#', '0xFF')));
     } else {
-      // If it's not a valid hex color, return a default color
       return Colors.black; // Default color
     }
   }

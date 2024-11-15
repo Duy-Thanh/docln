@@ -1,6 +1,8 @@
+import 'package:flutter/material.dart'; // Import for BuildContext
 import 'package:html/parser.dart' as parser;
 import 'package:http/http.dart' as http;
 import '../modules/announcement.dart';
+import '../screens/custom_toast.dart';
 
 class CrawlerService {
   static const List<String> servers = [
@@ -34,12 +36,12 @@ class CrawlerService {
     }
   }
   
-  Future<List<Announcement>> getAnnouncements() async {
+  Future<List<Announcement>> getAnnouncements(BuildContext context) async {
     try {
       final workingServer = await _getWorkingServer();
 
       if (workingServer == null) {
-        throw Exception('None of the servers are working.');
+        throw Exception('None of the servers are working.'); // Custom message
       }
 
       final response = await http.get(
@@ -73,7 +75,8 @@ class CrawlerService {
       return [];
     } catch (e) {
       print('Error fetching announcements: $e');
-      return [];
+      CustomToast.show(context, 'Error fetching announcements: $e'); // Use custom toast
+      throw Exception('Error fetching announcements.'); // Throw exception to be caught in LibraryScreen
     }
   }
 }
