@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../services/theme_services.dart';
+import '../services/language_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:ui';
 import '../services/settings_services.dart';
@@ -64,13 +67,24 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   late bool _initialDataSaver = false;
   late String? _initialServer = null;
 
-    @override
+  @override
   void initState() {
     super.initState();
     _animationController = AnimationController(
       duration: const Duration(seconds: 20),
       vsync: this,
     )..repeat();
+
+    // Initialize settings from providers
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final themeService = Provider.of<ThemeServices>(context, listen: false);
+      final languageService = Provider.of<LanguageService>(context, listen: false);
+      setState(() {
+        isDarkMode = themeService.themeMode == ThemeMode.dark;
+        selectedLanguage = languageService.currentLocale.languageCode;
+      });
+    });
+
     _loadSettings();
   }
 
@@ -126,6 +140,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
 
   Future<void> _saveSettings() async {
     final prefs = await SharedPreferences.getInstance();
+    final themeService = Provider.of<ThemeServices>(context, listen: false);
+    final languageService = Provider.of<LanguageService>(context, listen: false);
+
     await prefs.setBool('darkMode', isDarkMode);
     await prefs.setDouble('textSize', textSize);
     await prefs.setBool('notifications', isNotificationsEnabled);
@@ -143,9 +160,16 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     });
     
     CustomToast.show(context, 'Settings saved successfully');
+
+    // Update theme and language
+    themeService.setThemeMode(isDarkMode);
+    
+    if (selectedLanguage != null) {
+      await languageService.setLanguage(selectedLanguage!);
+    }
   }
 
-    void _showTextSizeDialog() {
+  void _showTextSizeDialog() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(

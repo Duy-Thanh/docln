@@ -19,5 +19,33 @@ class ThemeServices extends ChangeNotifier {
     notifyListeners();
   }
 
-  
+  Future<void> setThemeMode(bool isDark) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('darkMode', isDark);
+    _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+    notifyListeners();
+  }
+
+  Future<void> setTextScaleFactor(double factor) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('textSize', factor);
+    _textScaleFactor = factor;
+    notifyListeners();
+  }
+
+  ThemeData getLightTheme() {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      primaryColor: Colors.blue,
+    );
+  }
+
+  ThemeData getDarkTheme() {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      primaryColor: Colors.blue,
+    );
+  }
 }

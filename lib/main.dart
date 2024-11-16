@@ -1,14 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'screens/SplashScreen.dart';
+import 'package:provider/provider.dart';
 
-void main() {
+// Services
+import 'services/notification_service.dart';
+import 'services/theme_services.dart';
+import 'services/language_service.dart';
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  final themeService = ThemeServices();
+  final languageService = LanguageService();
+  final notificationService = NotificationService();
+
+  await Future.wait([
+    themeService.init(),
+    languageService.init(),
+    notificationService.init(),
+  ]);
+
   SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.manual,
     overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom]
   );
-  runApp(const MainApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: themeService),
+        ChangeNotifierProvider.value(value: languageService),
+      ],
+      child: const MainApp(),
+    ),
+  );
 }
 
 class MainApp extends StatelessWidget {
@@ -16,9 +41,17 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: SplashScreen(),
+    return Consumer2<ThemeServices, LanguageService>(
+      builder: (context, themeService, languageService, child) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          themeMode: themeService.themeMode,
+          theme: themeService.getLightTheme(),
+          darkTheme: themeService.getDarkTheme(),
+          locale: languageService.currentLocale,
+          home: SplashScreen(),
+        );
+      },
     );
   }
 }
