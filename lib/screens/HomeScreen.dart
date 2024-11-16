@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../screens/LibraryScreen.dart';
 import '../screens/webview_screen.dart';
-
+import '../screens/SettingsScreen.dart';
 class HomeScreen extends StatefulWidget {
   @override
   _HomeScreenState createState() => _HomeScreenState();
@@ -15,7 +15,7 @@ class _HomeScreenState extends State<HomeScreen> {
     Center(child: Text('Search')),
     Center(child: Text('Bookmarks')),
     Center(child: Text('History')),
-    Center(child: Text('Settings')),
+    SettingsScreen(),
   ];
 
   @override
