@@ -1,14 +1,50 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:ui';
 import '../services/settings_services.dart';
 import '../screens/custom_toast.dart';
+
+// GridPainter class at the top level
+class GridPainter extends CustomPainter {
+  final Color color;
+  
+  GridPainter({required this.color});
+  
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1;
+      
+    final spacing = 30.0;
+    
+    for (double i = 0; i < size.width; i += spacing) {
+      canvas.drawLine(
+        Offset(i, 0),
+        Offset(i, size.height),
+        paint,
+      );
+    }
+    
+    for (double i = 0; i < size.height; i += spacing) {
+      canvas.drawLine(
+        Offset(0, i),
+        Offset(size.width, i),
+        paint,
+      );
+    }
+  }
+  
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
 
 class SettingsScreen extends StatefulWidget {
   @override
   _SettingsScreenState createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProviderStateMixin {
   final SettingsService _settingsService = SettingsService();
   bool isDarkMode = false;
   String? currentServer;
@@ -18,19 +54,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool isDataSaverEnabled = false;
 
   bool _hasUnsavedChanges = false;
+  late AnimationController _animationController;
   
-  // Add these variables to track initial values
-  late bool _initialDarkMode;
-  late double _initialTextSize;
-  late bool _initialNotifications;
-  late String? _initialLanguage;
-  late bool _initialDataSaver;
-  late String? _initialServer;
+  // Initialize with default values
+  late bool _initialDarkMode = false;
+  late double _initialTextSize = 16.0;
+  late bool _initialNotifications = true;
+  late String? _initialLanguage = 'English';
+  late bool _initialDataSaver = false;
+  late String? _initialServer = null;
 
-  @override
+    @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(seconds: 20),
+      vsync: this,
+    )..repeat();
     _loadSettings();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadSettings() async {
@@ -42,7 +89,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       selectedLanguage = prefs.getString('language') ?? 'English';
       isDataSaverEnabled = prefs.getBool('dataSaver') ?? false;
 
-      // Store initial values
       _initialDarkMode = isDarkMode;
       _initialTextSize = textSize;
       _initialNotifications = isNotificationsEnabled;
@@ -53,10 +99,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
+  void _checkForChanges() {
+    setState(() {
+      _hasUnsavedChanges = 
+        isDarkMode != _initialDarkMode ||
+        textSize != _initialTextSize ||
+        isNotificationsEnabled != _initialNotifications ||
+        selectedLanguage != _initialLanguage ||
+        isDataSaverEnabled != _initialDataSaver ||
+        currentServer != _initialServer;
+    });
+  }
+
+  void _onSettingChanged(Function() change) {
+    change();
+    _checkForChanges();
+  }
+
   Future<void> _loadCurrentServer() async {
     final server = await _settingsService.getCurrentServer();
     setState(() {
       currentServer = server;
+      _initialServer = server;
     });
   }
 
@@ -67,107 +131,342 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setBool('notifications', isNotificationsEnabled);
     await prefs.setString('language', selectedLanguage ?? 'English');
     await prefs.setBool('dataSaver', isDataSaverEnabled);
-    CustomToast.show(context, 'Settings saved');
+    
+    setState(() {
+      _initialDarkMode = isDarkMode;
+      _initialTextSize = textSize;
+      _initialNotifications = isNotificationsEnabled;
+      _initialLanguage = selectedLanguage;
+      _initialDataSaver = isDataSaverEnabled;
+      _initialServer = currentServer;
+      _hasUnsavedChanges = false;
+    });
+    
+    CustomToast.show(context, 'Settings saved successfully');
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 120.0,
-            floating: false,
-            pinned: true,
-            flexibleSpace: FlexibleSpaceBar(
-              title: Text('Settings',
-                style: TextStyle(color: Theme.of(context).primaryTextTheme.titleLarge?.color)),
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.blue.shade800, Colors.blue.shade600],
-                  )
-                ),
-              ),
+    void _showTextSizeDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Text Size'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Adjust text size', style: TextStyle(fontSize: textSize)),
+            SizedBox(height: 16),
+            Slider(
+              value: textSize,
+              min: 12.0,
+              max: 24.0,
+              divisions: 12,
+              label: textSize.round().toString(),
+              onChanged: (value) => setState(() => textSize = value),
             ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
           ),
-          SliverList(
-            delegate: SliverChildListDelegate([
-              _buildSection(
-                'Appearance',
-                [
-                  _buildSwitchTile(
-                    'Dark Mode',
-                    'Switch between light and dark theme',
-                    Icons.dark_mode,
-                    isDarkMode,
-                    (value) => setState(() => isDarkMode = value),
-                  ),
-                  _buildSliderTile(
-                    'Text Size',
-                    'Adjust the size of text in the app',
-                    Icons.text_fields,
-                    textSize,
-                    (value) => setState(() => textSize = value),
-                  ),
-                ]
-              ),
-              _buildSection(
-                'Server Settings',
-                [
-                  _buildServerTile(),
-                  _buildSwitchTile(
-                    'Data Saver',
-                    'Reduce data usage when loading content',
-                    Icons.data_usage,
-                    isDataSaverEnabled,
-                    (value) => setState(() => isDataSaverEnabled = value),
-                  ),
-                ],
-              ),
-              _buildSection(
-                'Notifications',
-                [
-                  _buildSwitchTile(
-                    'Push Notifications',
-                    'Receive updates and announcements',
-                    Icons.notifications,
-                    isNotificationsEnabled,
-                    (value) => setState(() => isNotificationsEnabled = value),
-                  ),
-                ],
-              ),
-              _buildSection(
-                'Language',
-                [
-                  _buildLanguageDropdown(),
-                ],
-              ),
-              _buildSection(
-                'About',
-                [
-                  _buildAboutTile(),
-                ],
+          TextButton(
+            onPressed: () {
+              _onSettingChanged(() {});
+              Navigator.pop(context);
+            },
+            child: Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLanguageBottomSheet() {
+    final languages = ['English', 'Tiếng Việt', 'Français', 'Española', 'Deutsch', 'Italiana', 'Nederlands', 'Português', 'Русский', '日本語', '한국인', '中国人'];
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.4,
+        minChildSize: 0.3,
+        maxChildSize: 0.9,
+        builder: (_, controller) => Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              Container(
+                margin: EdgeInsets.only(top: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
               Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: ElevatedButton(
-                  onPressed: _saveSettings,
-                  child: Text('Save Settings'),
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Select Language',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
-            ]),
-          )
-        ]
-      )
+              Expanded(
+                child: ListView(
+                  controller: controller,
+                  children: languages.map((language) => ListTile(
+                    leading: Radio<String>(
+                      value: language,
+                      groupValue: selectedLanguage,
+                      onChanged: (String? value) {
+                        _onSettingChanged(() => setState(() => selectedLanguage = value));
+                        Navigator.pop(context);
+                      },
+                    ),
+                    title: Text(language),
+                    onTap: () {
+                      _onSettingChanged(() => setState(() => selectedLanguage = language));
+                      Navigator.pop(context);
+                    },
+                  )).toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+    void _showAboutDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('About Light Novel Reader', textAlign: TextAlign.center),
+        content: SingleChildScrollView(
+          child: Column(
+            children: [
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.menu_book_rounded, size: 64, color: Colors.blue),
+              ),
+              SizedBox(height: 24),
+              Text('Version 1.0.0.0',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 8),
+              Text('© 2024 CyberDay Studios',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+              SizedBox(height: 16),
+              Text('Developed by nekkochan',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+              SizedBox(height: 24),
+              Text(
+                'Light Novel Reader is a free and open-source light novel reader app that allows you to read light novels online for free',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14),
+              ),
+              SizedBox(height: 24),
+              Text(
+                'This app is not affiliated with any of the websites it links to.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+              SizedBox(height: 16),
+              Text(
+                'This application is under heavy development. That means the application may contain bugs and errors. Please report any issues to the developer.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showServerBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.4,
+        minChildSize: 0.3,
+        maxChildSize: 0.9,
+        builder: (_, controller) => Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              Container(
+                margin: EdgeInsets.only(top: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Select Server',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  controller: controller,
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  children: [
+                    _buildServerOption('ln.hako.vn'),
+                    _buildServerOption('ln.hako.re'),
+                    _buildServerOption('docln.net'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildServerOption(String server) {
+    final isSelected = currentServer == server;
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.symmetric(vertical: 4),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: isSelected ? Colors.blue : Colors.grey.withOpacity(0.2),
+          width: isSelected ? 2 : 1,
+        ),
+      ),
+      child: ListTile(
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        leading: Radio<String>(
+          value: server,
+          groupValue: currentServer,
+          onChanged: (String? value) async {
+            await _settingsService.saveCurrentServer(value!);
+            _onSettingChanged(() => _loadCurrentServer());
+            Navigator.pop(context);
+          },
+        ),
+        title: Text(
+          server,
+          style: TextStyle(
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            color: isSelected ? Colors.blue : null,
+          ),
+        ),
+        onTap: () async {
+          await _settingsService.saveCurrentServer(server);
+          _onSettingChanged(() => _loadCurrentServer());
+          Navigator.pop(context);
+        },
+      ),
+    );
+  }
+
+    Widget _buildQuickActionCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      width: MediaQuery.of(context).size.width / 2 - 24,
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.blue.shade400, Colors.blue.shade600],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.blue.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 24),
+                ),
+                SizedBox(height: 16),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -176,32 +475,69 @@ class _SettingsScreenState extends State<SettingsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.blue.shade800
-            ),
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+          child: Row(
+            children: [
+              Container(
+                width: 4,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade600,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              SizedBox(width: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                  color: Colors.blue.shade800,
+                ),
+              ),
+            ],
           ),
         ),
         Card(
           margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: Column(children: children,)
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(
+              color: Colors.grey.withOpacity(0.2),
+              width: 1,
+            ),
+          ),
+          child: Column(children: children),
         ),
       ],
     );
   }
 
-  Widget _buildSwitchTile(String title, String subtitle, IconData icon, bool value, Function(bool) onChanged) {
+  Widget _buildModernSwitchTile(
+    String title,
+    String subtitle,
+    IconData icon,
+    bool value,
+    Function(bool) onChanged,
+  ) {
     return ListTile(
-      leading: Icon(icon, color: Colors.blue),
-      title: Text(title),
+      contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      leading: Container(
+        padding: EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.blue.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: Colors.blue),
+      ),
+      title: Text(
+        title,
+        style: TextStyle(fontWeight: FontWeight.w500),
+      ),
       subtitle: Text(subtitle),
-      trailing: Switch(
+      trailing: Switch.adaptive(
         value: value,
         onChanged: onChanged,
         activeColor: Colors.blue,
@@ -209,139 +545,381 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildSliderTile(String title, String subtitle, IconData icon, double value, Function(double) onChanged) {
-    return ListTile(
-      leading: Icon(icon, color: Colors.blue),
-      title: Text(title),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(subtitle),
-          Slider(
-            value: value,
-            min: 12.0,
-            max: 24.0,
-            divisions: 12,
-            label: value.round().toString(),
-            onChanged: onChanged,
+  Widget _buildModernSliderTile(
+    String title,
+    String subtitle,
+    IconData icon,
+    double value,
+    Function(double) onChanged,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ListTile(
+          contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          leading: Container(
+            padding: EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: Colors.blue),
           ),
-        ],
-      ),
+          title: Text(
+            title,
+            style: TextStyle(fontWeight: FontWeight.w500),
+          ),
+          subtitle: Text(subtitle),
+        ),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            children: [
+              Text('12', style: TextStyle(color: Colors.grey)),
+              Expanded(
+                child: Slider.adaptive(
+                  value: value,
+                  min: 12.0,
+                  max: 24.0,
+                  divisions: 12,
+                  label: value.round().toString(),
+                  onChanged: onChanged,
+                  activeColor: Colors.blue,
+                ),
+              ),
+              Text('24', style: TextStyle(color: Colors.grey)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildServerTile() {
+    Widget _buildServerTile() {
     return ListTile(
-      leading: Icon(Icons.dns, color: Colors.blue),
-      title: Text('Current server'),
-      subtitle: Text(currentServer ?? 'No server selected. The app will use the default server'),
-      trailing: Icon(Icons.chevron_right),
-      onTap: () {
-        _showServerSelectionDialog();
-      },
+      contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      leading: Container(
+        padding: EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.blue.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(Icons.dns_rounded, color: Colors.blue),
+      ),
+      title: Text(
+        'Current Server',
+        style: TextStyle(fontWeight: FontWeight.w500),
+      ),
+      subtitle: Text(currentServer ?? 'No server selected'),
+      trailing: Icon(Icons.chevron_right_rounded),
+      onTap: () => _showServerBottomSheet(),
     );
   }
 
-  Widget _buildLanguageDropdown() {
-    final languages = ['English', 'Tiếng Việt', 'Français', 'Española', 'Deutsch', 'Italiana', 'Nederlands', 'Português', 'Русский', '日本語', '한국인', '中国人'];
+  Widget _buildLanguageTile() {
     return ListTile(
-      leading: Icon(Icons.language, color: Colors.blue),
-      title: Text('Language'),
-      trailing: DropdownButton<String>(
-        value: selectedLanguage,
-        onChanged: (String? newValue) {
-          setState(() {
-            selectedLanguage = newValue;
-          });
-        },
-        items: languages.map<DropdownMenuItem<String>>((String value) {
-          return DropdownMenuItem<String>(
-            value: value,
-            child: Text(value),
-          );
-        }).toList(),
+      contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      leading: Container(
+        padding: EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.blue.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(Icons.language_rounded, color: Colors.blue),
       ),
+      title: Text(
+        'Language',
+        style: TextStyle(fontWeight: FontWeight.w500),
+      ),
+      subtitle: Text(selectedLanguage ?? 'English'),
+      trailing: Icon(Icons.chevron_right_rounded),
+      onTap: () => _showLanguageBottomSheet(),
     );
   }
 
   Widget _buildAboutTile() {
     return ListTile(
-      leading: Icon(Icons.info_outline, color: Colors.blue),
-      title: Text('About'),
+      contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      leading: Container(
+        padding: EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.blue.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(Icons.info_outline_rounded, color: Colors.blue),
+      ),
+      title: Text(
+        'About',
+        style: TextStyle(fontWeight: FontWeight.w500),
+      ),
       subtitle: Text('Version 1.0.0.0'),
-      onTap: () {
-        _showAboutDialog();
-      },
+      trailing: Icon(Icons.chevron_right_rounded),
+      onTap: () => _showAboutDialog(),
     );
   }
 
-  void _showServerSelectionDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Select server'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text("Please select one of following servers below here. If you not selected, the app will use the default server.", style: TextStyle(fontSize: 16, color: Colors.grey[500])),
-            ListTile(
-              title: Text('ln.hako.vn'),
-              onTap: () async {
-                await _settingsService.saveCurrentServer('ln.hako.vn');
-                _loadCurrentServer();
-                Navigator.pop(context);
-              },
-            ),
-             ListTile(
-              title: Text('ln.hako.re'),
-              onTap: () async {
-                await _settingsService.saveCurrentServer('ln.hako.re');
-                _loadCurrentServer();
-                Navigator.pop(context);
-              },
-            ),
-             ListTile(
-              title: Text('docln.net'),
-              onTap: () async {
-                await _settingsService.saveCurrentServer('docln.net');
-                _loadCurrentServer();
-                Navigator.pop(context);
-              },
-            ),
-          ],
-        ),
-      )
-    );
-  }
-
-  void _showAboutDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('About Light Novel Reader'),
-        content: Column(
-          children: [
-            Icon(Icons.flutter_dash, size: 200, color: Colors.blue),
-            SizedBox(height: 16),
-            Text('Version 1.0.0.0'),
-            SizedBox(height: 8),
-            Text('© 2024 CyberDay Studios.'),
-            SizedBox(height: 16),
-            Text('Developed by nekkochan.'),
-            SizedBox(height: 30),
-            Text('Light Novel Reader is a free and open-source light novel reader app that allows you to read light novels online for free', textAlign: TextAlign.center),
-            SizedBox(height: 40),
-            Text('This app is not affiliated with any of the websites it links to.', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-            SizedBox(height: 16),
-            Text('This application is under heavy development. That''s mean the application may contain bugs and errors. Please report any issues to the developer.', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Close'),
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: !_hasUnsavedChanges,
+      onPopInvokedWithResult: (didPop, dynamic result) async {
+        if (!_hasUnsavedChanges) {
+          return;
+        }
+        
+        final bool shouldPop = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text('Unsaved Changes'),
+            content: Text('You have unsaved changes. Do you want to save them before leaving?'),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop(true);
+                },
+                child: Text('Discard'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  await _saveSettings();
+                  Navigator.of(context).pop(true);
+                },
+                child: Text('Save'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop(false);
+                },
+                child: Text('Cancel'),
+              ),
+            ],
           ),
-        ],
+        ) ?? false;
+
+        if (shouldPop) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        body: CustomScrollView(
+          slivers: [
+            SliverAppBar.large(
+              expandedHeight: 200.0,
+              floating: false,
+              pinned: true,
+              stretch: true,
+              flexibleSpace: FlexibleSpaceBar(
+                title: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Settings',
+                      style: TextStyle(
+                        color: Theme.of(context).primaryTextTheme.titleLarge?.color,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    if (_hasUnsavedChanges) ...[
+                      SizedBox(width: 8),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'Unsaved',
+                          style: TextStyle(
+                            color: Colors.amber,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                background: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ShaderMask(
+                      shaderCallback: (rect) {
+                        return LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
+                        ).createShader(rect);
+                      },
+                      blendMode: BlendMode.darken,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Colors.blue.shade800, Colors.purple.shade500],
+                          ),
+                        ),
+                      ),
+                    ),
+                    AnimatedBuilder(
+                      animation: _animationController,
+                      builder: (context, child) {
+                        return Transform.rotate(
+                          angle: _animationController.value * 2 * 3.14159,
+                          child: CustomPaint(
+                            painter: GridPainter(
+                              color: Colors.white.withOpacity(0.1),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+                        SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Quick Actions',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                        color: Colors.blue.shade800,
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    Wrap(
+                      spacing: 16,
+                      runSpacing: 16,
+                      children: [
+                        _buildQuickActionCard(
+                          icon: Icons.dark_mode_rounded,
+                          title: 'Theme',
+                          subtitle: isDarkMode ? 'Dark Mode' : 'Light Mode',
+                          onTap: () => _onSettingChanged(() => setState(() => isDarkMode = !isDarkMode)),
+                        ),
+                        _buildQuickActionCard(
+                          icon: Icons.text_fields_rounded,
+                          title: 'Text Size',
+                          subtitle: '${textSize.round()}',
+                          onTap: () => _showTextSizeDialog(),
+                        ),
+                        _buildQuickActionCard(
+                          icon: Icons.language_rounded,
+                          title: 'Language',
+                          subtitle: selectedLanguage ?? 'English',
+                          onTap: () => _showLanguageBottomSheet(),
+                        ),
+                        _buildQuickActionCard(
+                          icon: Icons.dns_rounded,
+                          title: 'Server',
+                          subtitle: currentServer ?? 'Not Selected',
+                          onTap: () => _showServerBottomSheet(),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SliverList(
+              delegate: SliverChildListDelegate([
+                _buildSection(
+                  'Appearance',
+                  [
+                    _buildModernSwitchTile(
+                      'Dark Mode',
+                      'Switch between light and dark theme',
+                      Icons.dark_mode_rounded,
+                      isDarkMode,
+                      (value) => _onSettingChanged(() => setState(() => isDarkMode = value)),
+                    ),
+                    _buildModernSliderTile(
+                      'Text Size',
+                      'Adjust the size of text in the app',
+                      Icons.text_fields_rounded,
+                      textSize,
+                      (value) => _onSettingChanged(() => setState(() => textSize = value)),
+                    ),
+                  ],
+                ),
+                _buildSection(
+                  'Server Settings',
+                  [
+                    _buildServerTile(),
+                    _buildModernSwitchTile(
+                      'Data Saver',
+                      'Reduce data usage when loading content',
+                      Icons.data_usage_rounded,
+                      isDataSaverEnabled,
+                      (value) => _onSettingChanged(() => setState(() => isDataSaverEnabled = value)),
+                    ),
+                  ],
+                ),
+                _buildSection(
+                  'Notifications',
+                  [
+                    _buildModernSwitchTile(
+                      'Push Notifications',
+                      'Receive updates and announcements',
+                      Icons.notifications_rounded,
+                      isNotificationsEnabled,
+                      (value) => _onSettingChanged(() => setState(() => isNotificationsEnabled = value)),
+                    ),
+                  ],
+                ),
+                _buildSection(
+                  'Language',
+                  [
+                    _buildLanguageTile(),
+                  ],
+                ),
+                _buildSection(
+                  'About',
+                  [
+                    _buildAboutTile(),
+                  ],
+                ),
+                SizedBox(height: 80), // Space for FAB
+              ]),
+            ),
+          ],
+        ),
+        floatingActionButton: _hasUnsavedChanges ? Container(
+          margin: EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.blue.withOpacity(0.3),
+                blurRadius: 12,
+                offset: Offset(0, 6),
+              ),
+            ],
+          ),
+          child: FloatingActionButton.extended(
+            onPressed: _saveSettings,
+            elevation: 0,
+            backgroundColor: Colors.blue.shade600,
+            icon: Icon(Icons.save_rounded, color: Colors.white),
+            label: Text(
+              'Save Changes',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+        ) : null,
       ),
     );
   }
