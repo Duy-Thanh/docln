@@ -177,24 +177,52 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Text Size'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Adjust text size', style: TextStyle(fontSize: textSize)),
-            SizedBox(height: 16),
-            Slider(
-              value: textSize,
-              min: 12.0,
-              max: 24.0,
-              divisions: 12,
-              label: textSize.round().toString(),
-              onChanged: (value) => setState(() => textSize = value),
-            ),
-          ],
+        content: StatefulBuilder( // Add StatefulBuilder
+          builder: (context, setDialogState) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Sample Text',
+                  style: TextStyle(fontSize: textSize),
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'Adjust the slider to change text size',
+                  style: TextStyle(fontSize: textSize * 0.8),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('A', style: TextStyle(fontSize: 12)),
+                    Expanded(
+                      child: Slider(
+                        value: textSize,
+                        min: 12.0,
+                        max: 24.0,
+                        divisions: 12,
+                        label: textSize.round().toString(),
+                        onChanged: (value) {
+                          setDialogState(() => textSize = value);
+                          setState(() => textSize = value);
+                        },
+                      ),
+                    ),
+                    Text('A', style: TextStyle(fontSize: 24)),
+                  ],
+                ),
+              ],
+            );
+          },
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              setState(() => textSize = _initialTextSize);
+              Navigator.pop(context);
+            },
             child: Text('Cancel'),
           ),
           TextButton(
@@ -202,7 +230,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               _onSettingChanged(() {});
               Navigator.pop(context);
             },
-            child: Text('OK'),
+            child: Text('Apply'),
           ),
         ],
       ),
@@ -532,7 +560,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     );
   }
 
-    Widget _buildQuickActionCard({
+  Widget _buildQuickActionCard({
     required IconData icon,
     required String title,
     required String subtitle,
@@ -687,46 +715,40 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     double value,
     Function(double) onChanged,
   ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ListTile(
-          contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          leading: Container(
-            padding: EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: Colors.blue),
-          ),
-          title: Text(
-            title,
-            style: TextStyle(fontWeight: FontWeight.w500),
-          ),
-          subtitle: Text(subtitle),
+    return ListTile(
+      contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      leading: Container(
+        padding: EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.blue.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
         ),
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
+        child: Icon(icon, color: Colors.blue),
+      ),
+      title: Text(title),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(subtitle),
+          SizedBox(height: 8),
+          Row(
             children: [
-              Text('12', style: TextStyle(color: Colors.grey)),
+              Text('A', style: TextStyle(fontSize: 12)),
               Expanded(
-                child: Slider.adaptive(
+                child: Slider(
                   value: value,
                   min: 12.0,
                   max: 24.0,
                   divisions: 12,
                   label: value.round().toString(),
                   onChanged: onChanged,
-                  activeColor: Colors.blue,
                 ),
               ),
-              Text('24', style: TextStyle(color: Colors.grey)),
+              Text('A', style: TextStyle(fontSize: 24)),
             ],
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
