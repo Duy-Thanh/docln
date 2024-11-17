@@ -756,7 +756,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     );
   }
 
-  Widget _buildModernSliderTile(
+    Widget _buildModernSliderTile(
     String title,
     String subtitle,
     IconData icon,
@@ -789,13 +789,39 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           ),
         ],
       ),
-      subtitle: Slider(
-        value: value.clamp(12.0, 24.0), // Ensure value is within bounds
-        min: 12.0,
-        max: 24.0,
-        divisions: 12,
-        label: value.round().toString(),
-        onChanged: onChanged,
+      subtitle: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('A', style: TextStyle(fontSize: 12)),
+              Expanded(
+                child: Slider(
+                  value: value.clamp(12.0, 24.0),
+                  min: 12.0,
+                  max: 24.0,
+                  divisions: 12,
+                  label: value.round().toString(),
+                  onChanged: (newValue) {
+                    onChanged(newValue);
+                    // Update text size in real-time
+                    final themeService = Provider.of<ThemeServices>(context, listen: false);
+                    themeService.setTextScaleFactor(newValue);
+                  },
+                ),
+              ),
+              Text('A', style: TextStyle(fontSize: 24)),
+            ],
+          ),
+          // Preview text
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              'Preview Text',
+              style: TextStyle(fontSize: value),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1052,7 +1078,11 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                       'Adjust the size of text in the app',
                       Icons.text_fields_rounded,
                       textSize,
-                      (value) => _onSettingChanged(() => setState(() => textSize = value)),
+                      (value) {
+                        _onSettingChanged(() {
+                          setState(() => textSize = value);
+                        });
+                      },
                     ),
                   ],
                 ),
