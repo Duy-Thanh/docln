@@ -253,7 +253,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                       onChanged: (value) {
                         setDialogState(() => tempSize = value);
                         final themeService = Provider.of<ThemeServices>(context, listen: false);
-                        themeService.setTextScaleFactor(value); // Pass the actual size
+                        themeService.setTextSize(value); // Pass the actual size
                       },
                     ),
                   ),
@@ -267,7 +267,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             TextButton(
               onPressed: () {
                 final themeService = Provider.of<ThemeServices>(context, listen: false);
-                themeService.setTextScaleFactor(_initialTextSize);
+                themeService.setTextSize(_initialTextSize);
                 Navigator.pop(context);
               },
               child: Text('Cancel'),
@@ -806,14 +806,13 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                     onChanged(newValue);
                     // Update text size in real-time
                     final themeService = Provider.of<ThemeServices>(context, listen: false);
-                    themeService.setTextScaleFactor(newValue);
+                    themeService.setTextSize(newValue); // Updated method name
                   },
                 ),
               ),
               Text('A', style: TextStyle(fontSize: 24)),
             ],
           ),
-          // Preview text
           Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
             child: Text(

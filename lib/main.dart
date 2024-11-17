@@ -50,6 +50,12 @@ class MainApp extends StatelessWidget {
           theme: themeService.getLightTheme(),
           darkTheme: themeService.getDarkTheme(),
           locale: languageService.currentLocale,
+          builder: (context, child) {
+            return MediaQuery(
+              data: MediaQuery.of(context).copyWith(textScaler: themeService.textScaler),
+              child: child!,
+            );
+          },
           home: SplashScreen(),
         );
       },

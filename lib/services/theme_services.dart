@@ -16,28 +16,21 @@ class ThemeServices extends ChangeNotifier {
   double _textSize = 16.0;
 
   ThemeMode get themeMode => _themeMode;
-  double get textScaleFactor => _textScaleFactor;
+  // New getter for textScaler
+  TextScaler get textScaler => TextScaler.linear(_textSize / 16.0);
   double get textSize => _textSize;
 
   Future<void> init() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      
-      // Theme Mode
       _themeMode = prefs.getBool('darkMode') == true ? ThemeMode.dark : ThemeMode.light;
-      
-      // Text Size - ensure it's within bounds
       _textSize = (prefs.getDouble('textSize') ?? 16.0).clamp(12.0, 24.0);
-      _textScaleFactor = _textSize / 16.0;
-      
-      print('🔤 Initialized text size: $_textSize, scale factor: $_textScaleFactor');
+      print('🔤 Initialized text size: $_textSize');
       notifyListeners();
     } catch (e) {
       print('Error initializing ThemeServices: $e');
-      // Ensure defaults are set even if there's an error
       _themeMode = ThemeMode.light;
       _textSize = 16.0;
-      _textScaleFactor = 1.0;
       notifyListeners();
     }
   }
@@ -49,14 +42,13 @@ class ThemeServices extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setTextScaleFactor(double size) async {
+  Future<void> setTextSize(double size) async {
     try {
-      size = size.clamp(12.0, 24.0); // Ensure size is within bounds
+      size = size.clamp(12.0, 24.0);
       final prefs = await SharedPreferences.getInstance();
       await prefs.setDouble('textSize', size);
       _textSize = size;
-      _textScaleFactor = size / 16.0;
-      print('🔤 Set text size to: $_textSize, scale factor: $_textScaleFactor');
+      print('🔤 Set text size to: $_textSize');
       notifyListeners();
     } catch (e) {
       print('Error setting text size: $e');
