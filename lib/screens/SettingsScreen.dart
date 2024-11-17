@@ -1236,7 +1236,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   [
                     _buildModernSwitchTile(
                       'Push Notifications',
-                      'Receive updates and announcements',
+                      'Receive notification for new chapter releases, application updates and announcements',
                       Icons.notifications_rounded,
                       isNotificationsEnabled,
                       (value) => _toggleNotifications(value),

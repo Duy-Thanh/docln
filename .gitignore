@@ -11,6 +11,10 @@
 migrate_working_dir/
 datas/
 
+# Completely removed iOS and macOS supported
+ios/
+macos/
+
 # IntelliJ related
 *.iml
 *.ipr
