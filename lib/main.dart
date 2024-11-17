@@ -28,9 +28,15 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider.value(value: themeService),
-        ChangeNotifierProvider.value(value: languageService),
-        Provider<NotificationService>.value(value: notificationService),
+        ChangeNotifierProvider<ThemeServices>.value(
+          value: themeService,
+        ),
+        ChangeNotifierProvider<LanguageService>.value(
+          value: languageService,
+        ),
+        ChangeNotifierProvider<NotificationService>.value( // Changed from Provider to ChangeNotifierProvider
+          value: notificationService,
+        ),
       ],
       child: const MainApp(),
     ),

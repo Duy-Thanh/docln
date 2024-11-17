@@ -102,11 +102,16 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     try {
       final prefs = await SharedPreferences.getInstance();
       final themeService = Provider.of<ThemeServices>(context, listen: false);
+      final notificationService = Provider.of<NotificationService>(context, listen: false);
+      
+      // Check notification permission status
+      final hasPermission = await notificationService.checkPermission();
       
       setState(() {
         isDarkMode = prefs.getBool('darkMode') ?? false;
-        textSize = themeService.textSize.clamp(12.0, 24.0); // Ensure within bounds
-        isNotificationsEnabled = prefs.getBool('isNotifications') ?? true;
+        textSize = themeService.textSize.clamp(12.0, 24.0);
+        // Only enable notifications if we have permission
+        isNotificationsEnabled = hasPermission && (prefs.getBool('isNotifications') ?? true);
         selectedLanguage = prefs.getString('language') ?? 'English';
         isDataSaverEnabled = prefs.getBool('dataSaver') ?? false;
 
@@ -115,17 +120,16 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         _initialNotifications = isNotificationsEnabled;
         _initialLanguage = selectedLanguage;
         _initialDataSaver = isDataSaverEnabled;
-
-        print('🔤 Loaded text size: $textSize');
       });
 
       await _loadCurrentServer();
     } catch (e) {
       print('Error loading settings: $e');
-      // Set defaults if loading fails
       setState(() {
         textSize = 16.0;
         _initialTextSize = 16.0;
+        isNotificationsEnabled = false;
+        _initialNotifications = false;
       });
     }
   }
@@ -214,18 +218,147 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
 
   Future<void> _toggleNotifications(bool value) async {
     if (value) {
-      // Only request permission when toggling ON
+      // Show explanation dialog before requesting permission
+      final bool? proceed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.notifications_active, color: Colors.blue),
+              SizedBox(width: 8),
+              Text('Enable Notifications'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Would you like to receive notifications for:',
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+              SizedBox(height: 16),
+              _buildNotificationBenefit(
+                icon: Icons.new_releases,
+                text: 'New chapter releases',
+              ),
+              _buildNotificationBenefit(
+                icon: Icons.campaign,
+                text: 'Important announcements',
+              ),
+              _buildNotificationBenefit(
+                icon: Icons.update,
+                text: 'App updates',
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text('Not Now'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text('Enable'),
+            ),
+          ],
+        ),
+      );
+
+      if (proceed != true) {
+        return;
+      }
+
       final notificationService = Provider.of<NotificationService>(context, listen: false);
       final granted = await notificationService.requestPermission();
+      
       if (!granted) {
-        CustomToast.show(context, 'Notification permission denied');
+        if (!context.mounted) return;
+        
+        // Show settings guidance dialog if permission denied
+        await showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.notifications_off, color: Colors.grey),
+                SizedBox(width: 8),
+                Text('Permission Required'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.notifications_off_outlined,
+                  size: 48,
+                  color: Colors.grey,
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'To receive notifications, you need to enable them in your device settings.',
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'You can change this anytime in your device settings.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  // Update the switch to reflect the actual state
+                  _onSettingChanged(() => setState(() => isNotificationsEnabled = false));
+                },
+                child: Text('Maybe Later'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  // Update the switch to reflect the actual state
+                  _onSettingChanged(() => setState(() => isNotificationsEnabled = false));
+                  // Open device settings
+                  final notificationService = Provider.of<NotificationService>(context, listen: false);
+                  notificationService.openSettings();
+                },
+                child: Text('Open Settings'),
+              ),
+            ],
+          ),
+        );
         return;
       }
     }
     
+    // If we get here, either permissions were granted or we're turning notifications off
     _onSettingChanged(() {
       setState(() => isNotificationsEnabled = value);
     });
+  }
+
+  Widget _buildNotificationBenefit({
+    required IconData icon,
+    required String text,
+  }) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: Colors.blue),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(text),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showTextSizeDialog() {
@@ -1106,7 +1239,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                       'Receive updates and announcements',
                       Icons.notifications_rounded,
                       isNotificationsEnabled,
-                      (value) => _onSettingChanged(() => setState(() => isNotificationsEnabled = value)),
+                      (value) => _toggleNotifications(value),
                     ),
                   ],
                 ),

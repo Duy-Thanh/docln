@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:permission_handler/permission_handler.dart'; // Add this package
+import 'package:permission_handler/permission_handler.dart';
+import 'package:app_settings/app_settings.dart';
 
-class NotificationService {
+class NotificationService extends ChangeNotifier {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
 
   final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
   bool _isInitialized = false;
+  bool _isEnabled = false;
+
+  bool get isEnabled => _isEnabled;
 
   Future<void> init() async {
     if (_isInitialized) return;
@@ -36,17 +40,17 @@ class NotificationService {
       );
 
       // Create default channel for Android
-      if (await Permission.notification.isDenied) {
-        print('🔔 Notification permission is denied');
-      }
+      final hasPermission = await Permission.notification.status.isGranted;
+      _isEnabled = hasPermission;
+      print('🔔 Notification permission status: ${hasPermission ? 'granted' : 'denied'}');
 
       final platform = _notifications.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
           
       if (platform != null) {
         const channel = AndroidNotificationChannel(
-          'high_importance_channel', // NEW channel id
-          'High Importance Notifications', // NEW channel name
+          'high_importance_channel',
+          'High Importance Notifications',
           description: 'This channel is used for important notifications',
           importance: Importance.max,
           playSound: true,
@@ -61,42 +65,91 @@ class NotificationService {
 
       _isInitialized = true;
       print('🔔 Notification service initialized successfully');
+      
+      // Load saved preference
+      final prefs = await SharedPreferences.getInstance();
+      _isEnabled = prefs.getBool('notifications') ?? false;
+      notifyListeners();
     } catch (e) {
       print('🔔 Error initializing notification service: $e');
-      rethrow;
+      _isEnabled = false;
+      _isInitialized = false;
+      notifyListeners();
     }
   }
 
-  Future<void> setNotificationEnabled(bool enabled) async {
+  Future<bool> checkPermission() async {
+    final status = await Permission.notification.status;
+    _isEnabled = status.isGranted;
+    notifyListeners();
+    return status.isGranted;
+  }
+
+  Future<void> openSettings() async {
+    try {
+      await AppSettings.openAppSettings();
+    } catch (e) {
+      print('🔔 Error opening settings: $e');
+    }
+  }
+
+  Future<bool> setNotificationEnabled(bool enabled) async {
     print("🔔 Setting notification enabled: $enabled");
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('notifications', enabled);
-    
-    if (enabled) {
-      // Ensure we have permission when enabling
-      final hasPermission = await requestPermission();
-      if (!hasPermission) {
-        throw Exception('Notification permission denied');
+    try {
+      if (enabled) {
+        final hasPermission = await requestPermission();
+        if (!hasPermission) {
+          _isEnabled = false;
+          notifyListeners();
+          return false;
+        }
       }
+      
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('notifications', enabled);
+      _isEnabled = enabled;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      print('🔔 Error setting notification enabled: $e');
+      _isEnabled = false;
+      notifyListeners();
+      return false;
     }
   }
 
   Future<bool> isNotificationEnabled() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('notifications') ?? false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final enabled = prefs.getBool('notifications') ?? false;
+      _isEnabled = enabled && await Permission.notification.isGranted;
+      notifyListeners();
+      return _isEnabled;
+    } catch (e) {
+      print('🔔 Error checking notification status: $e');
+      _isEnabled = false;
+      notifyListeners();
+      return false;
+    }
   }
 
   Future<bool> requestPermission() async {
     print("🔔 Requesting notification permission...");
-    
-    // Request notification permission using permission_handler
-    final status = await Permission.notification.request();
-    print("🔔 Permission status: $status");
-    
-    return status.isGranted;
+    try {
+      final status = await Permission.notification.request();
+      print("🔔 Permission status: $status");
+      _isEnabled = status.isGranted;
+      notifyListeners();
+      return status.isGranted;
+    } catch (e) {
+      print("🔔 Error requesting permission: $e");
+      _isEnabled = false;
+      notifyListeners();
+      return false;
+    }
   }
 
-  Future<void> showNotification({
+  Future<bool> showNotification({
     required String title,
     required String body,
     String? payload,
@@ -105,14 +158,13 @@ class NotificationService {
     if (!_isInitialized) await init();
 
     try {
-      // Check if permission is granted
-      if (!(await Permission.notification.isGranted)) {
+      if (!_isEnabled || !(await Permission.notification.isGranted)) {
         print("🔔 Notification permission not granted");
-        return;
+        return false;
       }
 
       const androidDetails = AndroidNotificationDetails(
-        'high_importance_channel', // Use the new channel
+        'high_importance_channel',
         'High Importance Notifications',
         channelDescription: 'This channel is used for important notifications',
         importance: Importance.max,
@@ -143,9 +195,10 @@ class NotificationService {
         payload: payload,
       );
       print("🔔 Notification sent successfully");
+      return true;
     } catch (e) {
       print("🔔 Error showing notification: $e");
-      rethrow;
+      return false;
     }
   }
 }
