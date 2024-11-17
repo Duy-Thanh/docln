@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../services/theme_services.dart';
 import '../screens/LibraryScreen.dart';
 import '../screens/webview_screen.dart';
 import '../screens/SettingsScreen.dart';
+
 class HomeScreen extends StatefulWidget {
   @override
   _HomeScreenState createState() => _HomeScreenState();
@@ -20,17 +23,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
       body: _screens[_selectedIndex],
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.black,
+            color: isDarkMode ? Colors.black : Colors.white,
             borderRadius: BorderRadius.circular(25),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.3),
+                color: (isDarkMode ? Colors.black : Colors.grey).withOpacity(0.3),
                 blurRadius: 10,
                 offset: Offset(0, 5),
               ),
@@ -46,9 +51,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 });
               },
               type: BottomNavigationBarType.fixed,
-              backgroundColor: Colors.white,
+              backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
               selectedItemColor: Colors.deepOrange,
-              unselectedItemColor: Colors.grey,
+              unselectedItemColor: isDarkMode ? Colors.grey[400] : Colors.grey[600],
               showSelectedLabels: false,
               showUnselectedLabels: false,
               elevation: 0,

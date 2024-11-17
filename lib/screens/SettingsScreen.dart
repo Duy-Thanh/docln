@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/theme_services.dart';
 import '../services/language_service.dart';
+import 'package:http/http.dart' as http;
+import '../services/crawler_service.dart';
+import 'dart:async'; // For TimeoutException
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:ui';
 import '../services/settings_services.dart';
@@ -206,70 +209,74 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     );
   }
 
+  // Update the language bottom sheet to use the new _changeLanguage method
   void _showLanguageBottomSheet() {
-    final languages = ['English', 'Tiếng Việt', 'Français', 'Española', 'Deutsch', 'Italiana', 'Nederlands', 'Português', 'Русский', '日本語', '한국인', '中国人'];
+    final languages = ['English', 'Tiếng Việt', 'Français', 'Española', 'Deutsch', 
+                      'Italiana', 'Nederlands', 'Português', 'Русский', '日本語', 
+                      '한국인', '中国人'];
+    
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.4,
-        minChildSize: 0.3,
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
         maxChildSize: 0.9,
-        builder: (_, controller) => Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            children: [
-              Container(
-                margin: EdgeInsets.only(top: 8),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
+        expand: false,
+        builder: (context, controller) => Column(
+          children: [
+            Container(
+              margin: EdgeInsets.symmetric(vertical: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
               ),
-              Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'Select Language',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+            ),
+            Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Select Language',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
-              Expanded(
-                child: ListView(
-                  controller: controller,
-                  children: languages.map((language) => ListTile(
+            ),
+            Expanded(
+              child: ListView.builder(
+                controller: controller,
+                itemCount: languages.length,
+                itemBuilder: (context, index) {
+                  final language = languages[index];
+                  return ListTile(
                     leading: Radio<String>(
                       value: language,
                       groupValue: selectedLanguage,
-                      onChanged: (String? value) {
-                        _onSettingChanged(() => setState(() => selectedLanguage = value));
-                        Navigator.pop(context);
+                      onChanged: (value) async {
+                        if (value != null) {
+                          Navigator.pop(context);
+                          await _changeLanguage(value);
+                        }
                       },
                     ),
                     title: Text(language),
-                    onTap: () {
-                      _onSettingChanged(() => setState(() => selectedLanguage = language));
+                    onTap: () async {
                       Navigator.pop(context);
+                      await _changeLanguage(language);
                     },
-                  )).toList(),
-                ),
+                  );
+                },
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-    void _showAboutDialog() {
+  void _showAboutDialog() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -330,56 +337,160 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   }
 
   void _showServerBottomSheet() {
+    final servers = CrawlerService.servers; // Get servers from CrawlerService
+    
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (context) => DraggableScrollableSheet(
         initialChildSize: 0.4,
         minChildSize: 0.3,
-        maxChildSize: 0.9,
-        builder: (_, controller) => Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            children: [
-              Container(
-                margin: EdgeInsets.only(top: 8),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
+        maxChildSize: 0.6,
+        expand: false,
+        builder: (context, controller) => Column(
+          children: [
+            Container(
+              margin: EdgeInsets.symmetric(vertical: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
               ),
-              Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'Select Server',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+            ),
+            Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Select Server',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
-              Expanded(
-                child: ListView(
-                  controller: controller,
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  children: [
-                    _buildServerOption('ln.hako.vn'),
-                    _buildServerOption('ln.hako.re'),
-                    _buildServerOption('docln.net'),
-                  ],
-                ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                controller: controller,
+                itemCount: servers.length,
+                itemBuilder: (context, index) {
+                  final server = servers[index];
+                  final isSelected = server == currentServer;
+                  return _buildServerListItem(server, isSelected);
+                },
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  Widget _buildServerListItem(String server, bool isSelected) {
+    return ListTile(
+      contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      leading: Container(
+        padding: EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.blue.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(
+          Icons.dns_rounded,
+          color: isSelected ? Colors.blue : Colors.grey,
+        ),
+      ),
+      title: Text(
+        server,
+        style: TextStyle(
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          color: isSelected ? Colors.blue : null,
+        ),
+      ),
+      trailing: isSelected ? Icon(Icons.check, color: Colors.blue) : null,
+      onTap: () async {
+        Navigator.pop(context);
+        await _changeServer(server);
+      },
+    );
+  }
+
+    Future<void> _changeServer(String newServer) async {
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      // Test server connection
+      final response = await http.get(
+        Uri.parse(newServer),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36'
+        },
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Connection timeout');
+        },
+      );
+
+      // Pop loading dialog
+      Navigator.pop(context);
+
+      if (response.statusCode == 200) {
+        _onSettingChanged(() {
+          setState(() => currentServer = newServer);
+        });
+        CustomToast.show(context, 'Server changed successfully');
+      } else {
+        throw Exception('Server returned ${response.statusCode}');
+      }
+    } catch (e) {
+      // Pop loading dialog if still showing
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+      
+      CustomToast.show(context, 'Failed to connect to server: ${e.toString()}');
+    }
+  }
+
+  Future<void> _changeLanguage(String newLanguage) async {
+    try {
+      _onSettingChanged(() async {
+        setState(() => selectedLanguage = newLanguage);
+        
+        // Show loading indicator
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+
+        try {
+          final languageService = Provider.of<LanguageService>(context, listen: false);
+          await languageService.setLanguage(newLanguage);
+          
+          // Pop loading dialog
+          Navigator.pop(context);
+          CustomToast.show(context, 'Language changed to $newLanguage');
+        } catch (e) {
+          // Pop loading dialog
+          Navigator.pop(context);
+          throw e;
+        }
+      });
+    } catch (e) {
+      CustomToast.show(context, 'Failed to change language: ${e.toString()}');
+      // Revert the change
+      setState(() => selectedLanguage = _initialLanguage);
+    }
   }
 
   Widget _buildServerOption(String server) {
@@ -414,7 +525,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         ),
         onTap: () async {
           await _settingsService.saveCurrentServer(server);
-          _onSettingChanged(() => _loadCurrentServer());
+          _onSettingChanged(() => _loadCurrentServer());  // This is causing the issue
           Navigator.pop(context);
         },
       ),
@@ -619,7 +730,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     );
   }
 
-    Widget _buildServerTile() {
+  Widget _buildServerTile() {
     return ListTile(
       contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       leading: Container(

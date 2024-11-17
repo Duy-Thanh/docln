@@ -45,6 +45,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: _loadAnnouncements,
@@ -53,7 +55,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           children: [
             if (isLoading) _buildLoadingIndicator(),
             if (error != null) _buildErrorCard(),
-            if (!isLoading && error == null) _buildAnnouncementsList(),
+            if (!isLoading && error == null) _buildAnnouncementsList(isDarkMode),
           ],
         ),
       ),
@@ -62,14 +64,20 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   Widget _buildLoadingIndicator() {
     return SizedBox(
-      height: MediaQuery.of(context).size.height - 200, // Adjust height to center
+      height: MediaQuery.of(context).size.height - 200,
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
+          children: [
             CircularProgressIndicator(),
             SizedBox(height: 20),
-            Text('Fetching data, please be patient...', style: TextStyle(fontSize: 16)),
+            Text(
+              'Fetching data, please be patient...', 
+              style: TextStyle(
+                fontSize: 16,
+                color: Theme.of(context).textTheme.bodyLarge?.color,
+              )
+            ),
           ],
         ),
       ),
@@ -133,16 +141,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  Widget _buildAnnouncementsList() {
+  Widget _buildAnnouncementsList(bool isDarkMode) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         const SizedBox(height: 16),
-        const Text(
+        Text(
           'Library',
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
+            color: Theme.of(context).textTheme.titleLarge?.color,
           ),
         ),
         const SizedBox(height: 8),
@@ -151,15 +160,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
+          color: isDarkMode ? Colors.grey[900] : Colors.grey[200],
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.grey[200],
               borderRadius: BorderRadius.circular(12),
             ),
             padding: const EdgeInsets.all(8),
             child: Column(
               children: [
-                ...announcements.map((announcement) => _buildAnnouncementItem(announcement)).toList(),
+                ...announcements.map((announcement) => 
+                  _buildAnnouncementItem(announcement, isDarkMode)
+                ).toList(),
               ],
             ),
           ),
@@ -168,17 +179,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  Widget _buildAnnouncementItem(Announcement announcement) {
+  Widget _buildAnnouncementItem(Announcement announcement, bool isDarkMode) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 2),
       padding: const EdgeInsets.all(4),
       child: InkWell(
         onTap: () {
-          // Navigate to the WebViewScreen with the announcement URL
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => WebViewScreen(url: announcement.url), // Assuming announcement has a url property
+              builder: (context) => WebViewScreen(url: announcement.url),
             ),
           );
         },
@@ -189,7 +199,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               announcement.title,
               style: TextStyle(
                 fontSize: 14,
-                color: _getColorFromString(announcement.color),
+                color: _getColorFromString(announcement.color, isDarkMode),
                 fontWeight: FontWeight.bold,
               ),
               textAlign: TextAlign.center,
@@ -200,21 +210,22 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  Color _getColorFromString(String? colorString) {
+  Color _getColorFromString(String? colorString, bool isDarkMode) {
     if (colorString == null || colorString.isEmpty) {
-      return Colors.black; // Default color
+      return isDarkMode ? Colors.white : Colors.black; // Default color based on theme
     }
 
     if (colorString.trim() == 'red') {
-      return Colors.red;
+      return isDarkMode ? Colors.red[300]! : Colors.red;
     } else if (colorString.trim() == 'blue') {
-      return Colors.blue;
+      return isDarkMode ? Colors.blue[300]! : Colors.blue;
     }
 
     if (colorString.startsWith('#') && (colorString.length == 7 || colorString.length == 9)) {
-      return Color(int.parse(colorString.replaceAll('#', '0xFF')));
+      Color baseColor = Color(int.parse(colorString.replaceAll('#', '0xFF')));
+      return isDarkMode ? baseColor.withOpacity(0.8) : baseColor; // Slightly lighter in dark mode
     } else {
-      return Colors.black; // Default color
+      return isDarkMode ? Colors.white : Colors.black; // Default color based on theme
     }
   }
 }
