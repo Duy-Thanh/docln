@@ -55,6 +55,18 @@ class ThemeServices extends ChangeNotifier {
     }
   }
 
+  // Add preview functionality
+  void previewTextSize(double size) {
+    _textSize = size.clamp(12.0, 24.0);
+    notifyListeners();
+  }
+
+  // Add method to reset text size
+  void resetTextSize(double originalSize) {
+    _textSize = originalSize.clamp(12.0, 24.0);
+    notifyListeners();
+  }
+
   ThemeData getLightTheme() {
     // Base font sizes
     final baseSizes = {

@@ -47,11 +47,15 @@ class GridPainter extends CustomPainter {
 }
 
 class SettingsScreen extends StatefulWidget {
+  final Function(bool hasChanges)? onSettingsChanged;
+
+  const SettingsScreen({Key? key, this.onSettingsChanged}) : super(key: key);
+
   @override
-  _SettingsScreenState createState() => _SettingsScreenState();
+  SettingsScreenState createState() => SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProviderStateMixin {
+class SettingsScreenState extends State<SettingsScreen> with SingleTickerProviderStateMixin {
   final SettingsService _settingsService = SettingsService();
   bool isDarkMode = false;
   String? currentServer;
@@ -148,7 +152,27 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
 
   void _onSettingChanged(Function() change) {
     change();
-    _checkForChanges();
+    final hasChanges = 
+      isDarkMode != _initialDarkMode ||
+      textSize != _initialTextSize ||
+      isNotificationsEnabled != _initialNotifications ||
+      selectedLanguage != _initialLanguage ||
+      isDataSaverEnabled != _initialDataSaver ||
+      currentServer != _initialServer;
+    
+    print('Settings changed:'); // Debug prints
+    print('Dark mode: $isDarkMode vs $_initialDarkMode');
+    print('Text size: $textSize vs $_initialTextSize');
+    print('Notifications: $isNotificationsEnabled vs $_initialNotifications');
+    print('Language: $selectedLanguage vs $_initialLanguage');
+    print('Data saver: $isDataSaverEnabled vs $_initialDataSaver');
+    print('Server: $currentServer vs $_initialServer');
+    print('Has changes: $hasChanges');
+    
+    setState(() {
+      _hasUnsavedChanges = hasChanges;
+    });
+    widget.onSettingsChanged?.call(hasChanges);
   }
 
   Future<void> _loadCurrentServer() async {
@@ -157,6 +181,10 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       currentServer = server;
       _initialServer = server;
     });
+  }
+
+  Future<void> saveSettings() async {
+    await _saveSettings();
   }
 
   Future<void> _saveSettings() async {
@@ -170,6 +198,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       await Future.wait([
         prefs.setBool('darkMode', isDarkMode),
         prefs.setDouble('textSize', textSize),
+        Future(() => themeService.setTextSize(textSize)),
         notificationService.setNotificationEnabled(isNotificationsEnabled),
         prefs.setString('language', selectedLanguage ?? 'English'),
         prefs.setBool('dataSaver', isDataSaverEnabled),
@@ -211,9 +240,32 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       }
 
       CustomToast.show(context, 'Settings saved successfully');
+
+      widget.onSettingsChanged?.call(false);
     } catch (e) {
       CustomToast.show(context, 'Failed to save settings: ${e.toString()}');
     }
+  }
+
+  void _revertSettings() {
+    final themeService = Provider.of<ThemeServices>(context, listen: false);
+    setState(() {
+      textSize = _initialTextSize;
+      isDarkMode = _initialDarkMode;
+      isNotificationsEnabled = _initialNotifications;
+      selectedLanguage = _initialLanguage;
+      isDataSaverEnabled = _initialDataSaver;
+      currentServer = _initialServer;
+      _hasUnsavedChanges = false;
+    });
+    // Reset the text size in ThemeService
+    themeService.setTextSize(_initialTextSize);  // Changed from resetTextSize to setTextSize
+    widget.onSettingsChanged?.call(false);
+  }
+
+  // Change from void _revertSettings() to:
+  void revertSettings() {
+    _revertSettings();
   }
 
   Future<void> _toggleNotifications(bool value) async {
@@ -889,6 +941,12 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     );
   }
 
+  void _handleTextSizeChange(double newSize) {
+    _onSettingChanged(() {
+      setState(() => textSize = newSize);
+    });
+  }
+
   Widget _buildModernSliderTile(
     String title,
     String subtitle,
@@ -923,28 +981,34 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         ],
       ),
       subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('A', style: TextStyle(fontSize: 12)),
-              Expanded(
-                child: Slider(
-                  value: value.clamp(12.0, 24.0),
-                  min: 12.0,
-                  max: 24.0,
-                  divisions: 12,
-                  label: value.round().toString(),
-                  onChanged: (newValue) {
-                    onChanged(newValue);
-                    // Update text size in real-time
-                    final themeService = Provider.of<ThemeServices>(context, listen: false);
-                    themeService.setTextSize(newValue); // Updated method name
-                  },
+          SizedBox(height: 8),
+          Container(
+            height: 40,
+            child: Row(
+              mainAxisSize: MainAxisSize.max,
+              children: [
+                Text('A', style: TextStyle(fontSize: 12)),
+                Expanded(
+                  child: Slider(
+                    value: value.clamp(12.0, 24.0),
+                    min: 12.0,
+                    max: 24.0,
+                    divisions: 12,
+                    label: value.round().toString(),
+                    onChanged: (newValue) {
+                      // Only update the state, don't update ThemeService yet
+                      onChanged(newValue);
+                      // Preview the change
+                      final themeService = Provider.of<ThemeServices>(context, listen: false);
+                      themeService.previewTextSize(newValue);
+                    },
+                  ),
                 ),
-              ),
-              Text('A', style: TextStyle(fontSize: 24)),
-            ],
+                Text('A', style: TextStyle(fontSize: 24)),
+              ],
+            ),
           ),
           Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
@@ -1039,6 +1103,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             actions: [
               TextButton(
                 onPressed: () {
+                  _revertSettings();  // Add this line
                   Navigator.of(context).pop(true);
                 },
                 child: Text('Discard'),
