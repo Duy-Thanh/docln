@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/theme_services.dart';
 import '../services/language_service.dart';
+import '../services/notification_service.dart';
 import 'package:http/http.dart' as http;
 import '../services/crawler_service.dart';
 import 'dart:async'; // For TimeoutException
@@ -98,22 +99,35 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   }
 
   Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      isDarkMode = prefs.getBool('darkMode') ?? false;
-      textSize = prefs.getDouble('textSize') ?? 16.0;
-      isNotificationsEnabled = prefs.getBool('isNotifications') ?? true;
-      selectedLanguage = prefs.getString('language') ?? 'English';
-      isDataSaverEnabled = prefs.getBool('dataSaver') ?? false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final themeService = Provider.of<ThemeServices>(context, listen: false);
+      
+      setState(() {
+        isDarkMode = prefs.getBool('darkMode') ?? false;
+        textSize = themeService.textSize.clamp(12.0, 24.0); // Ensure within bounds
+        isNotificationsEnabled = prefs.getBool('isNotifications') ?? true;
+        selectedLanguage = prefs.getString('language') ?? 'English';
+        isDataSaverEnabled = prefs.getBool('dataSaver') ?? false;
 
-      _initialDarkMode = isDarkMode;
-      _initialTextSize = textSize;
-      _initialNotifications = isNotificationsEnabled;
-      _initialLanguage = selectedLanguage;
-      _initialDataSaver = isDataSaverEnabled;
+        _initialDarkMode = isDarkMode;
+        _initialTextSize = textSize;
+        _initialNotifications = isNotificationsEnabled;
+        _initialLanguage = selectedLanguage;
+        _initialDataSaver = isDataSaverEnabled;
 
-      _loadCurrentServer();
-    });
+        print('🔤 Loaded text size: $textSize');
+      });
+
+      await _loadCurrentServer();
+    } catch (e) {
+      print('Error loading settings: $e');
+      // Set defaults if loading fails
+      setState(() {
+        textSize = 16.0;
+        _initialTextSize = 16.0;
+      });
+    }
   }
 
   void _checkForChanges() {
@@ -142,97 +156,131 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   }
 
   Future<void> _saveSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    final themeService = Provider.of<ThemeServices>(context, listen: false);
-    final languageService = Provider.of<LanguageService>(context, listen: false);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final themeService = Provider.of<ThemeServices>(context, listen: false);
+      final languageService = Provider.of<LanguageService>(context, listen: false);
+      final notificationService = Provider.of<NotificationService>(context, listen: false);
 
-    await prefs.setBool('darkMode', isDarkMode);
-    await prefs.setDouble('textSize', textSize);
-    await prefs.setBool('notifications', isNotificationsEnabled);
-    await prefs.setString('language', selectedLanguage ?? 'English');
-    await prefs.setBool('dataSaver', isDataSaverEnabled);
-    
-    setState(() {
-      _initialDarkMode = isDarkMode;
-      _initialTextSize = textSize;
-      _initialNotifications = isNotificationsEnabled;
-      _initialLanguage = selectedLanguage;
-      _initialDataSaver = isDataSaverEnabled;
-      _initialServer = currentServer;
-      _hasUnsavedChanges = false;
-    });
-    
-    CustomToast.show(context, 'Settings saved successfully');
+      // Save all settings
+      await Future.wait([
+        prefs.setBool('darkMode', isDarkMode),
+        prefs.setDouble('textSize', textSize),
+        notificationService.setNotificationEnabled(isNotificationsEnabled),
+        prefs.setString('language', selectedLanguage ?? 'English'),
+        prefs.setBool('dataSaver', isDataSaverEnabled),
+        _settingsService.saveCurrentServer(currentServer ?? ''),
+      ]);
 
-    // Update theme and language
-    themeService.setThemeMode(isDarkMode);
-    
-    if (selectedLanguage != null) {
-      await languageService.setLanguage(selectedLanguage!);
+      // If notifications were just enabled, request permission
+      if (isNotificationsEnabled && !_initialNotifications) {
+        final granted = await notificationService.requestPermission();
+        if (!granted) {
+          setState(() {
+            isNotificationsEnabled = false;
+          });
+          CustomToast.show(context, 'Failed to enable notifications: Permission denied');
+          return;
+        }
+        
+        // Show confirmation notification
+        await notificationService.showNotification(
+          title: 'Notifications Enabled',
+          body: 'You will now receive updates for new chapters and announcements',
+        );
+      }
+      
+      setState(() {
+        _initialDarkMode = isDarkMode;
+        _initialTextSize = textSize;
+        _initialNotifications = isNotificationsEnabled;
+        _initialLanguage = selectedLanguage;
+        _initialDataSaver = isDataSaverEnabled;
+        _initialServer = currentServer;
+        _hasUnsavedChanges = false;
+      });
+
+      CustomToast.show(context, 'Settings saved successfully');
+
+      // Update theme and language
+      themeService.setThemeMode(isDarkMode);
+      if (selectedLanguage != null) {
+        await languageService.setLanguage(selectedLanguage!);
+      }
+    } catch (e) {
+      CustomToast.show(context, 'Failed to save settings: ${e.toString()}');
     }
   }
 
+  Future<void> _toggleNotifications(bool value) async {
+    if (value) {
+      // Only request permission when toggling ON
+      final notificationService = Provider.of<NotificationService>(context, listen: false);
+      final granted = await notificationService.requestPermission();
+      if (!granted) {
+        CustomToast.show(context, 'Notification permission denied');
+        return;
+      }
+    }
+    
+    _onSettingChanged(() {
+      setState(() => isNotificationsEnabled = value);
+    });
+  }
+
   void _showTextSizeDialog() {
+    double tempSize = textSize.clamp(12.0, 24.0);
+    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Text Size'),
-        content: StatefulBuilder( // Add StatefulBuilder
-          builder: (context, setDialogState) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Sample Text',
-                  style: TextStyle(fontSize: textSize),
-                ),
-                SizedBox(height: 16),
-                Text(
-                  'Adjust the slider to change text size',
-                  style: TextStyle(fontSize: textSize * 0.8),
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('A', style: TextStyle(fontSize: 12)),
-                    Expanded(
-                      child: Slider(
-                        value: textSize,
-                        min: 12.0,
-                        max: 24.0,
-                        divisions: 12,
-                        label: textSize.round().toString(),
-                        onChanged: (value) {
-                          setDialogState(() => textSize = value);
-                          setState(() => textSize = value);
-                        },
-                      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Text Size'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('A', style: TextStyle(fontSize: 12)),
+                  Expanded(
+                    child: Slider(
+                      value: tempSize,
+                      min: 12.0,
+                      max: 24.0,
+                      divisions: 12,
+                      label: tempSize.round().toString(),
+                      onChanged: (value) {
+                        setDialogState(() => tempSize = value);
+                        final themeService = Provider.of<ThemeServices>(context, listen: false);
+                        themeService.setTextScaleFactor(value); // Pass the actual size
+                      },
                     ),
-                    Text('A', style: TextStyle(fontSize: 24)),
-                  ],
-                ),
-              ],
-            );
-          },
+                  ),
+                  Text('A', style: TextStyle(fontSize: 24)),
+                ],
+              ),
+              Text('Preview Text', style: TextStyle(fontSize: tempSize)),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                final themeService = Provider.of<ThemeServices>(context, listen: false);
+                themeService.setTextScaleFactor(_initialTextSize);
+                Navigator.pop(context);
+              },
+              child: Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                _onSettingChanged(() => setState(() => textSize = tempSize));
+                Navigator.pop(context);
+              },
+              child: Text('Apply'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              setState(() => textSize = _initialTextSize);
-              Navigator.pop(context);
-            },
-            child: Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              _onSettingChanged(() {});
-              Navigator.pop(context);
-            },
-            child: Text('Apply'),
-          ),
-        ],
       ),
     );
   }
@@ -713,7 +761,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     String subtitle,
     IconData icon,
     double value,
-    Function(double) onChanged,
+    ValueChanged<double> onChanged,
   ) {
     return ListTile(
       contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -725,29 +773,29 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         ),
         child: Icon(icon, color: Colors.blue),
       ),
-      title: Text(title),
-      subtitle: Column(
+      title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(subtitle),
-          SizedBox(height: 8),
-          Row(
-            children: [
-              Text('A', style: TextStyle(fontSize: 12)),
-              Expanded(
-                child: Slider(
-                  value: value,
-                  min: 12.0,
-                  max: 24.0,
-                  divisions: 12,
-                  label: value.round().toString(),
-                  onChanged: onChanged,
-                ),
-              ),
-              Text('A', style: TextStyle(fontSize: 24)),
-            ],
+          Text(
+            title,
+            style: TextStyle(fontWeight: FontWeight.w500),
+          ),
+          Text(
+            subtitle,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey,
+            ),
           ),
         ],
+      ),
+      subtitle: Slider(
+        value: value.clamp(12.0, 24.0), // Ensure value is within bounds
+        min: 12.0,
+        max: 24.0,
+        divisions: 12,
+        label: value.round().toString(),
+        onChanged: onChanged,
       ),
     );
   }

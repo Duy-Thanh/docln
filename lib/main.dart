@@ -30,6 +30,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider.value(value: themeService),
         ChangeNotifierProvider.value(value: languageService),
+        Provider<NotificationService>.value(value: notificationService),
       ],
       child: const MainApp(),
     ),
