@@ -200,13 +200,13 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         _hasUnsavedChanges = false;
       });
 
-      CustomToast.show(context, 'Settings saved successfully');
-
       // Update theme and language
-      themeService.setThemeMode(isDarkMode);
+      await themeService.setThemeMode(isDarkMode);
       if (selectedLanguage != null) {
         await languageService.setLanguage(selectedLanguage!);
       }
+
+      CustomToast.show(context, 'Settings saved successfully');
     } catch (e) {
       CustomToast.show(context, 'Failed to save settings: ${e.toString()}');
     }
