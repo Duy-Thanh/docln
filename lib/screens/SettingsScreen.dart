@@ -756,7 +756,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     );
   }
 
-    Widget _buildModernSliderTile(
+  Widget _buildModernSliderTile(
     String title,
     String subtitle,
     IconData icon,
