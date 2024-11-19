@@ -34,6 +34,8 @@ class CrawlerService {
         continue;
       }
     }
+
+    return null;
   }
   
   Future<List<Announcement>> getAnnouncements(BuildContext context) async {
