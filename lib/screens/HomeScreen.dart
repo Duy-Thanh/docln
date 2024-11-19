@@ -6,6 +6,8 @@ import '../screens/webview_screen.dart';
 import '../screens/SettingsScreen.dart';
 
 class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
   @override
   _HomeScreenState createState() => _HomeScreenState();
 }
@@ -22,9 +24,9 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _screens = [
       LibraryScreen(),
-      Center(child: Text('Search')),
-      Center(child: Text('Bookmarks')),
-      Center(child: Text('History')),
+      const Center(child: Text('Search')),
+      const Center(child: Text('Bookmarks')),
+      const Center(child: Text('History')),
       SettingsScreen(
         key: _settingsKey,
         onSettingsChanged: (hasChanges) {
@@ -40,29 +42,29 @@ class _HomeScreenState extends State<HomeScreen> {
         context: context,
         barrierDismissible: false,
         builder: (context) => AlertDialog(
-          title: Row(
+          title: const Row(
             children: [
               Icon(Icons.warning_amber_rounded, color: Colors.orange),
               SizedBox(width: 8),
               Text('Unsaved Changes'),
             ],
           ),
-          content: Text('Do you want to save your changes before leaving?'),
+          content: const Text('Do you want to save your changes before leaving?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: Text('Discard'),
+              child: const Text('Discard'),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, null),
-              child: Text('Cancel'),
+              child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () async {
                 Navigator.pop(context, true);
                 await _settingsKey.currentState?.saveSettings();
               },
-              child: Text('Save'),
+              child: const Text('Save'),
             ),
           ],
         ),
@@ -85,14 +87,14 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: Row(
+        title: const Row(
           children: [
             Icon(Icons.warning_amber_rounded, color: Colors.orange),
             SizedBox(width: 8),
             Text('Unsaved Changes'),
           ],
         ),
-        content: Text('Do you want to save your changes before leaving?'),
+        content: const Text('Do you want to save your changes before leaving?'),
         actions: [
           TextButton(
             onPressed: () {
@@ -103,11 +105,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 _hasUnsavedSettings = false;
               });
             },
-            child: Text('Discard'),
+            child: const Text('Discard'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () async {
@@ -120,7 +122,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 });
               }
             },
-            child: Text('Save'),
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -163,7 +165,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 BoxShadow(
                   color: (isDarkMode ? Colors.black : Colors.grey).withOpacity(0.3),
                   blurRadius: 10,
-                  offset: Offset(0, 5),
+                  offset: const Offset(0, 5),
                 ),
               ],
             ),

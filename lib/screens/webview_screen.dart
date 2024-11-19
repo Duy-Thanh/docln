@@ -4,7 +4,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 class WebViewScreen extends StatefulWidget {
   final String url;
 
-  WebViewScreen({required this.url});
+  const WebViewScreen({super.key, required this.url});
 
   @override
   _WebViewScreenState createState() => _WebViewScreenState();
@@ -89,7 +89,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('WebView'),
+        title: const Text('WebView'),
       ),
       body: WebViewWidget(controller: _controller), // Use WebViewWidget
     );

@@ -3,6 +3,8 @@ import '../modules/announcement.dart';
 import '../services/crawler_service.dart';
 import '../screens/custom_toast.dart';
 import '../screens/webview_screen.dart';
+import '../modules/light_novel.dart';
+import 'widgets/light_novel_card.dart';
 
 class LibraryScreen extends StatefulWidget {
   @override
@@ -12,6 +14,7 @@ class LibraryScreen extends StatefulWidget {
 class _LibraryScreenState extends State<LibraryScreen> {
   final CrawlerService _crawlerService = CrawlerService();
   List<Announcement> announcements = [];
+  List<LightNovel> popularNovels = [];
   bool isLoading = true;
   String? error;
 
@@ -43,6 +46,23 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
   }
 
+  Future<void> _loadPopularNovels() async {
+    await Future.delayed(Duration(seconds: 2));
+
+    setState(() {
+      popularNovels = [
+        LightNovel(
+          id: '1',
+          title: 'Light Novel 1',
+          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
+          url: '/tests1',
+        ),
+      ];
+
+      isLoading = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -55,10 +75,31 @@ class _LibraryScreenState extends State<LibraryScreen> {
           children: [
             if (isLoading) _buildLoadingIndicator(),
             if (error != null) _buildErrorCard(),
-            if (!isLoading && error == null) _buildAnnouncementsList(isDarkMode),
+            if (!isLoading && error == null) ... {
+              _buildLibraryTitle(),
+              _buildAnnouncementsList(isDarkMode),
+              _buildPopularNovels(isDarkMode),
+            },
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildLibraryTitle() {
+    return Column(
+      children: [
+        const SizedBox(height: 16),
+        Text(
+          'Library',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).textTheme.titleLarge?.color,
+          ),
+        ),
+        const SizedBox(height: 8),
+      ],
     );
   }
 
@@ -142,40 +183,25 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   Widget _buildAnnouncementsList(bool isDarkMode) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        const SizedBox(height: 16),
-        Text(
-          'Library',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Theme.of(context).textTheme.titleLarge?.color,
-          ),
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      color: isDarkMode ? Colors.grey[900] : Colors.grey[200],
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
         ),
-        const SizedBox(height: 8),
-        Card(
-          elevation: 4,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          color: isDarkMode ? Colors.grey[900] : Colors.grey[200],
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.all(8),
-            child: Column(
-              children: [
-                ...announcements.map((announcement) => 
-                  _buildAnnouncementItem(announcement, isDarkMode)
-                ).toList(),
-              ],
-            ),
-          ),
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          children: [
+            ...announcements.map((announcement) => 
+              _buildAnnouncementItem(announcement, isDarkMode)
+            ).toList(),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -208,6 +234,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
         ),
       ),
     );
+  }
+
+  // Light Novels
+  Widget _buildPopularNovels(bool isDarkMode) {
+    return Container();
   }
 
   Color _getColorFromString(String? colorString, bool isDarkMode) {

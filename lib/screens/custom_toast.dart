@@ -21,7 +21,7 @@ class CustomToast {
         child: Material(
           color: Colors.transparent,
           child: Container(
-            padding: EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.black.withOpacity(0.9),
               borderRadius: BorderRadius.circular(12),
@@ -29,7 +29,7 @@ class CustomToast {
                 BoxShadow(
                   color: Colors.black.withOpacity(0.2),
                   blurRadius: 8,
-                  offset: Offset(0, 4),
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
@@ -39,7 +39,7 @@ class CustomToast {
                 Expanded(
                   child: Text(
                     message,
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 14,
                       letterSpacing: 0.2,
@@ -47,9 +47,9 @@ class CustomToast {
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.close, color: Colors.white70, size: 20),
+                  icon: const Icon(Icons.close, color: Colors.white70, size: 20),
                   padding: EdgeInsets.zero,
-                  constraints: BoxConstraints(),
+                  constraints: const BoxConstraints(),
                   onPressed: () {
                     _timer?.cancel();
                     _overlayEntry?.remove();
@@ -63,10 +63,10 @@ class CustomToast {
       ),
     );
 
-    Overlay.of(context)?.insert(_overlayEntry!);
+    Overlay.of(context).insert(_overlayEntry!);
 
     // Start new timer for auto-dismiss
-    _timer = Timer(Duration(seconds: 3), () {
+    _timer = Timer(const Duration(seconds: 3), () {
       _overlayEntry?.remove();
       _overlayEntry = null;
       _timer = null;
