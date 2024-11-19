@@ -13,7 +13,7 @@ dependencies:
   html: ^0.15.5
   shared_preferences: ^2.3.3
   fluttertoast: ^8.2.8
-  webview_flutter: ^4.0.0
+  webview_flutter: ^4.7.0
   provider: ^6.1.1
   flutter_local_notifications: ^18.0.1
   permission_handler: ^11.3.1
