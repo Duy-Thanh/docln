@@ -58,6 +58,24 @@ class _LibraryScreenState extends State<LibraryScreen> {
           coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
           url: '/tests1',
         ),
+        LightNovel(
+          id: '1',
+          title: 'Light Novel 1',
+          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
+          url: '/tests1',
+        ),
+        LightNovel(
+          id: '1',
+          title: 'Light Novel 1',
+          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
+          url: '/tests1',
+        ),
+        LightNovel(
+          id: '1',
+          title: 'Light Novel 1',
+          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
+          url: '/tests1',
+        ),
       ];
 
       isLoading = false;
@@ -239,7 +257,70 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   // Light Novels
   Widget _buildPopularNovels(bool isDarkMode) {
-    return Container();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 24),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            children: [
+              Icon(
+                Icons.local_library_rounded,
+                size: 24,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Popular Novels',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        if (popularNovels.isEmpty)
+          Center(
+            child: Text(
+              'No novels available',
+              style: TextStyle(
+                color: Theme.of(context).textTheme.bodyMedium?.color,
+              ),
+            ),
+          )
+        else
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 0.65, // Adjusted this
+              crossAxisSpacing: 12, // Reduced spacing
+              mainAxisSpacing: 12,
+            ),
+            itemCount: popularNovels.length,
+            itemBuilder: (context, index) {
+              final novel = popularNovels[index];
+              return LightNovelCard(
+                novel: novel,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => WebViewScreen(
+                        url: 'https://ln.hako.vn${novel.url}',
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+      ],
+    );
   }
 
   Color _getColorFromString(String? colorString, bool isDarkMode) {
