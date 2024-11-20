@@ -22,6 +22,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   void initState() {
     super.initState();
     _loadAnnouncements();
+    _loadPopularNovels();
   }
 
   Future<void> _loadAnnouncements() async {
