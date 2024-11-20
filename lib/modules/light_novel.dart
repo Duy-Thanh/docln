@@ -3,12 +3,18 @@ class LightNovel {
   final String title;
   final String coverUrl;
   final String url;
+  final int? chapters;
+  final double? rating;
+  final int? reviews;
 
   LightNovel({
     required this.id,
     required this.title,
     required this.coverUrl,
     required this.url,
+    this.chapters,
+    this.rating,
+    this.reviews,
   });
 
   factory LightNovel.fromJson(Map<String, dynamic> json) {
