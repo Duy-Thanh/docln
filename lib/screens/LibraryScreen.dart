@@ -101,36 +101,54 @@ class _LibraryScreenState extends State<LibraryScreen> {
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: _loadAnnouncements,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            if (isLoading) _buildLoadingIndicator(),
-            if (error != null) _buildErrorCard(),
-            if (!isLoading && error == null) ... {
-              _buildLibraryTitle(),
-              _buildAnnouncementsList(isDarkMode),
-              _buildPopularNovels(isDarkMode),
-            },
-          ],
+        child: SingleChildScrollView(  // Wrap with SingleChildScrollView
+          physics: const AlwaysScrollableScrollPhysics(),  // Enable scrolling
+          child: Column(
+            children: [
+              if (isLoading) 
+                _buildLoadingIndicator()
+              else if (error != null) 
+                _buildErrorCard()
+              else ... [
+                _buildLibraryTitle(),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _buildAnnouncementsList(isDarkMode),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _buildPopularNovels(isDarkMode),
+                ),
+                // Add bottom padding for better scroll experience
+                const SizedBox(height: 32),
+              ],
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildLibraryTitle() {
-    return Column(
-      children: [
-        const SizedBox(height: 16),
-        Text(
-          'Library',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Theme.of(context).textTheme.titleLarge?.color,
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Icon(
+            Icons.campaign_rounded,
+            size: 24,
+            color: Theme.of(context).colorScheme.primary,
           ),
-        ),
-        const SizedBox(height: 8),
-      ],
+          const SizedBox(width: 8),
+          Text(
+            'Announcements',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -157,80 +175,90 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   Widget _buildErrorCard() {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 20),
-      elevation: 10,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.redAccent, Colors.red],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Card(
+          elevation: 0,
+          color: Theme.of(context).colorScheme.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
           ),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.error, color: Colors.white, size: 30),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    error!,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
+                Icon(
+                  Icons.error_outline_rounded,
+                  size: 48,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Connection Error',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  error?.replaceAll('Exception: ', '') ?? 'Error fetching announcements.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                TextButton.icon(
+                  onPressed: _loadAnnouncements,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text('Try Again'),
+                  style: TextButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.errorContainer.withOpacity(0.2),
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
                     ),
-                    textAlign: TextAlign.center,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 15),
-            ElevatedButton(
-              onPressed: _loadAnnouncements,
-              child: const Text('Try again'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.blue,
-                elevation: 6,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildAnnouncementsList(bool isDarkMode) {
+    if (announcements.isEmpty) {
+      return Center(
+        child: Text(
+          'No announcements available',
+          style: TextStyle(
+            color: Theme.of(context).textTheme.bodyMedium?.color,
+          ),
+        ),
+      );
+    }
+
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
-      color: isDarkMode ? Colors.grey[900] : Colors.grey[200],
       child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        width: double.infinity,
         padding: const EdgeInsets.all(8),
         child: Column(
-          children: [
-            ...announcements.map((announcement) => 
-              _buildAnnouncementItem(announcement, isDarkMode)
-            ).toList(),
-          ],
+          children: announcements.map((announcement) => 
+            _buildAnnouncementItem(announcement, isDarkMode)
+          ).toList(),
         ),
       ),
     );
@@ -267,31 +295,28 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  // Light Novels
+  // Update the GridView in _buildPopularNovels
   Widget _buildPopularNovels(bool isDarkMode) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 24),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            children: [
-              Icon(
-                Icons.local_library_rounded,
-                size: 24,
-                color: Theme.of(context).colorScheme.primary,
+        Row(
+          children: [
+            Icon(
+              Icons.local_library_rounded,
+              size: 24,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Popular Novels',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
               ),
-              const SizedBox(width: 8),
-              Text(
-                'Popular Novels',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
         if (popularNovels.isEmpty)
@@ -306,11 +331,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
         else
           GridView.builder(
             shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
+            physics: const NeverScrollableScrollPhysics(),  // Disable grid scrolling
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              childAspectRatio: 0.65, // Adjusted this
-              crossAxisSpacing: 12, // Reduced spacing
+              childAspectRatio: 0.65,
+              crossAxisSpacing: 12,
               mainAxisSpacing: 12,
             ),
             itemCount: popularNovels.length,

@@ -1,6 +1,9 @@
+import 'package:docln/services/update_service.dart';
 import 'package:flutter/material.dart';
 import '../screens/LibraryScreen.dart';
 import '../screens/SettingsScreen.dart';
+import '../screens/widgets/update_dialog.dart';
+import 'dart:ui';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -13,6 +16,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   bool _hasUnsavedSettings = false;
   final _settingsKey = GlobalKey<SettingsScreenState>();
+  bool _isCheckingForUpdates = false;
 
   late final List<Widget> _screens;
 
@@ -31,6 +35,70 @@ class _HomeScreenState extends State<HomeScreen> {
         },
       ),
     ];
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Check for updates only once after dependencies are ready
+    if (!_isCheckingForUpdates) {
+      _isCheckingForUpdates = true;
+      // Wait for the next frame to ensure everything is properly laid out
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            _checkForUpdates();
+          }
+        });
+      });
+    }
+  }
+
+  Future<void> _checkForUpdates() async {
+    try {
+      final updateInfo = await UpdateService.checkForUpdates();
+      if (updateInfo != null && mounted && context.mounted) {
+        // Use Navigator instead of showGeneralDialog
+        await Navigator.of(context).push(
+          PageRouteBuilder(
+            opaque: false,
+            barrierDismissible: false,
+            barrierColor: Colors.black54,
+            pageBuilder: (context, animation, secondaryAnimation) {
+              return WillPopScope(
+                onWillPop: () async => false,
+                child: SafeArea(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                    child: Dialog(
+                      backgroundColor: Colors.transparent,
+                      insetPadding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: UpdateDialog(updateInfo: updateInfo),
+                    ),
+                  ),
+                ),
+              );
+            },
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.8, end: 1.0).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOut,
+                    ),
+                  ),
+                  child: child,
+                ),
+              );
+            },
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error checking for updates: $e');
+    }
   }
 
   Future<bool> _handlePopWithResult() async {

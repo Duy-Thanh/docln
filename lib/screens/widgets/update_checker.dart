@@ -4,11 +4,7 @@ import 'update_dialog.dart';
 
 class UpdateChecker extends StatefulWidget {
   final Widget child;
-
-  const UpdateChecker({
-    Key? key,
-    required this.child,
-  }) : super(key: key);
+  const UpdateChecker({Key? key, required this.child}) : super(key: key);
 
   @override
   State<UpdateChecker> createState() => _UpdateCheckerState();
@@ -18,16 +14,23 @@ class _UpdateCheckerState extends State<UpdateChecker> {
   @override
   void initState() {
     super.initState();
-    _checkForUpdates();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkForUpdates();
+    });
   }
 
-  void _checkForUpdates() async {
-    final updateInfo = await UpdateService.checkForUpdates();
-    if (updateInfo != null && mounted) {
-      showDialog(
-        context: context,
-        builder: (context) => UpdateDialog(updateInfo: updateInfo),
-      );
+  Future<void> _checkForUpdates() async {
+    try {
+      final updateInfo = await UpdateService.checkForUpdates();
+      if (updateInfo != null && mounted && context.mounted) {
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) => UpdateDialog(updateInfo: updateInfo),
+        );
+      }
+    } catch (e) {
+      print('Error checking for updates: $e');
     }
   }
 

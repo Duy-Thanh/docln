@@ -71,6 +71,10 @@ class CrawlerService {
             .toList();
 
           return announcements;
+        } else if (response.statusCode == 525) {
+          throw Exception('SSL handshake failed. Please check your connection security.');
+        } else {
+          throw Exception('Server error (${response.statusCode}). Please try again later.');
         }
       }
 
