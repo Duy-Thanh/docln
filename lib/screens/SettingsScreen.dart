@@ -10,6 +10,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:ui';
 import '../services/settings_services.dart';
 import '../screens/custom_toast.dart';
+import '../services/update_service.dart';
+import '../screens/widgets/update_dialog.dart';
+import 'package:url_launcher/url_launcher.dart'; // Add this import
 
 // GridPainter class at the top level
 class GridPainter extends CustomPainter {
@@ -261,6 +264,28 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
     // Reset the text size in ThemeService
     themeService.setTextSize(_initialTextSize);  // Changed from resetTextSize to setTextSize
     widget.onSettingsChanged?.call(false);
+  }
+
+  // Add this method to check for updates
+  Future<void> _checkForUpdates() async {
+    try {
+      CustomToast.show(context, 'Checking for updates...');
+      final updateInfo = await UpdateService.checkForUpdates();
+      
+      if (!mounted) return;
+
+      if (updateInfo != null) {
+        showDialog(
+          context: context,
+          builder: (context) => UpdateDialog(updateInfo: updateInfo),
+        );
+      } else {
+        CustomToast.show(context, 'You are using the latest version!');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      CustomToast.show(context, 'Error checking for updates: $e');
+    }
   }
 
   // Change from void _revertSettings() to:
@@ -1065,23 +1090,34 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
   }
 
   Widget _buildAboutTile() {
-    return ListTile(
-      contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      leading: Container(
-        padding: EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: Colors.blue.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
+    return Column(
+      children: [
+        ListTile(
+          leading: const Icon(Icons.info_outline_rounded),
+          title: const Text('About App'),
+          subtitle: const Text('Version 1.0.0'),
+          onTap: () {
+            _showAboutDialog();
+          },
         ),
-        child: Icon(Icons.info_outline_rounded, color: Colors.blue),
-      ),
-      title: Text(
-        'About',
-        style: TextStyle(fontWeight: FontWeight.w500),
-      ),
-      subtitle: Text('Version 1.0.0.0'),
-      trailing: Icon(Icons.chevron_right_rounded),
-      onTap: () => _showAboutDialog(),
+        ListTile(
+          leading: const Icon(Icons.system_update_rounded),
+          title: const Text('Check for Updates'),
+          subtitle: const Text('Check if a new version is available'),
+          onTap: _checkForUpdates,
+        ),
+        ListTile(
+          leading: const Icon(Icons.code_rounded),
+          title: const Text('Source Code'),
+          subtitle: const Text('View on GitHub'),
+          onTap: () async {
+            final uri = Uri.parse('https://github.com/Duy-Thanh/docln');
+            if (await canLaunchUrl(uri)) {
+              await launchUrl(uri, mode: LaunchMode.externalApplication);
+            }
+          },
+        ),
+      ],
     );
   }
 
