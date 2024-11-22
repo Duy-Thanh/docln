@@ -26,7 +26,7 @@ class GridPainter extends CustomPainter {
       ..color = color
       ..strokeWidth = 1;
       
-    final spacing = 30.0;
+    const spacing = 30.0;
     
     for (double i = 0; i < size.width; i += spacing) {
       canvas.drawLine(
@@ -52,7 +52,7 @@ class GridPainter extends CustomPainter {
 class SettingsScreen extends StatefulWidget {
   final Function(bool hasChanges)? onSettingsChanged;
 
-  const SettingsScreen({Key? key, this.onSettingsChanged}) : super(key: key);
+  const SettingsScreen({super.key, this.onSettingsChanged});
 
   @override
   SettingsScreenState createState() => SettingsScreenState();
@@ -76,7 +76,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
   late bool _initialNotifications = true;
   late String? _initialLanguage = 'English';
   late bool _initialDataSaver = false;
-  late String? _initialServer = null;
+  late String? _initialServer;
 
   @override
   void initState() {
@@ -299,7 +299,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
       final bool? proceed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: Row(
+          title: const Row(
             children: [
               Icon(Icons.notifications_active, color: Colors.blue),
               SizedBox(width: 8),
@@ -310,11 +310,11 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              const Text(
                 'Would you like to receive notifications for:',
                 style: TextStyle(fontWeight: FontWeight.w500),
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildNotificationBenefit(
                 icon: Icons.new_releases,
                 text: 'New chapter releases',
@@ -332,11 +332,11 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: Text('Not Now'),
+              child: const Text('Not Now'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: Text('Enable'),
+              child: const Text('Enable'),
             ),
           ],
         ),
@@ -356,7 +356,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
         await showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            title: Row(
+            title: const Row(
               children: [
                 Icon(Icons.notifications_off, color: Colors.grey),
                 SizedBox(width: 8),
@@ -366,17 +366,17 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
+                const Icon(
                   Icons.notifications_off_outlined,
                   size: 48,
                   color: Colors.grey,
                 ),
-                SizedBox(height: 16),
-                Text(
+                const SizedBox(height: 16),
+                const Text(
                   'To receive notifications, you need to enable them in your device settings.',
                   textAlign: TextAlign.center,
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Text(
                   'You can change this anytime in your device settings.',
                   style: TextStyle(
@@ -394,7 +394,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
                   // Update the switch to reflect the actual state
                   _onSettingChanged(() => setState(() => isNotificationsEnabled = false));
                 },
-                child: Text('Maybe Later'),
+                child: const Text('Maybe Later'),
               ),
               FilledButton(
                 onPressed: () {
@@ -405,7 +405,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
                   final notificationService = Provider.of<NotificationService>(context, listen: false);
                   notificationService.openSettings();
                 },
-                child: Text('Open Settings'),
+                child: const Text('Open Settings'),
               ),
             ],
           ),
@@ -425,11 +425,11 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
     required String text,
   }) {
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
           Icon(icon, size: 20, color: Colors.blue),
-          SizedBox(width: 12),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(text),
           ),
@@ -445,14 +445,14 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text('Text Size'),
+          title: const Text('Text Size'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('A', style: TextStyle(fontSize: 12)),
+                  const Text('A', style: TextStyle(fontSize: 12)),
                   Expanded(
                     child: Slider(
                       value: tempSize,
@@ -467,7 +467,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
                       },
                     ),
                   ),
-                  Text('A', style: TextStyle(fontSize: 24)),
+                  const Text('A', style: TextStyle(fontSize: 24)),
                 ],
               ),
               Text('Preview Text', style: TextStyle(fontSize: tempSize)),
@@ -480,14 +480,14 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
                 themeService.setTextSize(_initialTextSize);
                 Navigator.pop(context);
               },
-              child: Text('Cancel'),
+              child: const Text('Cancel'),
             ),
             TextButton(
               onPressed: () {
                 _onSettingChanged(() => setState(() => textSize = tempSize));
                 Navigator.pop(context);
               },
-              child: Text('Apply'),
+              child: const Text('Apply'),
             ),
           ],
         ),
@@ -504,7 +504,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: RoundedRectangleBorder(
+      shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) => DraggableScrollableSheet(
@@ -515,7 +515,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
         builder: (context, controller) => Column(
           children: [
             Container(
-              margin: EdgeInsets.symmetric(vertical: 8),
+              margin: const EdgeInsets.symmetric(vertical: 8),
               width: 40,
               height: 4,
               decoration: BoxDecoration(
@@ -523,7 +523,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            Padding(
+            const Padding(
               padding: EdgeInsets.all(16),
               child: Text(
                 'Select Language',
@@ -567,43 +567,43 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('About Light Novel Reader', textAlign: TextAlign.center),
+        title: const Text('About Light Novel Reader', textAlign: TextAlign.center),
         content: SingleChildScrollView(
           child: Column(
             children: [
               Container(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.blue.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.menu_book_rounded, size: 64, color: Colors.blue),
+                child: const Icon(Icons.menu_book_rounded, size: 64, color: Colors.blue),
               ),
-              SizedBox(height: 24),
-              Text('Version 1.0.0.0',
+              const SizedBox(height: 24),
+              const Text('Version 1.0.0.0',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               Text('© 2024 CyberDay Studios',
                 style: TextStyle(color: Colors.grey[600]),
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               Text('Developed by nekkochan',
                 style: TextStyle(color: Colors.grey[600]),
               ),
-              SizedBox(height: 24),
-              Text(
+              const SizedBox(height: 24),
+              const Text(
                 'Light Novel Reader is a free and open-source light novel reader app that allows you to read light novels online for free',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14),
               ),
-              SizedBox(height: 24),
+              const SizedBox(height: 24),
               Text(
                 'This app is not affiliated with any of the websites it links to.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               Text(
                 'This application is under heavy development. That means the application may contain bugs and errors. Please report any issues to the developer.',
                 textAlign: TextAlign.center,
@@ -615,7 +615,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Close'),
+            child: const Text('Close'),
           ),
         ],
       ),
@@ -623,12 +623,12 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
   }
 
   void _showServerBottomSheet() {
-    final servers = CrawlerService.servers; // Get servers from CrawlerService
+    const servers = CrawlerService.servers; // Get servers from CrawlerService
     
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: RoundedRectangleBorder(
+      shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) => DraggableScrollableSheet(
@@ -639,7 +639,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
         builder: (context, controller) => Column(
           children: [
             Container(
-              margin: EdgeInsets.symmetric(vertical: 8),
+              margin: const EdgeInsets.symmetric(vertical: 8),
               width: 40,
               height: 4,
               decoration: BoxDecoration(
@@ -647,7 +647,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            Padding(
+            const Padding(
               padding: EdgeInsets.all(16),
               child: Text(
                 'Select Server',
@@ -673,9 +673,9 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
 
   Widget _buildServerListItem(String server, bool isSelected) {
     return ListTile(
-      contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
       leading: Container(
-        padding: EdgeInsets.all(8),
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: isSelected ? Colors.blue.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
@@ -692,7 +692,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
           color: isSelected ? Colors.blue : null,
         ),
       ),
-      trailing: isSelected ? Icon(Icons.check, color: Colors.blue) : null,
+      trailing: isSelected ? const Icon(Icons.check, color: Colors.blue) : null,
       onTap: () async {
         Navigator.pop(context);
         await _changeServer(server);
@@ -706,7 +706,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => Center(
+        builder: (context) => const Center(
           child: CircularProgressIndicator(),
         ),
       );
@@ -754,7 +754,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) => Center(
+          builder: (context) => const Center(
             child: CircularProgressIndicator(),
           ),
         );
@@ -769,7 +769,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
         } catch (e) {
           // Pop loading dialog
           Navigator.pop(context);
-          throw e;
+          rethrow;
         }
       });
     } catch (e) {
@@ -783,7 +783,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
     final isSelected = currentServer == server;
     return Card(
       elevation: 0,
-      margin: EdgeInsets.symmetric(vertical: 4),
+      margin: const EdgeInsets.symmetric(vertical: 4),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
@@ -792,7 +792,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
         ),
       ),
       child: ListTile(
-        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         leading: Radio<String>(
           value: server,
           groupValue: currentServer,
@@ -833,7 +833,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
             blurRadius: 10,
-            offset: Offset(0, 5),
+            offset: const Offset(0, 5),
           ),
         ],
       ),
@@ -843,12 +843,12 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
           onTap: onTap,
           borderRadius: BorderRadius.circular(20),
           child: Padding(
-            padding: EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding: EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [Colors.blue.shade400, Colors.blue.shade600],
@@ -860,22 +860,22 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
                       BoxShadow(
                         color: Colors.blue.withOpacity(0.3),
                         blurRadius: 8,
-                        offset: Offset(0, 4),
+                        offset: const Offset(0, 4),
                       ),
                     ],
                   ),
                   child: Icon(icon, color: Colors.white, size: 24),
                 ),
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
                 Text(
                   title,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 16,
                     letterSpacing: 0.5,
                   ),
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 Text(
                   subtitle,
                   style: TextStyle(
@@ -907,7 +907,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              SizedBox(width: 8),
+              const SizedBox(width: 8),
               Text(
                 title,
                 style: TextStyle(
@@ -921,7 +921,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
           ),
         ),
         Card(
-          margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
@@ -944,9 +944,9 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
     Function(bool) onChanged,
   ) {
     return ListTile(
-      contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       leading: Container(
-        padding: EdgeInsets.all(8),
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: Colors.blue.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
@@ -955,7 +955,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
       ),
       title: Text(
         title,
-        style: TextStyle(fontWeight: FontWeight.w500),
+        style: const TextStyle(fontWeight: FontWeight.w500),
       ),
       subtitle: Text(subtitle),
       trailing: Switch.adaptive(
@@ -980,9 +980,9 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
     ValueChanged<double> onChanged,
   ) {
     return ListTile(
-      contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       leading: Container(
-        padding: EdgeInsets.all(8),
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: Colors.blue.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
@@ -994,11 +994,11 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
         children: [
           Text(
             title,
-            style: TextStyle(fontWeight: FontWeight.w500),
+            style: const TextStyle(fontWeight: FontWeight.w500),
           ),
           Text(
             subtitle,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 12,
               color: Colors.grey,
             ),
@@ -1008,13 +1008,13 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(height: 8),
-          Container(
+          const SizedBox(height: 8),
+          SizedBox(
             height: 40,
             child: Row(
               mainAxisSize: MainAxisSize.max,
               children: [
-                Text('A', style: TextStyle(fontSize: 12)),
+                const Text('A', style: TextStyle(fontSize: 12)),
                 Expanded(
                   child: Slider(
                     value: value.clamp(12.0, 24.0),
@@ -1031,12 +1031,12 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
                     },
                   ),
                 ),
-                Text('A', style: TextStyle(fontSize: 24)),
+                const Text('A', style: TextStyle(fontSize: 24)),
               ],
             ),
           ),
           Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(
               'Preview Text',
               style: TextStyle(fontSize: value),
@@ -1049,42 +1049,42 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
 
   Widget _buildServerTile() {
     return ListTile(
-      contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       leading: Container(
-        padding: EdgeInsets.all(8),
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: Colors.blue.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(Icons.dns_rounded, color: Colors.blue),
+        child: const Icon(Icons.dns_rounded, color: Colors.blue),
       ),
-      title: Text(
+      title: const Text(
         'Current Server',
         style: TextStyle(fontWeight: FontWeight.w500),
       ),
       subtitle: Text(currentServer ?? 'No server selected'),
-      trailing: Icon(Icons.chevron_right_rounded),
+      trailing: const Icon(Icons.chevron_right_rounded),
       onTap: () => _showServerBottomSheet(),
     );
   }
 
   Widget _buildLanguageTile() {
     return ListTile(
-      contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       leading: Container(
-        padding: EdgeInsets.all(8),
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: Colors.blue.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(Icons.language_rounded, color: Colors.blue),
+        child: const Icon(Icons.language_rounded, color: Colors.blue),
       ),
-      title: Text(
+      title: const Text(
         'Language',
         style: TextStyle(fontWeight: FontWeight.w500),
       ),
       subtitle: Text(selectedLanguage ?? 'English'),
-      trailing: Icon(Icons.chevron_right_rounded),
+      trailing: const Icon(Icons.chevron_right_rounded),
       onTap: () => _showLanguageBottomSheet(),
     );
   }
@@ -1134,28 +1134,28 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
           context: context,
           builder: (context) => AlertDialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: Text('Unsaved Changes'),
-            content: Text('You have unsaved changes. Do you want to save them before leaving?'),
+            title: const Text('Unsaved Changes'),
+            content: const Text('You have unsaved changes. Do you want to save them before leaving?'),
             actions: [
               TextButton(
                 onPressed: () {
                   _revertSettings();  // Add this line
                   Navigator.of(context).pop(true);
                 },
-                child: Text('Discard'),
+                child: const Text('Discard'),
               ),
               TextButton(
                 onPressed: () async {
                   await _saveSettings();
                   Navigator.of(context).pop(true);
                 },
-                child: Text('Save'),
+                child: const Text('Save'),
               ),
               TextButton(
                 onPressed: () {
                   Navigator.of(context).pop(false);
                 },
-                child: Text('Cancel'),
+                child: const Text('Cancel'),
               ),
             ],
           ),
@@ -1186,14 +1186,14 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
                       ),
                     ),
                     if (_hasUnsavedChanges) ...[
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
                       Container(
-                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.amber.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Text(
+                        child: const Text(
                           'Unsaved',
                           style: TextStyle(
                             color: Colors.amber,
@@ -1246,7 +1246,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
             ),
                         SliverToBoxAdapter(
               child: Padding(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1259,7 +1259,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
                         color: Colors.blue.shade800,
                       ),
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     Wrap(
                       spacing: 16,
                       runSpacing: 16,
@@ -1356,20 +1356,20 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
                     _buildAboutTile(),
                   ],
                 ),
-                SizedBox(height: 80), // Space for FAB
+                const SizedBox(height: 80), // Space for FAB
               ]),
             ),
           ],
         ),
         floatingActionButton: _hasUnsavedChanges ? Container(
-          margin: EdgeInsets.only(bottom: 16),
+          margin: const EdgeInsets.only(bottom: 16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
                 color: Colors.blue.withOpacity(0.3),
                 blurRadius: 12,
-                offset: Offset(0, 6),
+                offset: const Offset(0, 6),
               ),
             ],
           ),
@@ -1377,8 +1377,8 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
             onPressed: _saveSettings,
             elevation: 0,
             backgroundColor: Colors.blue.shade600,
-            icon: Icon(Icons.save_rounded, color: Colors.white),
-            label: Text(
+            icon: const Icon(Icons.save_rounded, color: Colors.white),
+            label: const Text(
               'Save Changes',
               style: TextStyle(
                 color: Colors.white,

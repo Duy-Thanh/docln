@@ -1,7 +1,6 @@
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class UpdateInfo {
   final String currentVersion;

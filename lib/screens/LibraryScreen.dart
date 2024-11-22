@@ -5,8 +5,13 @@ import '../screens/custom_toast.dart';
 import '../screens/webview_screen.dart';
 import '../modules/light_novel.dart';
 import 'widgets/light_novel_card.dart';
+import 'package:android_intent_plus/android_intent.dart';
+import 'package:app_settings/app_settings.dart';
+import 'dart:io' show Platform;
 
 class LibraryScreen extends StatefulWidget {
+  const LibraryScreen({super.key});
+
   @override
   _LibraryScreenState createState() => _LibraryScreenState();
 }
@@ -48,10 +53,163 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   Future<void> _loadPopularNovels() async {
-    await Future.delayed(Duration(seconds: 2));
+    await Future.delayed(const Duration(seconds: 2));
 
     setState(() {
       popularNovels = [
+        LightNovel(
+          id: '1',
+          title: 'Light Novel 1',
+          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
+          url: '/tests1',
+          chapters: 123,
+          rating: 4.5,
+          reviews: 789,
+        ),
+        LightNovel(
+          id: '1',
+          title: 'Light Novel 1',
+          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
+          url: '/tests1',
+          chapters: 123,
+          rating: 4.5,
+          reviews: 789,
+        ),
+        LightNovel(
+          id: '1',
+          title: 'Light Novel 1',
+          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
+          url: '/tests1',
+          chapters: 123,
+          rating: 4.5,
+          reviews: 789,
+        ),
+        LightNovel(
+          id: '1',
+          title: 'Light Novel 1',
+          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
+          url: '/tests1',
+          chapters: 123,
+          rating: 4.5,
+          reviews: 789,
+        ),
+        LightNovel(
+          id: '1',
+          title: 'Light Novel 1',
+          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
+          url: '/tests1',
+          chapters: 123,
+          rating: 4.5,
+          reviews: 789,
+        ),
+        LightNovel(
+          id: '1',
+          title: 'Light Novel 1',
+          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
+          url: '/tests1',
+          chapters: 123,
+          rating: 4.5,
+          reviews: 789,
+        ),
+        LightNovel(
+          id: '1',
+          title: 'Light Novel 1',
+          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
+          url: '/tests1',
+          chapters: 123,
+          rating: 4.5,
+          reviews: 789,
+        ),
+        LightNovel(
+          id: '1',
+          title: 'Light Novel 1',
+          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
+          url: '/tests1',
+          chapters: 123,
+          rating: 4.5,
+          reviews: 789,
+        ),
+        LightNovel(
+          id: '1',
+          title: 'Light Novel 1',
+          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
+          url: '/tests1',
+          chapters: 123,
+          rating: 4.5,
+          reviews: 789,
+        ),
+        LightNovel(
+          id: '1',
+          title: 'Light Novel 1',
+          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
+          url: '/tests1',
+          chapters: 123,
+          rating: 4.5,
+          reviews: 789,
+        ),
+        LightNovel(
+          id: '1',
+          title: 'Light Novel 1',
+          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
+          url: '/tests1',
+          chapters: 123,
+          rating: 4.5,
+          reviews: 789,
+        ),
+        LightNovel(
+          id: '1',
+          title: 'Light Novel 1',
+          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
+          url: '/tests1',
+          chapters: 123,
+          rating: 4.5,
+          reviews: 789,
+        ),
+        LightNovel(
+          id: '1',
+          title: 'Light Novel 1',
+          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
+          url: '/tests1',
+          chapters: 123,
+          rating: 4.5,
+          reviews: 789,
+        ),
+        LightNovel(
+          id: '1',
+          title: 'Light Novel 1',
+          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
+          url: '/tests1',
+          chapters: 123,
+          rating: 4.5,
+          reviews: 789,
+        ),
+        LightNovel(
+          id: '1',
+          title: 'Light Novel 1',
+          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
+          url: '/tests1',
+          chapters: 123,
+          rating: 4.5,
+          reviews: 789,
+        ),
+        LightNovel(
+          id: '1',
+          title: 'Light Novel 1',
+          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
+          url: '/tests1',
+          chapters: 123,
+          rating: 4.5,
+          reviews: 789,
+        ),
+        LightNovel(
+          id: '1',
+          title: 'Light Novel 1',
+          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
+          url: '/tests1',
+          chapters: 123,
+          rating: 4.5,
+          reviews: 789,
+        ),
         LightNovel(
           id: '1',
           title: 'Light Novel 1',
@@ -101,30 +259,41 @@ class _LibraryScreenState extends State<LibraryScreen> {
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: _loadAnnouncements,
-        child: SingleChildScrollView(  // Wrap with SingleChildScrollView
-          physics: const AlwaysScrollableScrollPhysics(),  // Enable scrolling
-          child: Column(
-            children: [
-              if (isLoading) 
-                _buildLoadingIndicator()
-              else if (error != null) 
-                _buildErrorCard()
-              else ... [
-                _buildLibraryTitle(),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _buildAnnouncementsList(isDarkMode),
+        child: isLoading 
+          ? _buildLoadingIndicator()
+          : error != null 
+            ? LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: Container(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: Center(
+                        child: _buildErrorCard(),
+                      ),
+                    ),
+                  );
+                },
+              )
+            : SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Column(
+                  children: [
+                    _buildLibraryTitle(),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: _buildAnnouncementsList(isDarkMode),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: _buildPopularNovels(isDarkMode),
+                    ),
+                    const SizedBox(height: 32),
+                  ],
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _buildPopularNovels(isDarkMode),
-                ),
-                // Add bottom padding for better scroll experience
-                const SizedBox(height: 32),
-              ],
-            ],
-          ),
-        ),
+              ),
       ),
     );
   }
@@ -159,8 +328,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 20),
+            const CircularProgressIndicator(),
+            const SizedBox(height: 20),
             Text(
               'Fetching data, please be patient...', 
               style: TextStyle(
@@ -179,51 +348,183 @@ class _LibraryScreenState extends State<LibraryScreen> {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 32),
         child: Card(
-          elevation: 0,
+          elevation: 2,
+          shadowColor: Theme.of(context).colorScheme.error.withOpacity(0.3),
           color: Theme.of(context).colorScheme.surface,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(28),
+            side: BorderSide(
+              color: Theme.of(context).colorScheme.error.withOpacity(0.1),
+              width: 1,
+            ),
           ),
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 32),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.error_outline_rounded,
-                  size: 48,
-                  color: Theme.of(context).colorScheme.error,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Connection Error',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.error,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  error?.replaceAll('Exception: ', '') ?? 'Error fetching announcements.',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
-                  ),
+                // Animated Error Icon
+                TweenAnimationBuilder(
+                  duration: const Duration(milliseconds: 800),
+                  tween: Tween<double>(begin: 0, end: 1),
+                  builder: (context, double value, child) {
+                    return Transform.scale(
+                      scale: 0.8 + (0.2 * value),
+                      child: Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.error.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(100),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Theme.of(context).colorScheme.error.withOpacity(0.1),
+                              blurRadius: 20 * value,
+                              spreadRadius: 5 * value,
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.error_outline_rounded,
+                          size: 44,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 24),
-                TextButton.icon(
-                  onPressed: _loadAnnouncements,
-                  icon: const Icon(Icons.refresh_rounded, size: 18),
-                  label: const Text('Try Again'),
-                  style: TextButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.errorContainer.withOpacity(0.2),
-                    foregroundColor: Theme.of(context).colorScheme.error,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
+                // Error Title with Animation
+                TweenAnimationBuilder(
+                  duration: const Duration(milliseconds: 600),
+                  tween: Tween<double>(begin: 0, end: 1),
+                  builder: (context, double value, child) {
+                    return Opacity(
+                      opacity: value,
+                      child: Transform.translate(
+                        offset: Offset(0, 20 * (1 - value)),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Text(
+                    'Connection Error',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.error,
+                      letterSpacing: 0.5,
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Error Message with Animation
+                TweenAnimationBuilder(
+                  duration: const Duration(milliseconds: 600),
+                  tween: Tween<double>(begin: 0, end: 1),
+                  builder: (context, double value, child) {
+                    return Opacity(
+                      opacity: value,
+                      child: Transform.translate(
+                        offset: Offset(0, 20 * (1 - value)),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Text(
+                    'Error while fetching data.\n\nMaybe you are offline or the server is down.\n\nPlease check your internet connection\n\nUse button below to go to Internet settings',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 28),
+                // Settings Buttons with Animation
+                TweenAnimationBuilder(
+                  duration: const Duration(milliseconds: 800),
+                  tween: Tween<double>(begin: 0, end: 1),
+                  builder: (context, double value, child) {
+                    return Opacity(
+                      opacity: value,
+                      child: Transform.translate(
+                        offset: Offset(0, 20 * (1 - value)),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildSettingsButton(
+                        icon: Icons.wifi_rounded,
+                        label: 'Wi-Fi',
+                        onTap: () async {
+                          if (Platform.isAndroid) {
+                            const AndroidIntent intent = AndroidIntent(
+                              action: 'android.settings.WIFI_SETTINGS',
+                            );
+                            await intent.launch();
+                          } else {
+                            await AppSettings.openAppSettings(type: AppSettingsType.wifi);
+                          }
+                        },
+                      ),
+                      const SizedBox(width: 12),
+                      _buildSettingsButton(
+                        icon: Icons.cell_tower_rounded,
+                        label: 'Mobile Data',
+                        onTap: () async {
+                          if (Platform.isAndroid) {
+                            const AndroidIntent intent = AndroidIntent(
+                              action: 'android.settings.DATA_ROAMING_SETTINGS',
+                            );
+                            await intent.launch();
+                          } else {
+                            await AppSettings.openAppSettings(type: AppSettingsType.wireless);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // Try Again Button with Animation
+                TweenAnimationBuilder(
+                  duration: const Duration(milliseconds: 1000),
+                  tween: Tween<double>(begin: 0, end: 1),
+                  builder: (context, double value, child) {
+                    return Opacity(
+                      opacity: value,
+                      child: Transform.translate(
+                        offset: Offset(0, 20 * (1 - value)),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: TextButton.icon(
+                    onPressed: _loadAnnouncements,
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text('Try Again'),
+                    style: TextButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.error.withOpacity(0.1),
+                      foregroundColor: Theme.of(context).colorScheme.error,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 16,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ).copyWith(
+                      overlayColor: MaterialStateProperty.resolveWith((states) {
+                        if (states.contains(MaterialState.pressed)) {
+                          return Theme.of(context).colorScheme.error.withOpacity(0.2);
+                        }
+                        if (states.contains(MaterialState.hovered)) {
+                          return Theme.of(context).colorScheme.error.withOpacity(0.15);
+                        }
+                        return null;
+                      }),
                     ),
                   ),
                 ),
@@ -231,6 +532,53 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
+        side: BorderSide(
+          color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ).copyWith(
+        overlayColor: MaterialStateProperty.resolveWith((states) {
+          if (states.contains(MaterialState.pressed)) {
+            return Theme.of(context).colorScheme.primary.withOpacity(0.1);
+          }
+          return null;
+        }),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 24,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }
