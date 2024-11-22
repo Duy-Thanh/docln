@@ -295,7 +295,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                  animation: Listenable.merge([
                   _containerScale, 
                   _pulseAnimation,
-                  _floatAnimation,
                 ]),
                 builder: (context, child) {
                   return Transform.rotate(
@@ -367,46 +366,49 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                 AnimatedBuilder(
                   animation: Listenable.merge([_containerScale, _pulseAnimation]),
                   builder: (context, child) {
-                    return Transform.scale(
-                      scale: _containerScale.value * _pulseAnimation.value,
-                      child: Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: primaryColor.withOpacity(0.1),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: primaryColor.withOpacity(0.2),
-                              blurRadius: 20 * _containerScale.value,
-                              spreadRadius: 5 * _containerScale.value,
-                            ),
-                          ],
-                        ),
-                        child: ShaderMask(
-                          shaderCallback: (Rect bounds) {
-                            return LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                primaryColor,
-                                primaryColor.withOpacity(0.8),
-                                primaryColor,
-                              ],
-                              stops: [
-                                0.0,
-                                _shimmerOffset.value,
-                                1.0,
-                              ],
-                            ).createShader(bounds);
-                          },
-                          child: Transform.rotate(
-                            angle: _iconRotation.value,
-                            child: Transform.scale(
-                              scale: _iconScale.value,
-                              child: Icon(
-                                Icons.menu_book_rounded,
-                                size: 64,
-                                color: Colors.white,
+                    return Transform.translate(
+                      offset: Offset(0, _floatAnimation.value),
+                        child: Transform.scale(
+                          scale: _containerScale.value * _pulseAnimation.value,
+                          child: Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: primaryColor.withOpacity(0.1),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: primaryColor.withOpacity(0.2),
+                                blurRadius: 20 * _containerScale.value,
+                                spreadRadius: 5 * _containerScale.value,
+                              ),
+                            ],
+                          ),
+                          child: ShaderMask(
+                            shaderCallback: (Rect bounds) {
+                              return LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  primaryColor,
+                                  primaryColor.withOpacity(0.8),
+                                  primaryColor,
+                                ],
+                                stops: [
+                                  0.0,
+                                  _shimmerOffset.value,
+                                  1.0,
+                                ],
+                              ).createShader(bounds);
+                            },
+                            child: Transform.rotate(
+                              angle: _iconRotation.value,
+                              child: Transform.scale(
+                                scale: _iconScale.value,
+                                child: Icon(
+                                  Icons.menu_book_rounded,
+                                  size: 64,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
                           ),
