@@ -29,60 +29,42 @@ class UpdateService {
   static const Duration CHECK_INTERVAL = Duration(minutes: 15);
 
   // Convert release date format to version number
-  static String _getReleaseVersion(String releaseTag) {
-    // release_2024.11.20_16-06 -> 2024.11.20
+  static DateTime _parseReleaseDate(String releaseTag) {
     try {
-      if (releaseTag.startsWith('release_')) {
-        final parts = releaseTag.split('release_')[1].split('_');
-        return parts[0]; // Returns 2024.11.20
-      }
-      return releaseTag;
+      // Parse release_2024.11.22_09-24
+      final parts = releaseTag.split('release_')[1].split('_');
+      final date = parts[0]; // 2024.11.22
+      final time = parts[1].replaceAll('-', ':'); // 09:24
+      return DateTime.parse('${date.replaceAll('.', '-')}T$time:00Z');
     } catch (e) {
-      print('Error converting release tag: $e');
-      return '0.0.0';
+      print('Error parsing release date: $e');
+      return DateTime(1970); // Return very old date on error
     }
   }
 
-  static bool _isNewerVersion(String currentVersion, String latestReleaseTag) {
+  // Convert app version to comparable date
+  static DateTime _parseAppVersion(String version) {
     try {
-      final latestVersion = _getReleaseVersion(latestReleaseTag);
-      
-      // Split versions into parts and compare
-      final currentParts = currentVersion.split('.')
-          .map(int.parse).toList();
-      final latestParts = latestVersion.split('.')
-          .map(int.parse).toList();
-
-      // Compare year
-      if (latestParts[0] != currentParts[0]) {
-        return latestParts[0] > currentParts[0];
-      }
-      // Compare month
-      if (latestParts[1] != currentParts[1]) {
-        return latestParts[1] > currentParts[1];
-      }
-      // Compare day
-      return latestParts[2] > currentParts[2];
+      // Parse 2024.11.20
+      final parts = version.split('.');
+      return DateTime(
+        int.parse(parts[0]), // year
+        int.parse(parts[1]), // month
+        int.parse(parts[2]), // day
+      );
     } catch (e) {
-      print('Error comparing versions: $e');
-      return false;
+      print('Error parsing app version: $e');
+      return DateTime(1970); // Return very old date on error
     }
   }
 
   static Future<UpdateInfo?> checkForUpdates() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final lastCheck = prefs.getInt(LAST_CHECK_KEY) ?? 0;
-      final now = DateTime.now().millisecondsSinceEpoch;
-      
-      if (now - lastCheck < CHECK_INTERVAL.inMilliseconds) {
-        return null;
-      }
-
       // Get current app version
       final packageInfo = await PackageInfo.fromPlatform();
-      final currentVersion = packageInfo.version;
-      final currentBuildNumber = int.parse(packageInfo.buildNumber);
+      final currentVersion = packageInfo.version; // 2024.11.20
+      
+      print('Current app version: $currentVersion'); // Debug print
 
       // Get latest release from GitHub
       final response = await http.get(
@@ -92,40 +74,59 @@ class UpdateService {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        final latestReleaseTag = data['tag_name'].toString();
-        final releaseNotes = data['body'] ?? '';
+        print('GitHub API Response: ${response.body}'); // Debug print
         
-        // Find the APK asset
-        final assets = List<Map<String, dynamic>>.from(data['assets']);
-        final apkAsset = assets.firstWhere(
-          (asset) => asset['name'].toString().endsWith('.apk'),
-          orElse: () => {},
+        final latestTag = data['tag_name'].toString();
+        print('Latest GitHub tag: $latestTag'); // Debug print
+
+        // Simple date comparison
+        final currentParts = currentVersion.split('.');
+        final currentDate = DateTime(
+          int.parse(currentParts[0]), // year
+          int.parse(currentParts[1]), // month
+          int.parse(currentParts[2])  // day
         );
-        
-        if (apkAsset.isEmpty) return null;
 
-        // Check if the latest version is newer
-        if (_isNewerVersion(currentVersion, latestReleaseTag)) {
-          final downloadUrl = apkAsset['browser_download_url'];
-          final releaseDate = DateTime.parse(data['published_at']);
+        final tagParts = latestTag.split('release_')[1].split('_')[0].split('.');
+        final releaseDate = DateTime(
+          int.parse(tagParts[0]), // year
+          int.parse(tagParts[1]), // month
+          int.parse(tagParts[2])  // day
+        );
 
-          // Save last check time
-          await prefs.setInt(LAST_CHECK_KEY, now);
+        print('Current date: $currentDate'); // Debug print
+        print('Release date: $releaseDate'); // Debug print
+        print('Is update needed: ${releaseDate.isAfter(currentDate)}'); // Debug print
+
+        if (releaseDate.isAfter(currentDate)) {
+          final releaseNotes = data['body'] ?? '';
+          final assets = List<Map<String, dynamic>>.from(data['assets']);
+          final apkAsset = assets.firstWhere(
+            (asset) => asset['name'].toString().endsWith('.apk'),
+            orElse: () => {},
+          );
+          
+          if (apkAsset.isEmpty) {
+            print('No APK asset found!'); // Debug print
+            return null;
+          }
 
           return UpdateInfo(
             currentVersion: currentVersion,
-            currentBuildNumber: currentBuildNumber,
-            newVersion: latestReleaseTag,
-            releaseDate: releaseDate,
+            currentBuildNumber: 1,
+            newVersion: latestTag,
+            releaseDate: DateTime.parse(data['published_at']),
             releaseNotes: releaseNotes,
-            downloadUrl: downloadUrl,
+            downloadUrl: apkAsset['browser_download_url'],
             apkSize: (apkAsset['size'] as int) ~/ 1048576,
           );
         }
+      } else {
+        print('GitHub API Error: ${response.statusCode}'); // Debug print
       }
       return null;
     } catch (e) {
-      print('Error checking for updates: $e');
+      print('Error checking for updates: $e'); // Debug print
       return null;
     }
   }

@@ -1,12 +1,14 @@
 name: docln
 description: "Light Novel Reader written in Flutter (for Android and iOS)"
 publish_to: 'none'
-version: 2024.11.20
+version: 2024.11.22
 
 environment:
   sdk: ^3.5.4
 
 dependencies:
+  flutter_localizations:
+    sdk: flutter
   flutter:
     sdk: flutter
   http: ^1.2.2
@@ -23,7 +25,7 @@ dependencies:
   url_launcher: ^6.3.1
   android_intent_plus: ^5.2.0
   package_info_plus: ^8.1.1
-  intl: ^0.18.0
+  intl: ^0.19.0
 
 dev_dependencies:
   flutter_test:
