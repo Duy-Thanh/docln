@@ -79,7 +79,7 @@ class AdBlockService {
             elements.forEach(element => {
               element.style.display = 'none';
               // Optional: completely remove element
-              // element.remove();
+              element.remove();
             });
           } catch (e) {
             console.log('Error applying selector:', selector, e);

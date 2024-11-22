@@ -299,24 +299,26 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   Widget _buildLibraryTitle() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          Icon(
-            Icons.campaign_rounded,
-            size: 24,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            'Announcements',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-              fontSize: 20,
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8), // Adjusted padding
+        child: Row(
+          children: [
+            Icon(
+              Icons.campaign_rounded,
+              size: 24,
+              color: Theme.of(context).colorScheme.primary,
             ),
-          ),
-        ],
+            const SizedBox(width: 8),
+            Text(
+              'Announcements',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
