@@ -1,3 +1,4 @@
+import 'dart:ffi';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../services/adguard_service.dart';
@@ -6,6 +7,10 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:android_intent_plus/android_intent.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/services.dart';
+import 'dart:convert';
+import 'package:translator/translator.dart';
+import 'dart:math' show min;
+import 'dart:math' show Random;
 
 class WebViewScreen extends StatefulWidget {
   final String url;
@@ -80,9 +85,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
   }
 
- void _initWebView() {
+  void _initWebView() {
     final controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..enableZoom(false) // Optional: disable zoom if not needed
+      ..setBackgroundColor(Colors.transparent)
       ..setNavigationDelegate(
         NavigationDelegate(
           onNavigationRequest: (NavigationRequest request) {
@@ -122,7 +129,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
             }
           },
         ),
-      );
+      )
+      // Add console message handling
+      ..setOnConsoleMessage((JavaScriptConsoleMessage message) {
+        debugPrint('WebView Console: ${message.message}');
+      });
 
     controller.loadRequest(Uri.parse(widget.url));
     
@@ -459,8 +470,418 @@ class _WebViewScreenState extends State<WebViewScreen> {
   }
 
   void _showTranslateOptions() {
-    // Implement translation options
-    // You can use packages like translator or google_translator
+    final theme = Theme.of(context);
+    final translator = GoogleTranslator();
+    int translatedCount = 0;
+    int failedCount = 0;
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(20),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, -2),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Handle bar
+                Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.onSurfaceVariant.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Translate Page',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton.filledTonal(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                        style: IconButton.styleFrom(
+                          backgroundColor: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(),
+                _buildLanguageOption(
+                  'English',
+                  'en',
+                  onTap: () => _translatePage('en'),
+                ),
+                _buildLanguageOption(
+                  'Vietnamese',
+                  'vi',
+                  onTap: () => _translatePage('vi'),
+                ),
+                _buildLanguageOption(
+                  'Japanese',
+                  'ja',
+                  onTap: () => _translatePage('ja'),
+                ),
+                _buildLanguageOption(
+                  'Korean',
+                  'ko',
+                  onTap: () => _translatePage('ko'),
+                ),
+                _buildLanguageOption(
+                  'Chinese (Simplified)',
+                  'zh-CN',
+                  onTap: () => _translatePage('zh-CN'),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLanguageOption(String language, String code, {required VoidCallback onTap}) {
+    final theme = Theme.of(context);
+    
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Text(
+                language,
+                style: theme.textTheme.bodyLarge,
+              ),
+              const Spacer(),
+              Text(
+                code.toUpperCase(),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 16,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _translatePage(String targetLanguage) async {
+    try {
+      Navigator.pop(context); // Close language selection
+      
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text('Translating...', style: Theme.of(context).textTheme.bodyLarge),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Initialize translation infrastructure in JavaScript
+      await _controller?.runJavaScript(r'''
+        window.translationSystem = {
+          elements: new Map(),
+          cache: new Map(),  // Cache for translations
+          pendingUpdates: [],
+          
+          shouldTranslateNode: function(node) {
+            if (!node || !node.textContent) return false;
+            const text = node.textContent.trim();
+            if (text.length < 2) return false;
+            if (node.closest('script, style, iframe, noscript, svg, path')) return false;
+            if (node.tagName === 'INPUT' || node.tagName === 'TEXTAREA') return false;
+            if (/^[-_+=<>{}\[\]()\/\\|~`!@#$%^&*]+$/.test(text)) return false;
+            return true;
+          },
+          
+          collectTexts: function() {
+            const walker = document.createTreeWalker(
+              document.body,
+              NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+              {
+                acceptNode: function(node) {
+                  if (node.nodeType === 3) {
+                    return node.textContent.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+                  }
+                  if (node.hasAttribute('data-translated')) return NodeFilter.FILTER_REJECT;
+                  return NodeFilter.FILTER_ACCEPT;
+                }
+              }
+            );
+
+            const texts = [];
+            let index = 0;
+            let currentNode;
+            let lastParent = null;
+            let lastText = null;
+
+            while (currentNode = walker.nextNode()) {
+              if (currentNode.nodeType === 3) {
+                const parent = currentNode.parentElement;
+                if (this.shouldTranslateNode(parent)) {
+                  const text = currentNode.textContent.trim();
+                  
+                  // Combine short consecutive texts under same parent
+                  if (lastParent === parent && text.length < 10 && lastText) {
+                    lastText.text += ' ' + text;
+                    continue;
+                  }
+
+                  this.elements.set(index, parent);
+                  lastText = { id: index, text: text };
+                  texts.push(lastText);
+                  lastParent = parent;
+                  index++;
+                }
+              } else if (currentNode.nodeType === 1) {
+                const hasOnlyText = Array.from(currentNode.childNodes)
+                  .every(child => child.nodeType === 3 || child.tagName === 'BR');
+                
+                if (hasOnlyText && this.shouldTranslateNode(currentNode)) {
+                  const text = currentNode.textContent.trim().replace(/\s+/g, ' ');
+                  this.elements.set(index, currentNode);
+                  texts.push({ id: index, text: text });
+                  currentNode.setAttribute('data-translated', 'true');
+                  index++;
+                }
+              }
+            }
+            return texts;
+          },
+          
+          queueUpdate: function(id, text) {
+            this.pendingUpdates.push({ id, text });
+            if (this.pendingUpdates.length >= 10) {
+              this.flushUpdates();
+            }
+          },
+          
+          flushUpdates: function() {
+            const updates = this.pendingUpdates.splice(0);
+            requestAnimationFrame(() => {
+              updates.forEach(({id, text}) => {
+                const element = this.elements.get(id);
+                if (element) {
+                  element.textContent = text;
+                  element.style.color = '#1a73e8';
+                }
+              });
+            });
+          },
+          
+          updateText: function(id, text) {
+            this.queueUpdate(id, text);
+            return true;
+          }
+        };
+      ''');
+
+      // Collect texts to translate
+      final String jsonResult = await _controller?.runJavaScriptReturningResult(r'''
+        (function() {
+          try {
+            const texts = window.translationSystem.collectTexts();
+            console.log('Number of texts collected:', texts.length);
+            // Return the array directly, WebView will handle JSON conversion
+            return texts;
+          } catch (e) {
+            console.error('Error collecting texts:', e);
+            return []; // Return empty array if error
+          }
+        })()
+      ''') as String;
+
+      print('Raw result type: ${jsonResult.runtimeType}');
+      print('Raw result preview: ${jsonResult.substring(0, min(100, jsonResult.length))}');
+      
+      // Parse the JSON, handling potential errors
+      List<dynamic> elements;
+      try {
+        if (jsonResult.startsWith('"') && jsonResult.endsWith('"')) {
+          // Handle double-encoded JSON
+          elements = json.decode(json.decode(jsonResult));
+        } else {
+          // Handle single-encoded JSON
+          elements = json.decode(jsonResult);
+        }
+        print('Successfully parsed ${elements.length} elements');
+      } catch (e) {
+        print('JSON parsing error: $e');
+        print('Raw result was: $jsonResult');
+        elements = [];
+      }
+
+      if (elements.isEmpty) {
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No text found to translate')),
+          );
+        }
+        return;
+      }
+
+      final translator = GoogleTranslator();
+      int translatedCount = 0;
+      int failedCount = 0;
+      final translationCache = <String, String>{};  // Cache translations
+
+      // Create connection pools to manage concurrent requests
+      const maxConcurrent = 10;  // Maximum concurrent translations
+      final connectionPool = <Future<void>>[];
+      final completedFutures = <Future<void>>{};  // Track completed futures
+
+      // Process elements with controlled concurrency
+      for (var i = 0; i < elements.length; i++) {
+        final element = elements[i];
+        final int id = element['id'] as int;
+        final String text = element['text'] as String;
+
+        // Skip non-translatable text
+        if (RegExp(r'^[^a-zA-Z\u00C0-\u1EF9]+$').hasMatch(text)) {
+          continue;
+        }
+
+        // Check cache first
+        if (translationCache.containsKey(text)) {
+          _controller?.runJavaScript(
+            'window.translationSystem.updateText(${id}, ${json.encode(translationCache[text])})'
+          );
+          translatedCount++;
+          continue;
+        }
+
+        // Clean up completed futures
+        connectionPool.removeWhere((f) => completedFutures.contains(f));
+
+        // Manage connection pool
+        if (connectionPool.length >= maxConcurrent) {
+          // Wait for one translation to complete before adding more
+          await Future.wait([connectionPool.first]);
+        }
+
+        // Add new translation to pool
+        final future = () async {
+          try {
+            final translation = await translator.translate(
+              text,
+              to: targetLanguage,
+            ).timeout(
+              const Duration(seconds: 5),
+              onTimeout: () => throw 'Translation timeout',
+            );
+
+            if (translation.text != text) {
+              // Cache the translation
+              translationCache[text] = translation.text;
+              
+              // Update UI immediately
+              _controller?.runJavaScript(
+                'window.translationSystem.updateText(${id}, ${json.encode(translation.text)})'
+              );
+              
+              translatedCount++;
+              if (translatedCount % 5 == 0 && mounted) {
+                ScaffoldMessenger.of(context)
+                  ..clearSnackBars()
+                  ..showSnackBar(
+                    SnackBar(
+                      content: Text('Translated $translatedCount of ${elements.length} elements...'),
+                      duration: const Duration(milliseconds: 100),
+                    ),
+                  );
+              }
+            }
+          } catch (e) {
+            print('Error translating element: $e');
+            failedCount++;
+            
+            // On error, reduce concurrent connections temporarily
+            await Future.delayed(const Duration(milliseconds: 100));
+          }
+        }();
+
+        // Track the future
+        connectionPool.add(future);
+        future.then((_) => completedFutures.add(future));
+      }
+      
+      // Wait for remaining translations
+      await Future.wait(connectionPool);
+
+      // Cleanup
+      await _controller?.runJavaScript('delete window.translationSystem;');
+
+      // Show completion message
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Translated $translatedCount elements' + 
+              (failedCount > 0 ? ' ($failedCount failed)' : '')
+            ),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+
+    } catch (e) {
+      print('Translation error: $e');
+      print('Stack trace: ${StackTrace.current}');
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Translation failed')),
+        );
+      }
+    }
   }
 
   Future<void> _saveForOffline() async {
@@ -474,25 +895,30 @@ class _WebViewScreenState extends State<WebViewScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(20),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, -2),
+      isScrollControlled: true, // Add this
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6, // Start at 60% of screen height
+        minChildSize: 0.3, // Min 30% of screen height
+        maxChildSize: 0.9, // Max 90% of screen height
+        expand: false,
+        builder: (context, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(20),
             ),
-          ],
-        ),
-        child: SafeArea(
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, -2),
+              ),
+            ],
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Handle bar
+              // Handle bar and header (fixed)
               Container(
                 margin: const EdgeInsets.only(top: 8),
                 width: 40,
@@ -523,70 +949,88 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   ],
                 ),
               ),
-              const Divider(),
-              _buildOptionTile(
-                icon: Icons.text_fields_rounded,
-                title: 'Text size',
-                subtitle: 'Adjust reading text size',
-                onTap: () {
-                  Navigator.pop(context);
-                  _showTextSizeDialog();
-                },
+              const Divider(height: 1),
+              // Scrollable content
+              Expanded(
+                child: ListView(
+                  controller: scrollController,
+                  padding: EdgeInsets.zero,
+                  children: [
+                    _buildOptionTile(
+                      icon: Icons.text_fields_rounded,
+                      title: 'Text size',
+                      subtitle: 'Adjust reading text size',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showTextSizeDialog();
+                      },
+                    ),
+                    _buildOptionTile(
+                      icon: Icons.chrome_reader_mode_rounded,
+                      title: 'Reader mode',
+                      subtitle: 'Clean, simplified view',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _toggleReaderMode();
+                      },
+                      isActive: _isReaderMode,
+                    ),
+                    _buildOptionTile(
+                      icon: Icons.dark_mode_rounded,
+                      title: 'Dark mode',
+                      subtitle: 'Toggle dark appearance',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _toggleDarkMode();
+                      },
+                      isActive: _isDarkMode,
+                    ),
+                    _buildOptionTile(
+                      icon: Icons.translate_rounded,
+                      title: 'Translate',
+                      subtitle: 'Translate page content',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showTranslateOptions();
+                      },
+                    ),
+                    _buildOptionTile(
+                      icon: Icons.share_rounded,
+                      title: 'Share',
+                      subtitle: 'Share this page with others',
+                      onTap: () async {
+                        final url = await _controller?.currentUrl();
+                        if (url != null) {
+                          await Share.share(url);
+                          if (mounted) Navigator.pop(context);
+                        }
+                      },
+                    ),
+                    _buildOptionTile(
+                      icon: Icons.open_in_browser_rounded,
+                      title: 'Open in browser',
+                      subtitle: 'View in external browser',
+                      onTap: () async {
+                        final url = await _controller?.currentUrl();
+                        if (url != null) {
+                          Navigator.pop(context);
+                          _openInBrowser(url);
+                        }
+                      },
+                    ),
+                    _buildOptionTile(
+                      icon: Icons.info_outline_rounded,
+                      title: 'Page info',
+                      subtitle: 'View page information',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showPageInfo();
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
               ),
-              _buildOptionTile(
-                icon: Icons.chrome_reader_mode_rounded,
-                title: 'Reader mode',
-                subtitle: 'Clean, simplified view',
-                onTap: () {
-                  Navigator.pop(context);
-                  _toggleReaderMode();
-                },
-                isActive: _isReaderMode,
-              ),
-              _buildOptionTile(
-                icon: Icons.dark_mode_rounded,
-                title: 'Dark mode',
-                subtitle: 'Toggle dark appearance',
-                onTap: () {
-                  Navigator.pop(context);
-                  _toggleDarkMode();
-                },
-                isActive: _isDarkMode,
-              ),
-              _buildOptionTile(
-                icon: Icons.share_rounded,
-                title: 'Share',
-                subtitle: 'Share this page with others',
-                onTap: () async {
-                  final url = await _controller?.currentUrl();
-                  if (url != null) {
-                    await Share.share(url);
-                    if (mounted) Navigator.pop(context);
-                  }
-                },
-              ),
-              _buildOptionTile(
-                icon: Icons.open_in_browser_rounded,
-                title: 'Open in browser',
-                subtitle: 'View in external browser',
-                onTap: () async {
-                  final url = await _controller?.currentUrl();
-                  if (url != null) {
-                    Navigator.pop(context);
-                    _openInBrowser(url);
-                  }
-                },
-              ),
-              _buildOptionTile(
-                icon: Icons.info_outline_rounded,
-                title: 'Page info',
-                subtitle: 'View page information',
-                onTap: () {
-                  Navigator.pop(context);
-                  _showPageInfo();
-                },
-              ),
-              const SizedBox(height: 8), // Bottom padding
             ],
           ),
         ),
