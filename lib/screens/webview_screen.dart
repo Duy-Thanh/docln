@@ -136,14 +136,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
   Future<void> _toggleReaderMode() async {
     const readerModeScript = '''
       (function() {
-        // Remove existing style if present
         const existingStyle = document.getElementById('reader-mode-styles');
         if (existingStyle) {
           existingStyle.remove();
           return false;
         }
 
-        // Create and apply new styles
         const style = document.createElement('style');
         style.id = 'reader-mode-styles';
         style.innerHTML = `
@@ -151,29 +149,53 @@ class _WebViewScreenState extends State<WebViewScreen> {
             max-width: 800px !important;
             margin: 0 auto !important;
             padding: 20px !important;
-            background: #fff !important;
-            color: #333 !important;
-            font-family: system-ui, -apple-system, sans-serif !important;
+            background: #fafafa !important;
+            color: #2c3e50 !important;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif !important;
             line-height: 1.8 !important;
             font-size: 18px !important;
+          }
+          
+          .chapter-content, .content, article, .chapter-c, #chapter-content {
+            font-size: 18px !important;
+            line-height: 1.8 !important;
+            color: #2c3e50 !important;
+            padding: 0 16px !important;
           }
           
           p, li {
             font-size: 18px !important;
             line-height: 1.8 !important;
-            color: #333 !important;
+            color: #2c3e50 !important;
+            margin: 1em 0 !important;
           }
           
           h1, h2, h3, h4, h5, h6 {
-            color: #111 !important;
+            color: #1a1a1a !important;
             line-height: 1.4 !important;
             margin: 1.5em 0 0.8em !important;
+            font-weight: 600 !important;
           }
           
           img {
             max-width: 100% !important;
             height: auto !important;
-            margin: 1em 0 !important;
+            margin: 1.5em auto !important;
+            display: block !important;
+            border-radius: 8px !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+          }
+          
+          a {
+            color: #3498db !important;
+            text-decoration: none !important;
+            border-bottom: 1px solid #3498db44 !important;
+            transition: all 0.2s ease !important;
+          }
+          
+          a:hover {
+            color: #2980b9 !important;
+            border-bottom-color: #2980b9 !important;
           }
           
           header, footer, nav, aside, .ads, .banner, .social-share,
@@ -335,60 +357,90 @@ class _WebViewScreenState extends State<WebViewScreen> {
   Future<void> _toggleDarkMode() async {
     const darkModeScript = '''
       (function() {
-        // Remove existing style if present
         const existingStyle = document.getElementById('dark-mode-styles');
         if (existingStyle) {
           existingStyle.remove();
           return false;
         }
 
-        // Create and apply new styles
         const style = document.createElement('style');
         style.id = 'dark-mode-styles';
         style.innerHTML = `
           body {
             background: #1a1a1a !important;
-            color: #d4d4d4 !important;
+            color: #e0e0e0 !important;
           }
           
           .chapter-content, .content, article, .chapter-c, #chapter-content {
-            color: #d4d4d4 !important;
+            color: #e0e0e0 !important;
             background: #1a1a1a !important;
           }
           
           p, div, span, li {
-            color: #d4d4d4 !important;
+            color: #e0e0e0 !important;
             background: transparent !important;
           }
           
           h1, h2, h3, h4, h5, h6 {
             color: #ffffff !important;
+            font-weight: 600 !important;
           }
           
           a {
-            color: #6ea8fe !important;
+            color: #64b5f6 !important;
+            text-decoration: none !important;
+            border-bottom: 1px solid #64b5f644 !important;
+            transition: all 0.2s ease !important;
+          }
+          
+          a:hover {
+            color: #90caf9 !important;
+            border-bottom-color: #90caf9 !important;
           }
           
           pre, code {
             background: #2d2d2d !important;
             color: #e0e0e0 !important;
+            border-radius: 4px !important;
+            padding: 0.2em 0.4em !important;
           }
           
           blockquote {
             background: #2d2d2d !important;
-            border-left-color: #404040 !important;
+            border-left: 4px solid #64b5f6 !important;
+            margin: 1em 0 !important;
+            padding: 0.5em 1em !important;
+            border-radius: 0 4px 4px 0 !important;
           }
           
           hr {
-            border-color: #404040 !important;
+            border: none !important;
+            border-top: 1px solid #404040 !important;
+            margin: 2em 0 !important;
+          }
+          
+          img {
+            opacity: 0.9 !important;
+            border-radius: 8px !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
           }
           
           table {
-            border-color: #404040 !important;
+            border-collapse: collapse !important;
+            border: 1px solid #404040 !important;
+            background: #2d2d2d !important;
+            border-radius: 4px !important;
+            overflow: hidden !important;
           }
           
           th, td {
-            border-color: #404040 !important;
+            border: 1px solid #404040 !important;
+            padding: 8px 12px !important;
+          }
+          
+          th {
+            background: #333333 !important;
+            color: #ffffff !important;
           }
         `;
         document.head.appendChild(style);
@@ -421,114 +473,189 @@ class _WebViewScreenState extends State<WebViewScreen> {
     
     showModalBottomSheet(
       context: context,
-      backgroundColor: theme.colorScheme.surface,
-      builder: (context) => SafeArea(
-        child: SingleChildScrollView( // Add this
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(20),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
                     Text(
                       'More options',
-                      style: theme.textTheme.titleMedium,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const Spacer(),
-                    IconButton(
+                    IconButton.filledTonal(
                       icon: const Icon(Icons.close),
                       onPressed: () => Navigator.pop(context),
+                      style: IconButton.styleFrom(
+                        backgroundColor: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                      ),
                     ),
                   ],
                 ),
               ),
               const Divider(),
-              ListTile(
-                leading: const Icon(Icons.share_rounded),
-                title: const Text('Share'),
-                onTap: () async {
-                  final url = await _controller?.currentUrl();
-                  if (url != null) {
-                    await Share.share(url);
-                    Navigator.pop(context);
-                  }
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.open_in_browser_rounded),
-                title: const Text('Open in browser'),
-                onTap: () async {
-                  final url = await _controller?.currentUrl();
-                  if (url != null) {
-                    Navigator.pop(context);
-                    if (Platform.isAndroid) {
-                      final intent = AndroidIntent(
-                        action: 'action_view',
-                        data: url,
-                        package: 'com.android.chrome',
-                      );
-                      await intent.launch().catchError((e) async {
-                        final defaultIntent = AndroidIntent(
-                          action: 'action_view',
-                          data: url,
-                        );
-                        await defaultIntent.launch();
-                      });
-                    } else {
-                      final uri = Uri.parse(url);
-                      if (await canLaunchUrl(uri)) {
-                        await launchUrl(
-                          uri,
-                          mode: LaunchMode.externalApplication,
-                        );
-                      }
-                    }
-                  }
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  _isReaderMode ? Icons.chrome_reader_mode : Icons.chrome_reader_mode_outlined,
-                  color: _isReaderMode ? theme.colorScheme.primary : null,
-                ),
-                title: const Text('Reader mode'),
-                subtitle: const Text('Clean layout for better reading'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _toggleReaderMode();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.text_fields_rounded),
-                title: const Text('Text size'),
+              _buildOptionTile(
+                icon: Icons.text_fields_rounded,
+                title: 'Text size',
+                subtitle: 'Adjust reading text size',
                 onTap: () {
                   Navigator.pop(context);
                   _showTextSizeDialog();
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.info_outline_rounded),
-                title: const Text('Page info'),
-                onTap: () async {
-                  final url = await _controller?.currentUrl();
-                  if (!mounted || url == null) return;
+              _buildOptionTile(
+                icon: Icons.chrome_reader_mode_rounded,
+                title: 'Reader mode',
+                subtitle: 'Clean, simplified view',
+                onTap: () {
                   Navigator.pop(context);
-                  _showPageInfo();
+                  _toggleReaderMode();
                 },
+                isActive: _isReaderMode,
               ),
-              ListTile(
-                leading: Icon(
-                  _isDarkMode ? Icons.dark_mode : Icons.dark_mode_outlined,
-                  color: _isDarkMode ? theme.colorScheme.primary : null,
-                ),
-                title: const Text('Dark mode'),
-                subtitle: Text(_isDarkMode ? 'On' : 'Off'),
+              _buildOptionTile(
+                icon: Icons.dark_mode_rounded,
+                title: 'Dark mode',
+                subtitle: 'Toggle dark appearance',
                 onTap: () {
                   Navigator.pop(context);
                   _toggleDarkMode();
                 },
+                isActive: _isDarkMode,
               ),
+              _buildOptionTile(
+                icon: Icons.share_rounded,
+                title: 'Share',
+                subtitle: 'Share this page with others',
+                onTap: () async {
+                  final url = await _controller?.currentUrl();
+                  if (url != null) {
+                    await Share.share(url);
+                    if (mounted) Navigator.pop(context);
+                  }
+                },
+              ),
+              _buildOptionTile(
+                icon: Icons.open_in_browser_rounded,
+                title: 'Open in browser',
+                subtitle: 'View in external browser',
+                onTap: () async {
+                  final url = await _controller?.currentUrl();
+                  if (url != null) {
+                    Navigator.pop(context);
+                    _openInBrowser(url);
+                  }
+                },
+              ),
+              _buildOptionTile(
+                icon: Icons.info_outline_rounded,
+                title: 'Page info',
+                subtitle: 'View page information',
+                onTap: () {
+                  Navigator.pop(context);
+                  _showPageInfo();
+                },
+              ),
+              const SizedBox(height: 8), // Bottom padding
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOptionTile({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    required VoidCallback onTap,
+    bool isActive = false,
+  }) {
+    final theme = Theme.of(context);
+    
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: isActive 
+                    ? theme.colorScheme.primaryContainer
+                    : theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  icon,
+                  color: isActive 
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: isActive ? FontWeight.w600 : null,
+                        color: isActive 
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurface,
+                      ),
+                    ),
+                    if (subtitle != null)
+                      Text(
+                        subtitle,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (isActive)
+                Icon(
+                  Icons.check_circle_rounded,
+                  color: theme.colorScheme.primary,
+                ),
             ],
           ),
         ),
@@ -888,10 +1015,17 @@ class _NavButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         child: Tooltip(
           message: tooltip,
-          child: Container(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
             width: 40,
             height: 40,
             alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              color: enabled && !isLoading 
+                ? theme.colorScheme.surfaceVariant.withOpacity(0.1)
+                : Colors.transparent,
+            ),
             child: isLoading 
               ? SizedBox(
                   width: 18,
@@ -901,12 +1035,16 @@ class _NavButton extends StatelessWidget {
                     color: theme.colorScheme.primary,
                   ),
                 )
-              : Icon(
-                  icon,
-                  size: 18,
-                  color: enabled 
-                    ? theme.colorScheme.onSurfaceVariant 
-                    : theme.colorScheme.onSurfaceVariant.withOpacity(0.38),
+              : AnimatedScale(
+                  scale: enabled ? 1.0 : 0.8,
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(
+                    icon,
+                    size: 20,
+                    color: enabled 
+                      ? theme.colorScheme.onSurfaceVariant 
+                      : theme.colorScheme.onSurfaceVariant.withOpacity(0.38),
+                  ),
                 ),
           ),
         ),
@@ -933,11 +1071,57 @@ class _TextSizeOption extends StatelessWidget {
     final theme = Theme.of(context);
     final isSelected = size == currentSize;
 
-    return ListTile(
-      title: Text(label),
-      trailing: isSelected ? Icon(Icons.check, color: theme.colorScheme.primary) : null,
-      selected: isSelected,
-      onTap: () => onSelect(size),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => onSelect(size),
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: isSelected 
+              ? theme.colorScheme.primaryContainer.withOpacity(0.4)
+              : Colors.transparent,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: isSelected 
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurface,
+                        fontWeight: isSelected ? FontWeight.w600 : null,
+                      ),
+                    ),
+                    Text(
+                      '${size.toInt()}%',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (isSelected)
+                AnimatedScale(
+                  scale: isSelected ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(
+                    Icons.check_circle_rounded,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
