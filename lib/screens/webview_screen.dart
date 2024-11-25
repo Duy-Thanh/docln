@@ -134,58 +134,57 @@ class _WebViewScreenState extends State<WebViewScreen> {
   }
 
   Future<void> _toggleReaderMode() async {
-    final readerModeScript = '''
-      function enableReaderMode() {
-        // Save original styles
-        if (!document.querySelector('#reader-mode-styles')) {
-          const style = document.createElement('style');
-          style.id = 'reader-mode-styles';
-          style.textContent = `
-            body {
-              max-width: 800px !important;
-              margin: 0 auto !important;
-              padding: 20px !important;
-              background: #fff !important;
-              color: #333 !important;
-              font-family: system-ui, -apple-system, sans-serif !important;
-              line-height: 1.8 !important;
-              font-size: 18px !important;
-            }
-            
-            p, li {
-              font-size: 18px !important;
-              line-height: 1.8 !important;
-              color: #333 !important;
-            }
-            
-            h1, h2, h3, h4, h5, h6 {
-              color: #111 !important;
-              line-height: 1.4 !important;
-              margin: 1.5em 0 0.8em !important;
-            }
-            
-            img {
-              max-width: 100% !important;
-              height: auto !important;
-              margin: 1em 0 !important;
-            }
-            
-            /* Hide unnecessary elements */
-            header, footer, nav, aside, .ads, .banner, .social-share,
-            [class*="advertisement"], [class*="sidebar"], [class*="related"],
-            [class*="recommended"], [class*="popup"], [class*="modal"] {
-              display: none !important;
-            }
-          `;
-          document.head.appendChild(style);
+    const readerModeScript = '''
+      (function() {
+        // Remove existing style if present
+        const existingStyle = document.getElementById('reader-mode-styles');
+        if (existingStyle) {
+          existingStyle.remove();
+          return false;
         }
-        
-        // Toggle styles
-        const styleSheet = document.querySelector('#reader-mode-styles');
-        styleSheet.disabled = !styleSheet.disabled;
-        return !styleSheet.disabled;
-      }
-      enableReaderMode();
+
+        // Create and apply new styles
+        const style = document.createElement('style');
+        style.id = 'reader-mode-styles';
+        style.innerHTML = `
+          body {
+            max-width: 800px !important;
+            margin: 0 auto !important;
+            padding: 20px !important;
+            background: #fff !important;
+            color: #333 !important;
+            font-family: system-ui, -apple-system, sans-serif !important;
+            line-height: 1.8 !important;
+            font-size: 18px !important;
+          }
+          
+          p, li {
+            font-size: 18px !important;
+            line-height: 1.8 !important;
+            color: #333 !important;
+          }
+          
+          h1, h2, h3, h4, h5, h6 {
+            color: #111 !important;
+            line-height: 1.4 !important;
+            margin: 1.5em 0 0.8em !important;
+          }
+          
+          img {
+            max-width: 100% !important;
+            height: auto !important;
+            margin: 1em 0 !important;
+          }
+          
+          header, footer, nav, aside, .ads, .banner, .social-share,
+          [class*="advertisement"], [class*="sidebar"], [class*="related"],
+          [class*="recommended"], [class*="popup"], [class*="modal"] {
+            display: none !important;
+          }
+        `;
+        document.head.appendChild(style);
+        return true;
+      })();
     ''';
 
     try {
@@ -335,37 +334,66 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   Future<void> _toggleDarkMode() async {
     const darkModeScript = '''
-      function toggleDarkMode() {
-        if (!document.querySelector('#dark-mode-styles')) {
-          const style = document.createElement('style');
-          style.id = 'dark-mode-styles';
-          style.textContent = `
-            body {
-              background: #1a1a1a !important;
-            }
-            
-            .chapter-content, .content, article, .chapter-c, #chapter-content {
-              color: #d4d4d4 !important;
-              background: #1a1a1a !important;
-            }
-            
-            p, div, span, li {
-              color: #d4d4d4 !important;
-              background: transparent !important;
-            }
-            
-            h1, h2, h3, h4, h5, h6 {
-              color: #ffffff !important;
-            }
-          `;
-          document.head.appendChild(style);
+      (function() {
+        // Remove existing style if present
+        const existingStyle = document.getElementById('dark-mode-styles');
+        if (existingStyle) {
+          existingStyle.remove();
+          return false;
         }
-        
-        const styleSheet = document.querySelector('#dark-mode-styles');
-        styleSheet.disabled = !styleSheet.disabled;
-        return !styleSheet.disabled;
-      }
-      toggleDarkMode();
+
+        // Create and apply new styles
+        const style = document.createElement('style');
+        style.id = 'dark-mode-styles';
+        style.innerHTML = `
+          body {
+            background: #1a1a1a !important;
+            color: #d4d4d4 !important;
+          }
+          
+          .chapter-content, .content, article, .chapter-c, #chapter-content {
+            color: #d4d4d4 !important;
+            background: #1a1a1a !important;
+          }
+          
+          p, div, span, li {
+            color: #d4d4d4 !important;
+            background: transparent !important;
+          }
+          
+          h1, h2, h3, h4, h5, h6 {
+            color: #ffffff !important;
+          }
+          
+          a {
+            color: #6ea8fe !important;
+          }
+          
+          pre, code {
+            background: #2d2d2d !important;
+            color: #e0e0e0 !important;
+          }
+          
+          blockquote {
+            background: #2d2d2d !important;
+            border-left-color: #404040 !important;
+          }
+          
+          hr {
+            border-color: #404040 !important;
+          }
+          
+          table {
+            border-color: #404040 !important;
+          }
+          
+          th, td {
+            border-color: #404040 !important;
+          }
+        `;
+        document.head.appendChild(style);
+        return true;
+      })();
     ''';
 
     try {
