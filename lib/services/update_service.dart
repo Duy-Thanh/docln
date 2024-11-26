@@ -1,6 +1,11 @@
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 import 'dart:convert';
+import 'package:open_file/open_file.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:dio/dio.dart';
 
 class UpdateInfo {
   final String currentVersion;
@@ -127,6 +132,47 @@ class UpdateService {
     } catch (e) {
       print('Error checking for updates: $e'); // Debug print
       return null;
+    }
+  }
+
+  static Future<void> downloadAndInstallUpdate(
+    UpdateInfo updateInfo,
+    void Function(double) onProgress
+  ) async {
+    try {
+      final dir = await getTemporaryDirectory();
+      final apkPath = '${dir.path}/docln_update.apk';
+      
+      final dio = Dio(BaseOptions(
+        receiveTimeout: const Duration(minutes: 5),
+        sendTimeout: const Duration(minutes: 5),
+      ));
+      
+      await dio.download(
+        updateInfo.downloadUrl,
+        apkPath,
+        onReceiveProgress: (received, total) {
+          if (total != -1) {
+            onProgress(received / total);
+          }
+        },
+        deleteOnError: true,
+      );
+
+      if (Platform.isAndroid) {
+        final result = await OpenFile.open(apkPath);
+        if (result.type != ResultType.done) {
+          throw 'Failed to open APK: ${result.message}';
+        }
+      }
+
+      Future.delayed(const Duration(minutes: 2), () {
+        File(apkPath).delete().catchError((e) => print('Error cleaning up: $e'));
+      });
+      
+    } catch (e) {
+      print('Error downloading/installing update: $e');
+      rethrow;
     }
   }
 }

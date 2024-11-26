@@ -3,6 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  open_file_linux
   sentry_flutter
   url_launcher_linux
 )
