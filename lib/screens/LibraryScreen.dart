@@ -53,203 +53,27 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   Future<void> _loadPopularNovels() async {
-    await Future.delayed(const Duration(seconds: 2));
+    await Future.delayed(const Duration(seconds: 3));
 
-    setState(() {
-      popularNovels = [
-        LightNovel(
-          id: '1',
-          title: 'Light Novel 1',
-          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
-          url: '/tests1',
-          chapters: 123,
-          rating: 4.5,
-          reviews: 789,
-        ),
-        LightNovel(
-          id: '1',
-          title: 'Light Novel 1',
-          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
-          url: '/tests1',
-          chapters: 123,
-          rating: 4.5,
-          reviews: 789,
-        ),
-        LightNovel(
-          id: '1',
-          title: 'Light Novel 1',
-          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
-          url: '/tests1',
-          chapters: 123,
-          rating: 4.5,
-          reviews: 789,
-        ),
-        LightNovel(
-          id: '1',
-          title: 'Light Novel 1',
-          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
-          url: '/tests1',
-          chapters: 123,
-          rating: 4.5,
-          reviews: 789,
-        ),
-        LightNovel(
-          id: '1',
-          title: 'Light Novel 1',
-          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
-          url: '/tests1',
-          chapters: 123,
-          rating: 4.5,
-          reviews: 789,
-        ),
-        LightNovel(
-          id: '1',
-          title: 'Light Novel 1',
-          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
-          url: '/tests1',
-          chapters: 123,
-          rating: 4.5,
-          reviews: 789,
-        ),
-        LightNovel(
-          id: '1',
-          title: 'Light Novel 1',
-          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
-          url: '/tests1',
-          chapters: 123,
-          rating: 4.5,
-          reviews: 789,
-        ),
-        LightNovel(
-          id: '1',
-          title: 'Light Novel 1',
-          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
-          url: '/tests1',
-          chapters: 123,
-          rating: 4.5,
-          reviews: 789,
-        ),
-        LightNovel(
-          id: '1',
-          title: 'Light Novel 1',
-          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
-          url: '/tests1',
-          chapters: 123,
-          rating: 4.5,
-          reviews: 789,
-        ),
-        LightNovel(
-          id: '1',
-          title: 'Light Novel 1',
-          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
-          url: '/tests1',
-          chapters: 123,
-          rating: 4.5,
-          reviews: 789,
-        ),
-        LightNovel(
-          id: '1',
-          title: 'Light Novel 1',
-          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
-          url: '/tests1',
-          chapters: 123,
-          rating: 4.5,
-          reviews: 789,
-        ),
-        LightNovel(
-          id: '1',
-          title: 'Light Novel 1',
-          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
-          url: '/tests1',
-          chapters: 123,
-          rating: 4.5,
-          reviews: 789,
-        ),
-        LightNovel(
-          id: '1',
-          title: 'Light Novel 1',
-          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
-          url: '/tests1',
-          chapters: 123,
-          rating: 4.5,
-          reviews: 789,
-        ),
-        LightNovel(
-          id: '1',
-          title: 'Light Novel 1',
-          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
-          url: '/tests1',
-          chapters: 123,
-          rating: 4.5,
-          reviews: 789,
-        ),
-        LightNovel(
-          id: '1',
-          title: 'Light Novel 1',
-          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
-          url: '/tests1',
-          chapters: 123,
-          rating: 4.5,
-          reviews: 789,
-        ),
-        LightNovel(
-          id: '1',
-          title: 'Light Novel 1',
-          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
-          url: '/tests1',
-          chapters: 123,
-          rating: 4.5,
-          reviews: 789,
-        ),
-        LightNovel(
-          id: '1',
-          title: 'Light Novel 1',
-          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
-          url: '/tests1',
-          chapters: 123,
-          rating: 4.5,
-          reviews: 789,
-        ),
-        LightNovel(
-          id: '1',
-          title: 'Light Novel 1',
-          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
-          url: '/tests1',
-          chapters: 123,
-          rating: 4.5,
-          reviews: 789,
-        ),
-        LightNovel(
-          id: '1',
-          title: 'Light Novel 1',
-          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
-          url: '/tests1',
-          chapters: 123,
-          rating: 4.5,
-          reviews: 789,
-        ),
-        LightNovel(
-          id: '1',
-          title: 'Light Novel 1',
-          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
-          url: '/tests1',
-          chapters: 123,
-          rating: 4.5,
-          reviews: 789,
-        ),
-        LightNovel(
-          id: '1',
-          title: 'Light Novel 1',
-          coverUrl: 'https://ln.hako.vn/img/nocover.jpg',
-          url: '/tests1',
-          chapters: 123,
-          rating: 4.5,
-          reviews: 789,
-        ),
-      ];
+    try {
+      setState(() {
+        isLoading = true;
+        error = null;
+      });
 
-      isLoading = false;
-    });
+      final novels = await _crawlerService.getPopularNovels(context);
+      
+      setState(() {
+        popularNovels = novels;
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        error = e.toString();
+        isLoading = false;
+      });
+      CustomToast.show(context, error!);
+    }
   }
 
   @override
