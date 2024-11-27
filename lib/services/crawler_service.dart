@@ -8,7 +8,6 @@ import '../modules/light_novel.dart';
 class CrawlerService {
   static const List<String> servers = [
     'https://ln.hako.vn',
-    'https://ln.hako.re',
     'https://docln.net',
   ];
 
