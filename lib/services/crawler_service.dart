@@ -87,58 +87,68 @@ class CrawlerService {
   Future<List<LightNovel>> getPopularNovels(BuildContext context) async {
     try {
       final workingServer = await _getWorkingServer();
-      
       if (workingServer == null) {
         throw Exception('No working server available');
       }
 
       final response = await http.get(
         Uri.parse(workingServer),
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36'
-        },
+        headers: {'User-Agent': 'Mozilla/5.0'},
       );
 
       if (response.statusCode == 200) {
         final document = parser.parse(response.body);
+        List<LightNovel> novels = [];
+
+        // Parse all thumb-item-flow elements (both original and translated novels)
+        final novelElements = document.querySelectorAll('.thumb-item-flow:not(.see-more)');
         
-        // Find the popular novels section
-        final novelsContainer = document.querySelector('.thumb-item-flow');
-        if (novelsContainer == null) return [];
+        for (var element in novelElements) {
+          try {
+            final titleElement = element.querySelector('.thumb_attr.series-title a');
+            final coverElement = element.querySelector('.content.img-in-ratio');
+            final chapterElement = element.querySelector('.thumb_attr.chapter-title');
+            
+            if (titleElement != null) {
+              final title = titleElement.text;
+              final url = titleElement.attributes['href'] ?? '';
+              final id = url.split('/').last;
+              
+              // Get cover URL from data-bg attribute or background-image style
+              String coverUrl = coverElement?.attributes['data-bg'] ?? '';
+              if (coverUrl.isEmpty) {
+                final bgStyle = coverElement?.attributes['style'] ?? '';
+                final bgMatch = RegExp(r'url\("([^"]+)"\)').firstMatch(bgStyle);
+                coverUrl = bgMatch?.group(1) ?? 'https://ln.hako.vn/img/nocover.jpg';
+              }
 
-        final novels = novelsContainer.querySelectorAll('.thumb-item-flow').map((element) {
-          // Extract novel data
-          final titleElement = element.querySelector('.series-title a');
-          final coverElement = element.querySelector('.content.img-in-ratio');
-          final chapterElement = element.querySelector('.chapter-title');
-          final ratingElement = element.querySelector('.thumb_attr.rating');
-          
-          // Get background image URL from style attribute
-          String coverUrl = 'https://ln.hako.vn/img/nocover.jpg';
-          final styleAttr = coverElement?.attributes['style'] ?? '';
-          final bgUrlMatch = RegExp(r"url\('([^']+)'\)").firstMatch(styleAttr);
-          if (bgUrlMatch != null) {
-            coverUrl = bgUrlMatch.group(1) ?? coverUrl;
+              // Get chapter count
+              final chapterText = chapterElement?.text ?? '';
+              final chapterMatch = RegExp(r'Chương (\d+)').firstMatch(chapterText);
+              final chapters = chapterMatch != null ? 
+                  int.tryParse(chapterMatch.group(1) ?? '0') : 0;
+
+              novels.add(LightNovel(
+                id: id,
+                title: title,
+                coverUrl: coverUrl,
+                url: '$workingServer$url',
+                chapters: chapters,
+              ));
+            }
+          } catch (e) {
+            print('Error parsing novel element: $e');
+            continue;
           }
-
-          return LightNovel(
-            id: titleElement?.attributes['href']?.split('-').last ?? '',
-            title: titleElement?.text ?? 'Unknown Title',
-            coverUrl: coverUrl,
-            url: titleElement?.attributes['href'] ?? '',
-            chapters: int.tryParse(chapterElement?.text.replaceAll(RegExp(r'[^0-9]'), '') ?? '0'),
-            rating: double.tryParse(ratingElement?.text ?? '0'),
-            reviews: int.tryParse(element.querySelector('.thumb_attr.reviews')?.text ?? '0'),
-          );
-        }).toList();
+        }
 
         return novels;
       }
 
-      throw Exception('Failed to fetch popular novels');
+      throw Exception('Failed to load novels');
     } catch (e) {
-      print('Error fetching popular novels: $e');
-      CustomToast.show(context, 'Error fetching popular novels: $e');
+      print('Error fetching novels: $e');
+      CustomToast.show(context, 'Error fetching novels: $e');
       return [];
     }
   }

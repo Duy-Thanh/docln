@@ -23,6 +23,9 @@ class LightNovel {
       title: json['title'] ?? '',
       coverUrl: json['coverUrl'] ?? 'https://ln.hako.vn/img/nocover.jpg',
       url: json['url'] ?? '',
+      chapters: json['chapters'],
+      rating: json['rating']?.toDouble(),
+      reviews: json['reviews'],
     );
   }
 }

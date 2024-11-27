@@ -53,8 +53,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   Future<void> _loadPopularNovels() async {
-    await Future.delayed(const Duration(seconds: 3));
-
     try {
       setState(() {
         isLoading = true;
@@ -72,7 +70,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         error = e.toString();
         isLoading = false;
       });
-      CustomToast.show(context, error!);
+      CustomToast.show(context, 'Error fetching novels: $e');
     }
   }
 
@@ -505,7 +503,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         else
           GridView.builder(
             shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),  // Disable grid scrolling
+            physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
               childAspectRatio: 0.65,
@@ -522,7 +520,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     context,
                     MaterialPageRoute(
                       builder: (context) => WebViewScreen(
-                        url: 'https://ln.hako.vn${novel.url}',
+                        url: novel.url,
                       ),
                     ),
                   );
