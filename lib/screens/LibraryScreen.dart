@@ -26,18 +26,28 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
   bool isLoading = true;
   String? error;
 
+  double _tabAnimationValue = 0.0; // Add this variable
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.animation?.addListener(_handleTabAnimation); // Add listener
     _loadAnnouncements();
     _loadAllNovels();
   }
 
   @override
   void dispose() {
+    _tabController.animation?.removeListener(_handleTabAnimation); // Remove listener
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _handleTabAnimation() {
+    setState(() {
+      _tabAnimationValue = _tabController.animation!.value;
+    });
   }
 
   Future<void> _loadAnnouncements() async {
@@ -132,86 +142,451 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('DocLN'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(
-              icon: Icon(Icons.local_fire_department_rounded),
-              text: 'Popular',
+      body: NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) {
+          return [
+            SliverAppBar(
+              toolbarHeight: 0,
+              floating: true,
+              pinned: true,
+              elevation: 0,
+              backgroundColor: isDark 
+                ? colorScheme.surface.withOpacity(0.95)
+                : colorScheme.surface,
+              surfaceTintColor: Colors.transparent,
+              scrolledUnderElevation: 1,
+              shadowColor: colorScheme.shadow.withOpacity(0.2),
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(72), // Increased height
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: Container(
+                    height: 48, // Fixed height for the container
+                    decoration: BoxDecoration(
+                      color: isDark 
+                        ? colorScheme.surfaceVariant.withOpacity(0.3)
+                        : colorScheme.surfaceVariant.withOpacity(0.4),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: colorScheme.outline.withOpacity(0.1),
+                        width: 1,
+                      ),
+                    ),
+                    child: TabBar(
+                      controller: _tabController,
+                      padding: const EdgeInsets.all(4),
+                      labelPadding: EdgeInsets.zero,
+                      indicator: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: colorScheme.primary.withOpacity(0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            colorScheme.surface,
+                            isDark 
+                              ? colorScheme.surface.withOpacity(0.9)
+                              : Colors.white,
+                          ],
+                        ),
+                      ),
+                      splashFactory: NoSplash.splashFactory,
+                      overlayColor: MaterialStateProperty.all(Colors.transparent),
+                      labelStyle: textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.3,
+                      ),
+                      unselectedLabelStyle: textTheme.titleSmall?.copyWith(
+                        letterSpacing: 0.2,
+                      ),
+                      dividerColor: Colors.transparent,
+                      tabs: [
+                        _buildTab(
+                          icon: Icons.local_fire_department_rounded,
+                          label: 'Popular',
+                          isSelected: _tabController.index == 0,
+                          tabIndex: 0,
+                        ),
+                        _buildTab(
+                          icon: Icons.create_rounded,
+                          label: 'Creative',
+                          isSelected: _tabController.index == 1,
+                          tabIndex: 1,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
-            Tab(
-              icon: Icon(Icons.create_rounded),
-              text: 'Creative',
+          ];
+        },
+        body: Column(
+          children: [
+            if (announcements.isNotEmpty)
+              _buildAnnouncementBanner(colorScheme, textTheme, isDark),
+
+            Expanded(
+              child: error != null
+                ? _buildErrorCard()
+                : TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildTabContent(
+                        novels: popularNovels,
+                        isLoading: isLoading,
+                        showRating: true,
+                      ),
+                      _buildTabContent(
+                        novels: creativeNovels,
+                        isLoading: isLoading,
+                        showChapterInfo: true,
+                      ),
+                    ],
+                  ),
             ),
           ],
         ),
       ),
-      body: Column(
-        children: [
-          // Announcements at top
-          if (announcements.isNotEmpty)
-            SizedBox(
-              height: 40,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                itemCount: announcements.length,
-                itemBuilder: (context, index) {
-                  final announcement = announcements[index];
-                  return Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                    child: InkWell(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => WebViewScreen(url: announcement.url),
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Center(
-                          child: Text(
-                            announcement.title,
-                            style: TextStyle(
-                              color: _getColorFromString(
-                                announcement.color,
-                                Theme.of(context).brightness == Brightness.dark,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
+    );
+  }
+
+  Widget _buildTab({
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+    required int tabIndex,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    // Calculate the color interpolation value based on animation
+    final colorValue = 1.0 - (_tabAnimationValue - tabIndex).abs().clamp(0.0, 1.0);
+    
+    return Tab(
+      height: 40,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: Color.lerp(
+                colorScheme.onSurfaceVariant,
+                colorScheme.primary,
+                colorValue,
               ),
             ),
-
-          // Tab content
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                // Popular Novels Tab
-                _buildNovelGrid(
-                  novels: popularNovels,
-                  isLoading: isLoading,
-                  showRating: true,
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: Color.lerp(
+                  colorScheme.onSurfaceVariant,
+                  colorScheme.primary,
+                  colorValue,
                 ),
+                fontWeight: FontWeight.lerp(
+                  FontWeight.w500,
+                  FontWeight.w600,
+                  colorValue,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-                // Creative Novels Tab
-                _buildNovelGrid(
-                  novels: creativeNovels,
-                  isLoading: isLoading,
-                  showChapterInfo: true,
+  List<Widget> _buildAnimatedTabs() {
+    return [
+      _buildAnimatedTab(
+        icon: Icons.local_fire_department_rounded,
+        label: 'Popular',
+        isSelected: _tabController.index == 0,
+      ),
+      _buildAnimatedTab(
+        icon: Icons.create_rounded,
+        label: 'Creative',
+        isSelected: _tabController.index == 1,
+      ),
+    ];
+  }
+
+  Widget _buildAnimatedTab({
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+  }) {
+    return Tab(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: isSelected 
+            ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
+            : Colors.transparent,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18),
+            const SizedBox(width: 8),
+            Text(label),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAnnouncementBanner(ColorScheme colorScheme, TextTheme textTheme, bool isDark) {
+    return Container(
+      height: 52, // Increased height
+      decoration: BoxDecoration(
+        color: isDark 
+          ? colorScheme.surfaceVariant.withOpacity(0.3)
+          : colorScheme.surfaceVariant.withOpacity(0.1),
+        border: Border(
+          bottom: BorderSide(
+            color: colorScheme.outlineVariant.withOpacity(0.5),
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: announcements.length,
+        itemBuilder: (context, index) => _buildAnnouncementChip(
+          announcement: announcements[index],
+          colorScheme: colorScheme,
+          textTheme: textTheme,
+          isDark: isDark,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAnnouncementChip({
+    required Announcement announcement,
+    required ColorScheme colorScheme,
+    required TextTheme textTheme,
+    required bool isDark,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+      child: Material(
+        color: _getColorFromString(announcement.color, isDark).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(24),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => WebViewScreen(url: announcement.url),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.announcement_outlined,
+                  size: 16,
+                  color: _getColorFromString(announcement.color, isDark),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  announcement.title,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: _getColorFromString(announcement.color, isDark),
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.2,
+                    height: 1.2,
+                  ),
                 ),
               ],
             ),
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+    Widget _buildTabContent({
+    required List<LightNovel> novels,
+    required bool isLoading,
+    bool showRating = false,
+    bool showChapterInfo = false,
+  }) {
+    if (error != null) {
+      return _buildErrorCard();
+    }
+
+    if (isLoading) {
+      return GridView.builder(
+        padding: const EdgeInsets.all(16),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 0.55,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+        ),
+        itemCount: 6,
+        itemBuilder: (context, index) => _buildShimmerCard(),
+      );
+    }
+
+    if (novels.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.library_books_outlined,
+                size: 48,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'No novels available',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: _loadData,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Reload'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ).copyWith(
+                  overlayColor: MaterialStateProperty.resolveWith((states) {
+                    if (states.contains(MaterialState.pressed)) {
+                      return Theme.of(context).colorScheme.onPrimary.withOpacity(0.1);
+                    }
+                    return null;
+                  }),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      child: GridView.builder(
+        padding: const EdgeInsets.all(16),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 0.55,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+        ),
+        itemCount: novels.length,
+        itemBuilder: (context, index) => LightNovelCard(
+          novel: novels[index],
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => WebViewScreen(
+                  url: novels[index].url
+                ),
+              ),
+            );
+          },
+          showRating: showRating,
+          showChapterInfo: showChapterInfo,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShimmerCard() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: Theme.of(context).colorScheme.surface,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 3,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(12),
+                  ),
+                  color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                ),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      height: 12,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(6),
+                        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 12,
+                      width: 100,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(6),
+                        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

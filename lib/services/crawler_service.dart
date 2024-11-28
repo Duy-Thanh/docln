@@ -93,10 +93,8 @@ class CrawlerService {
       }
 
       final response = await http.get(
-        Uri.parse(server),
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36'
-        });
+        Uri.parse(server)
+      );
       if (response.statusCode == 200) {
         final document = parser.parse(response.body);
         final novelElements = document.querySelectorAll('.daily-recent_views .popular-thumb-item');
@@ -157,10 +155,7 @@ class CrawlerService {
       }
 
       final response = await http.get(
-        Uri.parse(server),
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36'
-        },
+        Uri.parse(server)
       );
 
       if (response.statusCode == 200) {
