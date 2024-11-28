@@ -45,6 +45,7 @@ dependencies:
   lazy_load_scrollview: ^1.3.0
   dio: ^5.7.0
   open_file: ^3.5.10
+  shimmer: ^3.0.0
 
 dev_dependencies:
   flutter_test:

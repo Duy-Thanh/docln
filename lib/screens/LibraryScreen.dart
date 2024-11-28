@@ -16,18 +16,28 @@ class LibraryScreen extends StatefulWidget {
   _LibraryScreenState createState() => _LibraryScreenState();
 }
 
-class _LibraryScreenState extends State<LibraryScreen> {
+class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProviderStateMixin {
   final CrawlerService _crawlerService = CrawlerService();
+  late TabController _tabController;
+
   List<Announcement> announcements = [];
   List<LightNovel> popularNovels = [];
+  List<LightNovel> creativeNovels = [];
   bool isLoading = true;
   String? error;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _loadAnnouncements();
-    _loadPopularNovels();
+    _loadAllNovels();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadAnnouncements() async {
@@ -52,17 +62,22 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
   }
 
-  Future<void> _loadPopularNovels() async {
+  Future<void> _loadAllNovels() async {
     try {
       setState(() {
         isLoading = true;
         error = null;
       });
 
-      final novels = await _crawlerService.getPopularNovels(context);
-      
+      // Load both sections in parallel
+      final results = await Future.wait([
+        _crawlerService.getPopularNovels(context),
+        _crawlerService.getCreativeNovels(context),
+      ]);
+
       setState(() {
-        popularNovels = novels;
+        popularNovels = results[0];
+        creativeNovels = results[1];
         isLoading = false;
       });
     } catch (e) {
@@ -70,53 +85,278 @@ class _LibraryScreenState extends State<LibraryScreen> {
         error = e.toString();
         isLoading = false;
       });
-      CustomToast.show(context, 'Error fetching novels: $e');
     }
   }
 
+  Future<void> _loadData() async {
+    try {
+      setState(() {
+        isLoading = true;
+        error = null;
+      });
+
+      await Future.wait([
+        _loadAnnouncements(),
+        _loadAllNovels(),
+      ]);
+    } catch (e) {
+      setState(() {
+        error = e.toString();
+        isLoading = false;
+      });
+      CustomToast.show(context, 'Error loading data: $e');
+    }
+  }
+
+  // Future<void> _loadPopularNovels() async {
+  //   try {
+  //     setState(() {
+  //       isLoading = true;
+  //       error = null;
+  //     });
+
+  //     final novels = await _crawlerService.getPopularNovels(context);
+      
+  //     setState(() {
+  //       popularNovels = novels;
+  //       isLoading = false;
+  //     });
+  //   } catch (e) {
+  //     setState(() {
+  //       error = e.toString();
+  //       isLoading = false;
+  //     });
+  //     CustomToast.show(context, 'Error fetching novels: $e');
+  //   }
+  // }
+
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
     return Scaffold(
-      body: RefreshIndicator(
-        onRefresh: _loadAnnouncements,
-        child: isLoading 
-          ? _buildLoadingIndicator()
-          : error != null 
-            ? LayoutBuilder(
-                builder: (context, constraints) {
-                  return SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    child: Container(
-                      constraints: BoxConstraints(
-                        minHeight: constraints.maxHeight,
+      appBar: AppBar(
+        title: const Text('DocLN'),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(
+              icon: Icon(Icons.local_fire_department_rounded),
+              text: 'Popular',
+            ),
+            Tab(
+              icon: Icon(Icons.create_rounded),
+              text: 'Creative',
+            ),
+          ],
+        ),
+      ),
+      body: Column(
+        children: [
+          // Announcements at top
+          if (announcements.isNotEmpty)
+            SizedBox(
+              height: 40,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                itemCount: announcements.length,
+                itemBuilder: (context, index) {
+                  final announcement = announcements[index];
+                  return Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    child: InkWell(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => WebViewScreen(url: announcement.url),
+                        ),
                       ),
-                      child: Center(
-                        child: _buildErrorCard(),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Center(
+                          child: Text(
+                            announcement.title,
+                            style: TextStyle(
+                              color: _getColorFromString(
+                                announcement.color,
+                                Theme.of(context).brightness == Brightness.dark,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   );
                 },
-              )
-            : SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: Column(
-                  children: [
-                    _buildLibraryTitle(),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: _buildAnnouncementsList(isDarkMode),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: _buildPopularNovels(isDarkMode),
-                    ),
-                    const SizedBox(height: 32),
-                  ],
+              ),
+            ),
+
+          // Tab content
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                // Popular Novels Tab
+                _buildNovelGrid(
+                  novels: popularNovels,
+                  isLoading: isLoading,
+                  showRating: true,
+                ),
+
+                // Creative Novels Tab
+                _buildNovelGrid(
+                  novels: creativeNovels,
+                  isLoading: isLoading,
+                  showChapterInfo: true,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNovelGrid({
+    required List<LightNovel> novels,
+    required bool isLoading,
+    bool showRating = false,
+    bool showChapterInfo = false,
+  }) {
+    if (isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (novels.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('No novels available'),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: _loadData,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      child: GridView.builder(
+        padding: const EdgeInsets.all(8),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 0.55,
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 8,
+        ),
+        itemCount: novels.length,
+        itemBuilder: (context, index) {
+          return LightNovelCard(
+            novel: novels[index],
+            showRating: showRating,
+            showChapterInfo: showChapterInfo,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => WebViewScreen(url: novels[index].url),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAnnouncementCard(Announcement announcement, bool isDarkMode) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      child: InkWell(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => WebViewScreen(url: announcement.url),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Center(
+            child: Text(
+              announcement.title,
+              style: TextStyle(
+                color: _getColorFromString(announcement.color, isDarkMode),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNovelSection({
+    required String title,
+    required IconData icon,
+    required List<LightNovel> novels,
+    bool showRating = false,
+    bool showChapterInfo = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 24),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              Icon(icon, size: 24, color: Theme.of(context).colorScheme.primary),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
                 ),
               ),
-      ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        if (isLoading)
+          const Center(child: CircularProgressIndicator())
+        else if (novels.isEmpty)
+          Center(child: Text('No $title available'))
+        else
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 0.48,  // Adjusted to be taller
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+            ),
+            itemCount: novels.length,
+            itemBuilder: (context, index) {
+              final novel = novels[index];
+              return LightNovelCard(
+                novel: novel,
+                showRating: showRating,
+                showChapterInfo: showChapterInfo,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => WebViewScreen(url: novel.url),
+                  ),
+                ),
+              );
+            },
+          ),
+      ],
     );
   }
 
@@ -464,71 +704,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  // Update the GridView in _buildPopularNovels
-  Widget _buildPopularNovels(bool isDarkMode) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 24),
-        Row(
-          children: [
-            Icon(
-              Icons.local_library_rounded,
-              size: 24,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Popular Novels',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-                fontSize: 20,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        if (popularNovels.isEmpty)
-          Center(
-            child: Text(
-              'No novels available',
-              style: TextStyle(
-                color: Theme.of(context).textTheme.bodyMedium?.color,
-              ),
-            ),
-          )
-        else
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 0.65,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-            ),
-            itemCount: popularNovels.length,
-            itemBuilder: (context, index) {
-              final novel = popularNovels[index];
-              return LightNovelCard(
-                novel: novel,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => WebViewScreen(
-                        url: novel.url,
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-      ],
     );
   }
 

@@ -86,54 +86,48 @@ class CrawlerService {
 
   Future<List<LightNovel>> getPopularNovels(BuildContext context) async {
     try {
-      final workingServer = await _getWorkingServer();
-      if (workingServer == null) {
-        throw Exception('No working server available');
+      final server = await _getWorkingServer();
+      if (server == null) {
+        CustomToast.show(context, 'No server available');
+        return [];
       }
 
       final response = await http.get(
-        Uri.parse(workingServer),
-        headers: {'User-Agent': 'Mozilla/5.0'},
-      );
-
+        Uri.parse(server),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36'
+        });
       if (response.statusCode == 200) {
         final document = parser.parse(response.body);
-        List<LightNovel> novels = [];
-
-        // Parse all thumb-item-flow elements (both original and translated novels)
-        final novelElements = document.querySelectorAll('.thumb-item-flow:not(.see-more)');
+        final novelElements = document.querySelectorAll('.daily-recent_views .popular-thumb-item');
+        
+        final novels = <LightNovel>[];
         
         for (var element in novelElements) {
           try {
             final titleElement = element.querySelector('.thumb_attr.series-title a');
             final coverElement = element.querySelector('.content.img-in-ratio');
-            final chapterElement = element.querySelector('.thumb_attr.chapter-title');
-            
-            if (titleElement != null) {
-              final title = titleElement.text;
-              final url = titleElement.attributes['href'] ?? '';
-              final id = url.split('/').last;
-              
-              // Get cover URL from data-bg attribute or background-image style
-              String coverUrl = coverElement?.attributes['data-bg'] ?? '';
-              if (coverUrl.isEmpty) {
-                final bgStyle = coverElement?.attributes['style'] ?? '';
-                final bgMatch = RegExp(r'url\("([^"]+)"\)').firstMatch(bgStyle);
-                coverUrl = bgMatch?.group(1) ?? 'https://ln.hako.vn/img/nocover.jpg';
-              }
+            final linkElement = element.querySelector('.thumb-wrapper a');
 
-              // Get chapter count
-              final chapterText = chapterElement?.text ?? '';
-              final chapterMatch = RegExp(r'Chương (\d+)').firstMatch(chapterText);
-              final chapters = chapterMatch != null ? 
-                  int.tryParse(chapterMatch.group(1) ?? '0') : 0;
+            if (titleElement != null && coverElement != null && linkElement != null) {
+              final title = titleElement.text.trim();
+              final relativeUrl = linkElement.attributes['href'] ?? '';
+              // Convert relative URL to absolute URL
+              final url = relativeUrl.startsWith('http') 
+                  ? relativeUrl 
+                  : '$server$relativeUrl';
+              final id = relativeUrl.split('/').last;
+              
+              // Extract cover URL from style attribute
+              final styleAttr = coverElement.attributes['style'] ?? '';
+              final coverUrlMatch = RegExp(r"url\('([^']+)'\)").firstMatch(styleAttr);
+              final coverUrl = coverUrlMatch?.group(1) ?? 'https://ln.hako.vn/img/nocover.jpg';
 
               novels.add(LightNovel(
                 id: id,
                 title: title,
                 coverUrl: coverUrl,
-                url: '$workingServer$url',
-                chapters: chapters,
+                url: url,  // Now using the absolute URL
               ));
             }
           } catch (e) {
@@ -141,14 +135,103 @@ class CrawlerService {
             continue;
           }
         }
-
+        
         return novels;
       }
-
-      throw Exception('Failed to load novels');
+      
+      CustomToast.show(context, 'Failed to fetch popular novels');
+      return [];
     } catch (e) {
-      print('Error fetching novels: $e');
-      CustomToast.show(context, 'Error fetching novels: $e');
+      print('Error fetching popular novels: $e');
+      CustomToast.show(context, 'Error fetching popular novels: $e');
+      return [];
+    }
+  }
+
+  Future<List<LightNovel>> getCreativeNovels(BuildContext context) async {
+    try {
+      final server = await _getWorkingServer();
+      if (server == null) {
+        CustomToast.show(context, 'No server available');
+        return [];
+      }
+
+      final response = await http.get(
+        Uri.parse(server),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36'
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final document = parser.parse(response.body);
+        // Updated selector to match the creative novels section
+        final novelElements = document.querySelectorAll('.thumb-section-flow.original.one-row .thumb-item-flow:not(.see-more)');
+        
+        final novels = <LightNovel>[];
+        
+        for (var element in novelElements) {
+          try {
+            final titleElement = element.querySelector('.thumb_attr.series-title a');
+            final coverElement = element.querySelector('.content.img-in-ratio');
+            final chapterElement = element.querySelector('.thumb_attr.chapter-title a');
+            final volumeElement = element.querySelector('.thumb_attr.volume-title');
+
+            if (titleElement != null && coverElement != null) {
+              final title = titleElement.text.trim();
+              final relativeUrl = titleElement.attributes['href'] ?? '';
+              final url = relativeUrl.startsWith('http') 
+                  ? relativeUrl 
+                  : '$server$relativeUrl';
+              final id = relativeUrl.split('/').last;
+              
+              // Get cover URL from data-bg attribute
+              String coverUrl = coverElement.attributes['data-bg'] ?? '';
+              if (coverUrl.isEmpty) {
+                final styleAttr = coverElement.attributes['style'] ?? '';
+                final coverUrlMatch = RegExp(r'url\("([^"]+)"\)').firstMatch(styleAttr);
+                coverUrl = coverUrlMatch?.group(1) ?? 'https://ln.hako.vn/img/nocover.jpg';
+              }
+
+              // Extract chapter number if available
+              int? chapters;
+              String? latestChapter;
+              if (chapterElement != null) {
+                final chapterText = chapterElement.text;
+                final chapterMatch = RegExp(r'Chương (\d+)').firstMatch(chapterText);
+                if (chapterMatch != null) {
+                  chapters = int.tryParse(chapterMatch.group(1) ?? '');
+                }
+                latestChapter = chapterText;
+              }
+
+              // Extract volume title
+              final volumeTitle = volumeElement?.text.trim();
+
+              novels.add(LightNovel(
+                id: id,
+                title: title,
+                coverUrl: coverUrl,
+                url: url,
+                chapters: chapters,
+                latestChapter: latestChapter,
+                volumeTitle: volumeTitle,
+              ));
+            }
+          } catch (e) {
+            print('Error parsing creative novel element: $e');
+            continue;
+          }
+        }
+        
+        return novels;
+      }
+      
+      CustomToast.show(context, 'Failed to fetch creative novels');
+      return [];
+    } catch (e) {
+      print('Error fetching creative novels: $e');
+      CustomToast.show(context, 'Error fetching creative novels: $e');
       return [];
     }
   }
