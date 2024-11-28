@@ -10,11 +10,39 @@ import 'services/theme_services.dart';
 import 'services/language_service.dart';
 import 'handler/system_ui_handler.dart';
 
+// Firebase
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+
 // Dart libs
 import 'dart:ui';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  FlutterError.onError = (errorDetails) {
+    FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
+  };
+
+  // Pass all uncaught asynchronous errors that aren't handled by the Flutter framework to Crashlytics
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true;
+  };
+
+  // Add this test event
+  await FirebaseAnalytics.instance.logEvent(
+    name: 'app_opened',
+    parameters: {
+      'time': DateTime.now().toString(),
+    },
+  );
 
   final themeService = ThemeServices();
   final languageService = LanguageService();
@@ -54,6 +82,9 @@ void main() async {
 class MainApp extends StatelessWidget {
   const MainApp({super.key});
 
+  static FirebaseAnalytics analytics = FirebaseAnalytics.instance;
+  static FirebaseAnalyticsObserver observer = FirebaseAnalyticsObserver(analytics: analytics);
+
   @override
   Widget build(BuildContext context) {
     return Consumer2<ThemeServices, LanguageService>(
@@ -65,6 +96,7 @@ class MainApp extends StatelessWidget {
             theme: themeService.getLightTheme(),
             darkTheme: themeService.getDarkTheme(),
             locale: languageService.currentLocale,
+            navigatorObservers: [observer],
             localizationsDelegates: const [
               GlobalMaterialLocalizations.delegate,
               GlobalWidgetsLocalizations.delegate,
