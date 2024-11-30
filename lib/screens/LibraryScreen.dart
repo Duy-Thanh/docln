@@ -16,9 +16,21 @@ class LibraryScreen extends StatefulWidget {
   _LibraryScreenState createState() => _LibraryScreenState();
 }
 
-class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProviderStateMixin {
+class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateMixin {
   final CrawlerService _crawlerService = CrawlerService();
   late TabController _tabController;
+  double _tabAnimationValue = 0.0;
+
+  // Initialize animation controller and animation at declaration
+  late final AnimationController _gradientAnimationController = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 3),
+  )..repeat(reverse: true);
+
+  late final Animation<double> _gradientAnimation = Tween<double>(
+    begin: 0.0,
+    end: 1.0,
+  ).animate(_gradientAnimationController);
 
   List<Announcement> announcements = [];
   List<LightNovel> popularNovels = [];
@@ -26,20 +38,20 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
   bool isLoading = true;
   String? error;
 
-  double _tabAnimationValue = 0.0; // Add this variable
-
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _tabController.animation?.addListener(_handleTabAnimation); // Add listener
+    _tabController.animation?.addListener(_handleTabAnimation);
+    
     _loadAnnouncements();
     _loadAllNovels();
   }
 
   @override
   void dispose() {
-    _tabController.animation?.removeListener(_handleTabAnimation); // Remove listener
+    _gradientAnimationController.dispose();
+    _tabController.animation?.removeListener(_handleTabAnimation);
     _tabController.dispose();
     super.dispose();
   }
@@ -168,63 +180,96 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
                   child: Container(
                     height: 48, // Fixed height for the container
                     decoration: BoxDecoration(
-                      color: isDark 
-                        ? colorScheme.surfaceVariant.withOpacity(0.3)
-                        : colorScheme.surfaceVariant.withOpacity(0.4),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: colorScheme.outline.withOpacity(0.1),
                         width: 1,
                       ),
                     ),
-                    child: TabBar(
-                      controller: _tabController,
-                      padding: const EdgeInsets.all(4),
-                      labelPadding: EdgeInsets.zero,
-                      indicator: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: colorScheme.primary.withOpacity(0.1),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+                    child: AnimatedBuilder(
+                      animation: _gradientAnimation,
+                      builder: (context, child) {
+                        return Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            gradient: LinearGradient(
+                              begin: Alignment(
+                                -1 + _gradientAnimation.value * 2,
+                                -1 + _gradientAnimation.value,
+                              ),
+                              end: Alignment(
+                                1 - _gradientAnimation.value * 2,
+                                1 - _gradientAnimation.value,
+                              ),
+                              colors: [
+                                isDark 
+                                  ? colorScheme.surfaceVariant.withOpacity(0.4)
+                                  : colorScheme.surfaceVariant.withOpacity(0.3),
+                                isDark 
+                                  ? colorScheme.surfaceVariant.withOpacity(0.2)
+                                  : colorScheme.surfaceVariant.withOpacity(0.1),
+                                isDark 
+                                  ? colorScheme.surfaceVariant.withOpacity(0.3)
+                                  : colorScheme.surfaceVariant.withOpacity(0.2),
+                              ],
+                              stops: const [0.0, 0.5, 1.0],
+                            ),
                           ),
-                        ],
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            colorScheme.surface,
-                            isDark 
-                              ? colorScheme.surface.withOpacity(0.9)
-                              : Colors.white,
+                          child: child,
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: TabBar(
+                          controller: _tabController,
+                          padding: const EdgeInsets.all(4),
+                          labelPadding: EdgeInsets.zero,
+                          indicator: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: colorScheme.primary.withOpacity(0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                colorScheme.surface,
+                                isDark 
+                                  ? colorScheme.surface.withOpacity(0.9)
+                                  : Colors.white,
+                              ],
+                            ),
+                          ),
+                          splashFactory: NoSplash.splashFactory,
+                          overlayColor: MaterialStateProperty.all(Colors.transparent),
+                          labelStyle: textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.3,
+                          ),
+                          unselectedLabelStyle: textTheme.titleSmall?.copyWith(
+                            letterSpacing: 0.2,
+                          ),
+                          dividerColor: Colors.transparent,
+                          tabs: [
+                            _buildTab(
+                              icon: Icons.local_fire_department_rounded,
+                              label: 'Popular',
+                              isSelected: _tabController.index == 0,
+                              tabIndex: 0,
+                            ),
+                            _buildTab(
+                              icon: Icons.create_rounded,
+                              label: 'Latest Creative',
+                              isSelected: _tabController.index == 1,
+                              tabIndex: 1,
+                            ),
                           ],
                         ),
                       ),
-                      splashFactory: NoSplash.splashFactory,
-                      overlayColor: MaterialStateProperty.all(Colors.transparent),
-                      labelStyle: textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.3,
-                      ),
-                      unselectedLabelStyle: textTheme.titleSmall?.copyWith(
-                        letterSpacing: 0.2,
-                      ),
-                      dividerColor: Colors.transparent,
-                      tabs: [
-                        _buildTab(
-                          icon: Icons.local_fire_department_rounded,
-                          label: 'Popular',
-                          isSelected: _tabController.index == 0,
-                          tabIndex: 0,
-                        ),
-                        _buildTab(
-                          icon: Icons.create_rounded,
-                          label: 'Creative',
-                          isSelected: _tabController.index == 1,
-                          tabIndex: 1,
-                        ),
-                      ],
                     ),
                   ),
                 ),
@@ -441,92 +486,94 @@ class _LibraryScreenState extends State<LibraryScreen> with SingleTickerProvider
     }
 
     if (isLoading) {
-      return GridView.builder(
-        padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          childAspectRatio: 0.55,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-        ),
-        itemCount: 6,
-        itemBuilder: (context, index) => _buildShimmerCard(),
-      );
+      return _buildLoadingGrid();
     }
 
     if (novels.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.library_books_outlined,
-                size: 48,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'No novels available',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: _loadData,
-                icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: const Text('Reload'),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 12,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ).copyWith(
-                  overlayColor: MaterialStateProperty.resolveWith((states) {
-                    if (states.contains(MaterialState.pressed)) {
-                      return Theme.of(context).colorScheme.onPrimary.withOpacity(0.1);
-                    }
-                    return null;
-                  }),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
+      return _buildEmptyState();
     }
 
     return RefreshIndicator(
       onRefresh: _loadData,
-      child: GridView.builder(
-        padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          childAspectRatio: 0.55,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-        ),
-        itemCount: novels.length,
-        itemBuilder: (context, index) => LightNovelCard(
-          novel: novels[index],
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => WebViewScreen(
-                  url: novels[index].url
-                ),
+      child: CustomScrollView(
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.all(16),
+            sliver: SliverGrid(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 0.55,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
               ),
-            );
-          },
-          showRating: showRating,
-          showChapterInfo: showChapterInfo,
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final novel = novels[index];
+                  return KeyedSubtree(
+                    key: ValueKey(novel.id),
+                    child: LightNovelCard(
+                      novel: novel,
+                      showRating: showRating,
+                      showChapterInfo: showChapterInfo,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => WebViewScreen(url: novel.url),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+                childCount: novels.length,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingGrid() {
+    return GridView.builder(
+      padding: const EdgeInsets.all(16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 0.55,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+      ),
+      itemCount: 6,
+      itemBuilder: (context, index) => _buildShimmerCard(),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.library_books_outlined,
+              size: 48,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No novels available',
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: _loadData,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Reload'),
+            ),
+          ],
         ),
       ),
     );
