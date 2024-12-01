@@ -4,6 +4,7 @@ import 'HomeScreen.dart';
 import 'dart:async';
 import 'package:provider/provider.dart';
 import '../services/theme_services.dart';
+import '../services/performance_service.dart';
 
 class Particle {
   late Offset position;
@@ -81,6 +82,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   @override
   void initState() {
     super.initState();
+    _optimizeScreen();
     
     _mainController = AnimationController(
       duration: const Duration(milliseconds: 2500),
@@ -241,6 +243,10 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
         );
       }
     });
+  }
+
+  Future<void> _optimizeScreen() async {
+    await PerformanceService.optimizeScreen('SplashScreen');
   }
 
   void _updateParticles(_) {

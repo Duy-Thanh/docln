@@ -4,7 +4,7 @@ import '../screens/LibraryScreen.dart';
 import '../screens/SettingsScreen.dart';
 import '../screens/widgets/update_dialog.dart';
 import 'dart:ui';
-
+import '../services/performance_service.dart';
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -18,11 +18,16 @@ class _HomeScreenState extends State<HomeScreen> {
   final _settingsKey = GlobalKey<SettingsScreenState>();
   bool _isCheckingForUpdates = false;
 
+  Future<void> _optimizeScreen() async {
+    await PerformanceService.optimizeScreen('HomeScreen');
+  }
+
   late final List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
+    _optimizeScreen();
     _screens = [
       LibraryScreen(),
       const Center(child: Text('Search')),

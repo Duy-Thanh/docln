@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../modules/announcement.dart';
+import '../modules/chapter.dart';
 import '../services/crawler_service.dart';
 import '../screens/custom_toast.dart';
 import '../screens/webview_screen.dart';
@@ -8,6 +9,11 @@ import 'widgets/light_novel_card.dart';
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:app_settings/app_settings.dart';
 import 'dart:io' show Platform;
+import 'widgets/latest_chapters_section.dart';
+import 'widgets/chapter_card.dart';
+import 'package:shimmer/shimmer.dart';
+import 'package:flutter/services.dart';
+import '../services/performance_service.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -19,7 +25,9 @@ class LibraryScreen extends StatefulWidget {
 class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateMixin {
   final CrawlerService _crawlerService = CrawlerService();
   late TabController _tabController;
+  late AnimationController _controller;
   double _tabAnimationValue = 0.0;
+  int _selectedIndex = 0;
 
   // Initialize animation controller and animation at declaration
   late final AnimationController _gradientAnimationController = AnimationController(
@@ -35,17 +43,34 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
   List<Announcement> announcements = [];
   List<LightNovel> popularNovels = [];
   List<LightNovel> creativeNovels = [];
+  List<Chapter> latestChapters = [];
   bool isLoading = true;
   String? error;
+
+  void _onTabTapped(int index) {
+    if (_selectedIndex != index) {
+      setState(() => _selectedIndex = index);
+      // Add haptic feedback for better interaction
+      HapticFeedback.lightImpact();
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _optimizeScreen();
+    _tabController = TabController(length: 3, vsync: this);
     _tabController.animation?.addListener(_handleTabAnimation);
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
     
-    _loadAnnouncements();
-    _loadAllNovels();
+    _loadData();
+  }
+
+  Future<void> _optimizeScreen() async {
+    await PerformanceService.optimizeScreen('LibraryScreen');
   }
 
   @override
@@ -53,6 +78,7 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
     _gradientAnimationController.dispose();
     _tabController.animation?.removeListener(_handleTabAnimation);
     _tabController.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
@@ -111,16 +137,22 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
   }
 
   Future<void> _loadData() async {
+    setState(() => isLoading = true);
     try {
-      setState(() {
-        isLoading = true;
-        error = null;
-      });
-
-      await Future.wait([
-        _loadAnnouncements(),
-        _loadAllNovels(),
+      final futures = await Future.wait([
+        _crawlerService.getAnnouncements(context),
+        _crawlerService.getPopularNovels(context),
+        _crawlerService.getCreativeNovels(context),
+        _crawlerService.getLatestChapters(context),
       ]);
+      
+      setState(() {
+        announcements = futures[0] as List<Announcement>;
+        popularNovels = futures[1] as List<LightNovel>;
+        creativeNovels = futures[2] as List<LightNovel>;
+        latestChapters = futures[3] as List<Chapter>;
+        isLoading = false;
+      });
     } catch (e) {
       setState(() {
         error = e.toString();
@@ -130,178 +162,268 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
     }
   }
 
-  // Future<void> _loadPopularNovels() async {
-  //   try {
-  //     setState(() {
-  //       isLoading = true;
-  //       error = null;
-  //     });
-
-  //     final novels = await _crawlerService.getPopularNovels(context);
-      
-  //     setState(() {
-  //       popularNovels = novels;
-  //       isLoading = false;
-  //     });
-  //   } catch (e) {
-  //     setState(() {
-  //       error = e.toString();
-  //       isLoading = false;
-  //     });
-  //     CustomToast.show(context, 'Error fetching novels: $e');
-  //   }
-  // }
-
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
+    final theme = Theme.of(context);
+    
     return Scaffold(
-      body: NestedScrollView(
-        headerSliverBuilder: (context, innerBoxIsScrolled) {
-          return [
-            SliverAppBar(
-              toolbarHeight: 0,
-              floating: true,
-              pinned: true,
-              elevation: 0,
-              backgroundColor: isDark 
-                ? colorScheme.surface.withOpacity(0.95)
-                : colorScheme.surface,
-              surfaceTintColor: Colors.transparent,
-              scrolledUnderElevation: 1,
-              shadowColor: colorScheme.shadow.withOpacity(0.2),
-              bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(72), // Increased height
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: Container(
-                    height: 48, // Fixed height for the container
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: colorScheme.outline.withOpacity(0.1),
-                        width: 1,
-                      ),
-                    ),
-                    child: AnimatedBuilder(
-                      animation: _gradientAnimation,
-                      builder: (context, child) {
-                        return Container(
+      body: Column(
+        children: [
+          // Enhanced Tab Bar Container
+          Container(
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 16,
+              bottom: 16,
+            ),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  theme.colorScheme.primary.withOpacity(0.08),
+                  theme.colorScheme.primary.withOpacity(0.02),
+                  theme.scaffoldBackgroundColor,
+                ],
+                stops: const [0.0, 0.6, 1.0],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: theme.colorScheme.primary.withOpacity(0.03),
+                  offset: const Offset(0, 4),
+                  blurRadius: 12,
+                ),
+              ],
+            ),
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(
+                  color: theme.colorScheme.primary.withOpacity(0.1),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: theme.colorScheme.primary.withOpacity(0.04),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final tabWidth = (constraints.maxWidth - 8) / 3;
+                  return Stack(
+                    children: [
+                      // Enhanced animated selection background
+                      AnimatedPositioned(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeOutExpo,
+                        left: 4 + (_selectedIndex * tabWidth),
+                        child: Container(
+                          width: tabWidth,
+                          height: 44,
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            gradient: LinearGradient(
-                              begin: Alignment(
-                                -1 + _gradientAnimation.value * 2,
-                                -1 + _gradientAnimation.value,
-                              ),
-                              end: Alignment(
-                                1 - _gradientAnimation.value * 2,
-                                1 - _gradientAnimation.value,
-                              ),
-                              colors: [
-                                isDark 
-                                  ? colorScheme.surfaceVariant.withOpacity(0.4)
-                                  : colorScheme.surfaceVariant.withOpacity(0.3),
-                                isDark 
-                                  ? colorScheme.surfaceVariant.withOpacity(0.2)
-                                  : colorScheme.surfaceVariant.withOpacity(0.1),
-                                isDark 
-                                  ? colorScheme.surfaceVariant.withOpacity(0.3)
-                                  : colorScheme.surfaceVariant.withOpacity(0.2),
-                              ],
-                              stops: const [0.0, 0.5, 1.0],
-                            ),
-                          ),
-                          child: child,
-                        );
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: TabBar(
-                          controller: _tabController,
-                          padding: const EdgeInsets.all(4),
-                          labelPadding: EdgeInsets.zero,
-                          indicator: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
+                            color: theme.colorScheme.surface,
+                            borderRadius: BorderRadius.circular(26),
                             boxShadow: [
                               BoxShadow(
-                                color: colorScheme.primary.withOpacity(0.1),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
+                                color: theme.colorScheme.primary.withOpacity(0.1),
+                                blurRadius: 12,
+                                offset: const Offset(0, 3),
+                              ),
+                              BoxShadow(
+                                color: theme.colorScheme.primary.withOpacity(0.05),
+                                blurRadius: 4,
+                                offset: const Offset(0, 1),
                               ),
                             ],
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                colorScheme.surface,
-                                isDark 
-                                  ? colorScheme.surface.withOpacity(0.9)
-                                  : Colors.white,
-                              ],
+                          ),
+                          // Add subtle gradient to selected tab
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(26),
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  theme.colorScheme.primary.withOpacity(0.05),
+                                  Colors.white.withOpacity(0.05),
+                                ],
+                              ),
                             ),
                           ),
-                          splashFactory: NoSplash.splashFactory,
-                          overlayColor: MaterialStateProperty.all(Colors.transparent),
-                          labelStyle: textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.3,
-                          ),
-                          unselectedLabelStyle: textTheme.titleSmall?.copyWith(
-                            letterSpacing: 0.2,
-                          ),
-                          dividerColor: Colors.transparent,
-                          tabs: [
-                            _buildTab(
-                              icon: Icons.local_fire_department_rounded,
-                              label: 'Popular',
-                              isSelected: _tabController.index == 0,
-                              tabIndex: 0,
+                        ),
+                      ),
+                      // Tab buttons
+                      SizedBox(
+                        height: 44,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _buildTabItem(
+                                'Popular',
+                                Icons.trending_up_rounded,
+                                0,
+                                theme,
+                              ),
                             ),
-                            _buildTab(
-                              icon: Icons.create_rounded,
-                              label: 'Latest Creative',
-                              isSelected: _tabController.index == 1,
-                              tabIndex: 1,
+                            Expanded(
+                              child: _buildTabItem(
+                                'Creative',
+                                Icons.auto_awesome_rounded,
+                                1,
+                                theme,
+                              ),
+                            ),
+                            Expanded(
+                              child: _buildTabItem(
+                                'Latest',
+                                Icons.new_releases_rounded,
+                                2,
+                                theme,
+                              ),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                  ),
-                ),
+                    ],
+                  );
+                },
               ),
             ),
-          ];
-        },
-        body: Column(
-          children: [
-            if (announcements.isNotEmpty)
-              _buildAnnouncementBanner(colorScheme, textTheme, isDark),
+          ),
 
-            Expanded(
-              child: error != null
-                ? _buildErrorCard()
-                : TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildTabContent(
-                        novels: popularNovels,
-                        isLoading: isLoading,
-                        showRating: true,
-                      ),
-                      _buildTabContent(
-                        novels: creativeNovels,
-                        isLoading: isLoading,
-                        showChapterInfo: true,
-                      ),
-                    ],
-                  ),
+          // Existing announcement banner
+          if (announcements.isNotEmpty)
+            _buildAnnouncementBanner(
+              theme.colorScheme,
+              theme.textTheme,
+              theme.brightness == Brightness.dark,
             ),
-          ],
+
+          // Content with existing transitions
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 400),
+              transitionBuilder: (Widget child, Animation<double> animation) {
+                return FadeTransition(
+                  opacity: CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ),
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0.03, 0),
+                      end: Offset.zero,
+                    ).animate(CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    )),
+                    child: child,
+                  ),
+                );
+              },
+              child: KeyedSubtree(
+                key: ValueKey<int>(_selectedIndex),
+                child: [
+                  _buildTabContent(
+                    novels: popularNovels,
+                    isLoading: isLoading,
+                    showRating: true,
+                  ),
+                  _buildTabContent(
+                    novels: creativeNovels,
+                    isLoading: isLoading,
+                    showChapterInfo: true,
+                  ),
+                  _buildLatestChaptersTab(),
+                ][_selectedIndex],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabItem(String title, IconData icon, int index, ThemeData theme) {
+    final isSelected = _selectedIndex == index;
+    
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _onTabTapped(index),
+        borderRadius: BorderRadius.circular(26),
+        child: Container(
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Enhanced icon with scale and rotation
+              TweenAnimationBuilder<double>(
+                duration: const Duration(milliseconds: 300),
+                tween: Tween(
+                  begin: 0.0,
+                  end: isSelected ? 1.0 : 0.0,
+                ),
+                builder: (context, value, child) {
+                  return Transform.scale(
+                    scale: 1.0 + (value * 0.2),
+                    child: Transform.rotate(
+                      angle: value * 0.1,
+                      child: Icon(
+                        icon,
+                        color: Color.lerp(
+                          theme.colorScheme.onSurface.withOpacity(0.6),
+                          theme.colorScheme.primary,
+                          value,
+                        ),
+                        size: 18,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(width: 4),
+              // Enhanced text with scale and slide
+              TweenAnimationBuilder<double>(
+                duration: const Duration(milliseconds: 300),
+                tween: Tween(
+                  begin: 0.0,
+                  end: isSelected ? 1.0 : 0.0,
+                ),
+                builder: (context, value, child) {
+                  return Transform.scale(
+                    scale: 1.0 + (value * 0.1),
+                    child: Transform.translate(
+                      offset: Offset(value * 2, 0),
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          color: Color.lerp(
+                            theme.colorScheme.onSurface.withOpacity(0.6),
+                            theme.colorScheme.primary,
+                            value,
+                          ),
+                          fontSize: 14 + (value * 1), // Subtle font size animation
+                          fontWeight: FontWeight.lerp(
+                            FontWeight.w500,
+                            FontWeight.w600,
+                            value,
+                          ),
+                          letterSpacing: 0.2 + (value * 0.2),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -580,59 +702,63 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
   }
 
   Widget _buildShimmerCard() {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Container(
-        decoration: BoxDecoration(
+    return Shimmer.fromColors(
+      baseColor: Colors.grey[300]!,
+      highlightColor: Colors.grey[100]!,
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          color: Theme.of(context).colorScheme.surface,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 3,
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(12),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: Theme.of(context).colorScheme.surface,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 3,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(12),
+                    ),
+                    color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
                   ),
-                  color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
                 ),
               ),
-            ),
-            Expanded(
-              flex: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      height: 12,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(6),
-                        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+              Expanded(
+                flex: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        height: 12,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6),
+                          color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      height: 12,
-                      width: 100,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(6),
-                        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                      const SizedBox(height: 8),
+                      Container(
+                        height: 12,
+                        width: 100,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6),
+                          color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1146,5 +1272,132 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
     } else {
       return isDarkMode ? Colors.white : Colors.black; // Default color based on theme
     }
+  }
+
+  Widget _buildChapterShimmerCard() {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey[300]!,
+      highlightColor: Colors.grey[100]!,
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AspectRatio(
+              aspectRatio: 2/3,
+              child: Container(color: Colors.white),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    height: 12,
+                    width: double.infinity,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    height: 12,
+                    width: 100,
+                    color: Colors.white,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLatestChaptersTab() {
+    if (isLoading) {
+      return GridView.builder(
+        padding: const EdgeInsets.all(8),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 0.55,  // Decreased from 0.6 to give more height
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
+        ),
+        itemCount: 6,
+        itemBuilder: (context, index) => _buildChapterShimmerCard(),
+      );
+    }
+
+    // Filter out invalid chapters
+    final validChapters = latestChapters.where((chapter) => 
+      chapter.title.isNotEmpty && 
+      chapter.seriesTitle.isNotEmpty
+    ).toList();
+
+    if (validChapters.isEmpty) {
+      return const Center(
+        child: Text('No chapters available'),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      child: GridView.builder(
+        padding: const EdgeInsets.all(8),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 0.57,  // Decreased from 0.6 to give more height
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
+        ),
+        itemCount: validChapters.length,
+        itemBuilder: (context, index) => ChapterCard(
+          chapter: validChapters[index],
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => WebViewScreen(url: validChapters[index].url),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNovelShimmerCard() {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey[300]!,
+      highlightColor: Colors.grey[100]!,
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AspectRatio(
+              aspectRatio: 2/3,
+              child: Container(color: Colors.white),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    height: 12,
+                    width: double.infinity,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    height: 12,
+                    width: 100,
+                    color: Colors.white,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

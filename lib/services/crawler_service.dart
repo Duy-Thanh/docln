@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import '../modules/announcement.dart';
 import '../screens/custom_toast.dart';
 import '../modules/light_novel.dart';
-
+import '../modules/chapter.dart';
 class CrawlerService {
   static const List<String> servers = [
     'https://ln.hako.vn',
@@ -36,6 +36,38 @@ class CrawlerService {
     }
 
     return null;
+  }
+
+    Future<List<Chapter>> getLatestChapters(BuildContext context) async {
+    try {
+      final workingServer = await _getWorkingServer();
+      if (workingServer == null) {
+        throw Exception('No working server available');
+      }
+
+      final response = await http.get(
+        Uri.parse('$workingServer'),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36'
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final document = parser.parse(response.body);
+        final chapterElements = document.querySelectorAll('.thumb-item-flow');
+        
+        return chapterElements.map((element) {
+          final html = element.outerHtml;
+          return Chapter.fromHtml(html);
+        }).toList();
+      }
+
+      throw Exception('Failed to fetch latest chapters');
+    } catch (e) {
+      print('Error fetching latest chapters: $e');
+      CustomToast.show(context, 'Error fetching latest chapters');
+      return [];
+    }
   }
   
   Future<List<Announcement>> getAnnouncements(BuildContext context) async {

@@ -13,6 +13,7 @@ import '../screens/custom_toast.dart';
 import '../services/update_service.dart';
 import '../screens/widgets/update_dialog.dart';
 import 'package:url_launcher/url_launcher.dart'; // Add this import
+import '../services/performance_service.dart';
 
 // GridPainter class at the top level
 class GridPainter extends CustomPainter {
@@ -97,6 +98,10 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
     });
 
     _loadSettings();
+  }
+
+  Future<void> _optimizeScreen() async {
+    await PerformanceService.optimizeScreen('SettingsScreen');
   }
 
   @override

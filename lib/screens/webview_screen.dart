@@ -11,6 +11,7 @@ import 'dart:convert';
 import 'package:translator/translator.dart';
 import 'dart:math' show min;
 import 'dart:math' show Random;
+import '../services/performance_service.dart';
 
 class WebViewScreen extends StatefulWidget {
   final String url;
@@ -69,7 +70,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
   @override
   void initState() {
     super.initState();
+    _optimizeScreen();
     _loadAdBlockRules();
+  }
+
+  Future<void> _optimizeScreen() async {
+    await PerformanceService.optimizeScreen('WebViewScreen');
   }
 
   Future<void> _loadAdBlockRules() async {

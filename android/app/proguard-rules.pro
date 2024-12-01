@@ -38,3 +38,31 @@
     void set*(***);
     *** get*();
 }
+
+# Performance Optimizations (Safe additions)
+-optimizations !code/simplification/arithmetic,!code/simplification/cast,!field/*,!class/merging/*
+-optimizationpasses 5
+-allowaccessmodification
+
+# Remove debug logs in release (Safe)
+-assumenosideeffects class android.util.Log {
+    public static *** d(...);
+    public static *** v(...);
+}
+
+# Keep Parcelables (Safe - for data transfer)
+-keepclassmembers class * implements android.os.Parcelable {
+    public static final android.os.Parcelable$Creator *;
+}
+
+# Memory optimizations (Safe)
+-keepclassmembers class * extends android.app.Activity {
+    public void *(android.view.View);
+}
+
+# Safe class loading optimizations
+-keepattributes Signature
+-keepattributes Exceptions
+
+# Remove kotlin metadata annotations (Safe - reduces size)
+-dontwarn kotlin.reflect.jvm.internal.**
