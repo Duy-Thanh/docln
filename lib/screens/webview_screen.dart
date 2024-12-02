@@ -1,4 +1,5 @@
 import 'dart:ffi';
+import 'package:docln/services/settings_services.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../services/adguard_service.dart';
@@ -72,6 +73,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
     super.initState();
     _optimizeScreen();
     _loadAdBlockRules();
+  }
+
+  Future<String> _ensureFullUrl(String url) async {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    
+    final settingsService = SettingsService();
+    final baseUrl = await settingsService.getCurrentServer() ?? 'https://ln.hako.vn';
+    final cleanPath = url.startsWith('/') ? url.substring(1) : url;
+    return '$baseUrl/$cleanPath';
   }
 
   Future<void> _optimizeScreen() async {

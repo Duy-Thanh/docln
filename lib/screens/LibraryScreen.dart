@@ -1,3 +1,4 @@
+import 'package:docln/services/settings_services.dart';
 import 'package:flutter/material.dart';
 import '../modules/announcement.dart';
 import '../modules/chapter.dart';
@@ -1345,22 +1346,39 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
         padding: const EdgeInsets.all(8),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
-          childAspectRatio: 0.57,  // Decreased from 0.6 to give more height
+          childAspectRatio: 0.55,
           mainAxisSpacing: 8,
           crossAxisSpacing: 8,
         ),
         itemCount: validChapters.length,
         itemBuilder: (context, index) => ChapterCard(
           chapter: validChapters[index],
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => WebViewScreen(url: validChapters[index].url),
-            ),
-          ),
+          onTap: () async {
+            final fullUrl = await _ensureFullUrl(validChapters[index].url);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => WebViewScreen(url: fullUrl),
+              ),
+            );
+          },
         ),
       ),
     );
+  }
+
+  Future<String> _ensureFullUrl(String url) async {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    
+    // Get the current server from settings
+    final settingsService = SettingsService();
+    final baseUrl = await settingsService.getCurrentServer() ?? 'https://ln.hako.vn';
+    
+    // Remove any leading slash to prevent double slashes
+    final cleanPath = url.startsWith('/') ? url.substring(1) : url;
+    return '$baseUrl/$cleanPath';
   }
 
   Widget _buildNovelShimmerCard() {

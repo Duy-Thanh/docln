@@ -291,31 +291,38 @@ class _LightNovelCardState extends State<LightNovelCard>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          widget.novel.title,
-          style: textTheme.titleSmall?.copyWith(
-            fontSize: 13,
-            height: 1.2,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.1,
+        // Title container that takes full width
+        Container(
+          width: double.infinity,  // Forces full width
+          child: Text(
+            widget.novel.title,
+            style: textTheme.titleSmall?.copyWith(
+              fontSize: 13,
+              height: 1.2,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.1,
+            ),
           ),
         ),
         if (widget.showChapterInfo) ...[
           if (widget.novel.volumeTitle != null) ...[
             const SizedBox(height: 6),
-            Text(
-              widget.novel.volumeTitle!,
-              style: textTheme.bodySmall?.copyWith(
-                fontSize: 11,
-                height: 1.2,
-                color: colorScheme.onSurfaceVariant,
+            Container(
+              width: double.infinity,  // Forces full width
+              child: Text(
+                widget.novel.volumeTitle!,
+                style: textTheme.bodySmall?.copyWith(
+                  fontSize: 11,
+                  height: 1.2,
+                  color: colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
           ],
           if (widget.novel.latestChapter != null) ...[
             const SizedBox(height: 4),
             Container(
-              width: double.infinity,
+              width: double.infinity,  // Forces container to full width
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: colorScheme.primaryContainer.withOpacity(0.3),
