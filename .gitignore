@@ -26,8 +26,10 @@ firebase.json
 firebase.txt
 *.env
 .env
+
 *.jks
 .jks
+rel.txt
 
 # The .vscode folder contains launch configuration and tasks you configure in
 # VS Code which you may wish to be included in version control, so this line

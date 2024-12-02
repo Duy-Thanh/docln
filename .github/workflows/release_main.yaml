@@ -28,6 +28,7 @@ jobs:
       - name: Create neccessary files
         run: |
           echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/rel.jks
       
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -39,6 +40,10 @@ jobs:
         run: flutter pub get
         
       - name: Build APK
+        env:
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
         run: flutter build apk --release --obfuscate --split-debug-info=build/app/outputs/symbols
 
       - name: Build App Bundle
