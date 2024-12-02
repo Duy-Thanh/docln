@@ -46,8 +46,12 @@ jobs:
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
         run: flutter build apk --release --obfuscate --split-debug-info=build/app/outputs/symbols
 
-      - name: Build App Bundle
-        run: flutter build appbundle --release --obfuscate --split-debug-info=build/app/outputs/symbols
+      # - name: Build App Bundle
+      #   env:
+      #     KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      #     KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      #     STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+      #   run: flutter build appbundle --release --obfuscate --split-debug-info=build/app/outputs/symbols
 
       - name: Setup Firebase CLI
         run: npm install -g firebase-tools
