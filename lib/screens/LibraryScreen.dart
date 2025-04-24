@@ -23,7 +23,8 @@ class LibraryScreen extends StatefulWidget {
   _LibraryScreenState createState() => _LibraryScreenState();
 }
 
-class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateMixin {
+class _LibraryScreenState extends State<LibraryScreen>
+    with TickerProviderStateMixin {
   final CrawlerService _crawlerService = CrawlerService();
   late TabController _tabController;
   late AnimationController _controller;
@@ -31,10 +32,9 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
   int _selectedIndex = 0;
 
   // Initialize animation controller and animation at declaration
-  late final AnimationController _gradientAnimationController = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 3),
-  )..repeat(reverse: true);
+  late final AnimationController _gradientAnimationController =
+      AnimationController(vsync: this, duration: const Duration(seconds: 3))
+        ..repeat(reverse: true);
 
   late final Animation<double> _gradientAnimation = Tween<double>(
     begin: 0.0,
@@ -66,7 +66,7 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
-    
+
     _loadData();
   }
 
@@ -96,8 +96,10 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
         error = null;
       });
 
-      final fetchedAnnouncements = await _crawlerService.getAnnouncements(context);
-      
+      final fetchedAnnouncements = await _crawlerService.getAnnouncements(
+        context,
+      );
+
       setState(() {
         announcements = fetchedAnnouncements;
         isLoading = false;
@@ -146,7 +148,7 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
         _crawlerService.getCreativeNovels(context),
         _crawlerService.getLatestChapters(context),
       ]);
-      
+
       setState(() {
         announcements = futures[0] as List<Announcement>;
         popularNovels = futures[1] as List<LightNovel>;
@@ -166,7 +168,7 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Scaffold(
       body: Column(
         children: [
@@ -231,12 +233,16 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
                             borderRadius: BorderRadius.circular(26),
                             boxShadow: [
                               BoxShadow(
-                                color: theme.colorScheme.primary.withOpacity(0.1),
+                                color: theme.colorScheme.primary.withOpacity(
+                                  0.1,
+                                ),
                                 blurRadius: 12,
                                 offset: const Offset(0, 3),
                               ),
                               BoxShadow(
-                                color: theme.colorScheme.primary.withOpacity(0.05),
+                                color: theme.colorScheme.primary.withOpacity(
+                                  0.05,
+                                ),
                                 blurRadius: 4,
                                 offset: const Offset(0, 1),
                               ),
@@ -319,29 +325,32 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
                     position: Tween<Offset>(
                       begin: const Offset(0.03, 0),
                       end: Offset.zero,
-                    ).animate(CurvedAnimation(
-                      parent: animation,
-                      curve: Curves.easeOutCubic,
-                    )),
+                    ).animate(
+                      CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutCubic,
+                      ),
+                    ),
                     child: child,
                   ),
                 );
               },
               child: KeyedSubtree(
                 key: ValueKey<int>(_selectedIndex),
-                child: [
-                  _buildTabContent(
-                    novels: popularNovels,
-                    isLoading: isLoading,
-                    showRating: true,
-                  ),
-                  _buildTabContent(
-                    novels: creativeNovels,
-                    isLoading: isLoading,
-                    showChapterInfo: true,
-                  ),
-                  _buildLatestChaptersTab(),
-                ][_selectedIndex],
+                child:
+                    [
+                      _buildTabContent(
+                        novels: popularNovels,
+                        isLoading: isLoading,
+                        showRating: true,
+                      ),
+                      _buildTabContent(
+                        novels: creativeNovels,
+                        isLoading: isLoading,
+                        showChapterInfo: true,
+                      ),
+                      _buildLatestChaptersTab(),
+                    ][_selectedIndex],
               ),
             ),
           ),
@@ -350,9 +359,14 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
     );
   }
 
-  Widget _buildTabItem(String title, IconData icon, int index, ThemeData theme) {
+  Widget _buildTabItem(
+    String title,
+    IconData icon,
+    int index,
+    ThemeData theme,
+  ) {
     final isSelected = _selectedIndex == index;
-    
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -367,10 +381,7 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
               // Enhanced icon with scale and rotation
               TweenAnimationBuilder<double>(
                 duration: const Duration(milliseconds: 300),
-                tween: Tween(
-                  begin: 0.0,
-                  end: isSelected ? 1.0 : 0.0,
-                ),
+                tween: Tween(begin: 0.0, end: isSelected ? 1.0 : 0.0),
                 builder: (context, value, child) {
                   return Transform.scale(
                     scale: 1.0 + (value * 0.2),
@@ -393,10 +404,7 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
               // Enhanced text with scale and slide
               TweenAnimationBuilder<double>(
                 duration: const Duration(milliseconds: 300),
-                tween: Tween(
-                  begin: 0.0,
-                  end: isSelected ? 1.0 : 0.0,
-                ),
+                tween: Tween(begin: 0.0, end: isSelected ? 1.0 : 0.0),
                 builder: (context, value, child) {
                   return Transform.scale(
                     scale: 1.0 + (value * 0.1),
@@ -410,7 +418,8 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
                             theme.colorScheme.primary,
                             value,
                           ),
-                          fontSize: 14 + (value * 1), // Subtle font size animation
+                          fontSize:
+                              14 + (value * 1), // Subtle font size animation
                           fontWeight: FontWeight.lerp(
                             FontWeight.w500,
                             FontWeight.w600,
@@ -437,10 +446,11 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
     required int tabIndex,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     // Calculate the color interpolation value based on animation
-    final colorValue = 1.0 - (_tabAnimationValue - tabIndex).abs().clamp(0.0, 1.0);
-    
+    final colorValue =
+        1.0 - (_tabAnimationValue - tabIndex).abs().clamp(0.0, 1.0);
+
     return Tab(
       height: 40,
       child: AnimatedContainer(
@@ -507,9 +517,10 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
-          color: isSelected 
-            ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
-            : Colors.transparent,
+          color:
+              isSelected
+                  ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
+                  : Colors.transparent,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -523,13 +534,18 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
     );
   }
 
-  Widget _buildAnnouncementBanner(ColorScheme colorScheme, TextTheme textTheme, bool isDark) {
+  Widget _buildAnnouncementBanner(
+    ColorScheme colorScheme,
+    TextTheme textTheme,
+    bool isDark,
+  ) {
     return Container(
       height: 52, // Increased height
       decoration: BoxDecoration(
-        color: isDark 
-          ? colorScheme.surfaceVariant.withOpacity(0.3)
-          : colorScheme.surfaceVariant.withOpacity(0.1),
+        color:
+            isDark
+                ? colorScheme.surfaceVariant.withOpacity(0.3)
+                : colorScheme.surfaceVariant.withOpacity(0.1),
         border: Border(
           bottom: BorderSide(
             color: colorScheme.outlineVariant.withOpacity(0.5),
@@ -541,12 +557,13 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: announcements.length,
-        itemBuilder: (context, index) => _buildAnnouncementChip(
-          announcement: announcements[index],
-          colorScheme: colorScheme,
-          textTheme: textTheme,
-          isDark: isDark,
-        ),
+        itemBuilder:
+            (context, index) => _buildAnnouncementChip(
+              announcement: announcements[index],
+              colorScheme: colorScheme,
+              textTheme: textTheme,
+              isDark: isDark,
+            ),
       ),
     );
   }
@@ -564,12 +581,13 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
         borderRadius: BorderRadius.circular(24),
         child: InkWell(
           borderRadius: BorderRadius.circular(24),
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => WebViewScreen(url: announcement.url),
-            ),
-          ),
+          onTap:
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => WebViewScreen(url: announcement.url),
+                ),
+              ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
@@ -598,7 +616,7 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
     );
   }
 
-    Widget _buildTabContent({
+  Widget _buildTabContent({
     required List<LightNovel> novels,
     required bool isLoading,
     bool showRating = false,
@@ -629,26 +647,24 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
               ),
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final novel = novels[index];
-                  return KeyedSubtree(
-                    key: ValueKey(novel.id),
-                    child: LightNovelCard(
-                      novel: novel,
-                      showRating: showRating,
-                      showChapterInfo: showChapterInfo,
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => WebViewScreen(url: novel.url),
+              delegate: SliverChildBuilderDelegate((context, index) {
+                final novel = novels[index];
+                return KeyedSubtree(
+                  key: ValueKey(novel.id),
+                  child: LightNovelCard(
+                    novel: novel,
+                    showRating: showRating,
+                    showChapterInfo: showChapterInfo,
+                    onTap:
+                        () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => WebViewScreen(url: novel.url),
+                          ),
                         ),
-                      ),
-                    ),
-                  );
-                },
-                childCount: novels.length,
-              ),
+                  ),
+                );
+              }, childCount: novels.length),
             ),
           ),
         ],
@@ -708,9 +724,7 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
       highlightColor: Colors.grey[100]!,
       child: Card(
         elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
@@ -726,7 +740,9 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
                     borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(12),
                     ),
-                    color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surfaceVariant.withOpacity(0.3),
                   ),
                 ),
               ),
@@ -742,7 +758,9 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
                         width: double.infinity,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(6),
-                          color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.surfaceVariant.withOpacity(0.3),
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -751,7 +769,9 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
                         width: 100,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(6),
-                          color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.surfaceVariant.withOpacity(0.3),
                         ),
                       ),
                     ],
@@ -808,12 +828,13 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
             novel: novels[index],
             showRating: showRating,
             showChapterInfo: showChapterInfo,
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => WebViewScreen(url: novels[index].url),
-              ),
-            ),
+            onTap:
+                () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => WebViewScreen(url: novels[index].url),
+                  ),
+                ),
           );
         },
       ),
@@ -824,12 +845,13 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 4),
       child: InkWell(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => WebViewScreen(url: announcement.url),
-          ),
-        ),
+        onTap:
+            () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => WebViewScreen(url: announcement.url),
+              ),
+            ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Center(
@@ -861,7 +883,11 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
-              Icon(icon, size: 24, color: Theme.of(context).colorScheme.primary),
+              Icon(
+                icon,
+                size: 24,
+                color: Theme.of(context).colorScheme.primary,
+              ),
               const SizedBox(width: 8),
               Text(
                 title,
@@ -885,7 +911,7 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
             padding: const EdgeInsets.symmetric(horizontal: 16),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              childAspectRatio: 0.48,  // Adjusted to be taller
+              childAspectRatio: 0.48, // Adjusted to be taller
               crossAxisSpacing: 8,
               mainAxisSpacing: 8,
             ),
@@ -896,12 +922,13 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
                 novel: novel,
                 showRating: showRating,
                 showChapterInfo: showChapterInfo,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => WebViewScreen(url: novel.url),
-                  ),
-                ),
+                onTap:
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => WebViewScreen(url: novel.url),
+                      ),
+                    ),
               );
             },
           ),
@@ -944,11 +971,11 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
             const CircularProgressIndicator(),
             const SizedBox(height: 20),
             Text(
-              'Fetching data, please be patient...', 
+              'Fetching data, please be patient...',
               style: TextStyle(
                 fontSize: 16,
                 color: Theme.of(context).textTheme.bodyLarge?.color,
-              )
+              ),
             ),
           ],
         ),
@@ -986,11 +1013,15 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
                       child: Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.error.withOpacity(0.1),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.error.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(100),
                           boxShadow: [
                             BoxShadow(
-                              color: Theme.of(context).colorScheme.error.withOpacity(0.1),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.error.withOpacity(0.1),
                               blurRadius: 20 * value,
                               spreadRadius: 5 * value,
                             ),
@@ -1046,7 +1077,9 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
                     'Error while fetching data.\n\nMaybe you are offline or the server is down.\n\nPlease check your internet connection\n\nUse button below to go to Internet settings',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
+                      color: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.color?.withOpacity(0.7),
                       height: 1.4,
                     ),
                   ),
@@ -1078,7 +1111,9 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
                             );
                             await intent.launch();
                           } else {
-                            await AppSettings.openAppSettings(type: AppSettingsType.wifi);
+                            await AppSettings.openAppSettings(
+                              type: AppSettingsType.wifi,
+                            );
                           }
                         },
                       ),
@@ -1093,7 +1128,9 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
                             );
                             await intent.launch();
                           } else {
-                            await AppSettings.openAppSettings(type: AppSettingsType.wireless);
+                            await AppSettings.openAppSettings(
+                              type: AppSettingsType.wireless,
+                            );
                           }
                         },
                       ),
@@ -1119,7 +1156,9 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
                     icon: const Icon(Icons.refresh_rounded, size: 18),
                     label: const Text('Try Again'),
                     style: TextButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.error.withOpacity(0.1),
+                      backgroundColor: Theme.of(
+                        context,
+                      ).colorScheme.error.withOpacity(0.1),
                       foregroundColor: Theme.of(context).colorScheme.error,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 32,
@@ -1131,10 +1170,14 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
                     ).copyWith(
                       overlayColor: MaterialStateProperty.resolveWith((states) {
                         if (states.contains(MaterialState.pressed)) {
-                          return Theme.of(context).colorScheme.error.withOpacity(0.2);
+                          return Theme.of(
+                            context,
+                          ).colorScheme.error.withOpacity(0.2);
                         }
                         if (states.contains(MaterialState.hovered)) {
-                          return Theme.of(context).colorScheme.error.withOpacity(0.15);
+                          return Theme.of(
+                            context,
+                          ).colorScheme.error.withOpacity(0.15);
                         }
                         return null;
                       }),
@@ -1157,16 +1200,11 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
     return OutlinedButton(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 12,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         side: BorderSide(
           color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
         ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ).copyWith(
         overlayColor: MaterialStateProperty.resolveWith((states) {
           if (states.contains(MaterialState.pressed)) {
@@ -1178,11 +1216,7 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 24,
-            color: Theme.of(context).colorScheme.primary,
-          ),
+          Icon(icon, size: 24, color: Theme.of(context).colorScheme.primary),
           const SizedBox(height: 4),
           Text(
             label,
@@ -1210,16 +1244,18 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
 
     return Card(
       elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(8),
         child: Column(
-          children: announcements.map((announcement) => 
-            _buildAnnouncementItem(announcement, isDarkMode)
-          ).toList(),
+          children:
+              announcements
+                  .map(
+                    (announcement) =>
+                        _buildAnnouncementItem(announcement, isDarkMode),
+                  )
+                  .toList(),
         ),
       ),
     );
@@ -1258,7 +1294,9 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
 
   Color _getColorFromString(String? colorString, bool isDarkMode) {
     if (colorString == null || colorString.isEmpty) {
-      return isDarkMode ? Colors.white : Colors.black; // Default color based on theme
+      return isDarkMode
+          ? Colors.white
+          : Colors.black; // Default color based on theme
     }
 
     if (colorString.trim() == 'red') {
@@ -1267,11 +1305,16 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
       return isDarkMode ? Colors.blue[300]! : Colors.blue;
     }
 
-    if (colorString.startsWith('#') && (colorString.length == 7 || colorString.length == 9)) {
+    if (colorString.startsWith('#') &&
+        (colorString.length == 7 || colorString.length == 9)) {
       Color baseColor = Color(int.parse(colorString.replaceAll('#', '0xFF')));
-      return isDarkMode ? baseColor.withOpacity(0.8) : baseColor; // Slightly lighter in dark mode
+      return isDarkMode
+          ? baseColor.withOpacity(0.8)
+          : baseColor; // Slightly lighter in dark mode
     } else {
-      return isDarkMode ? Colors.white : Colors.black; // Default color based on theme
+      return isDarkMode
+          ? Colors.white
+          : Colors.black; // Default color based on theme
     }
   }
 
@@ -1285,7 +1328,7 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AspectRatio(
-              aspectRatio: 2/3,
+              aspectRatio: 2 / 3,
               child: Container(color: Colors.white),
             ),
             Padding(
@@ -1299,11 +1342,7 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
                     color: Colors.white,
                   ),
                   const SizedBox(height: 8),
-                  Container(
-                    height: 12,
-                    width: 100,
-                    color: Colors.white,
-                  ),
+                  Container(height: 12, width: 100, color: Colors.white),
                 ],
               ),
             ),
@@ -1319,7 +1358,7 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
         padding: const EdgeInsets.all(8),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
-          childAspectRatio: 0.55,  // Decreased from 0.6 to give more height
+          childAspectRatio: 0.55, // Decreased from 0.6 to give more height
           mainAxisSpacing: 8,
           crossAxisSpacing: 8,
         ),
@@ -1329,15 +1368,16 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
     }
 
     // Filter out invalid chapters
-    final validChapters = latestChapters.where((chapter) => 
-      chapter.title.isNotEmpty && 
-      chapter.seriesTitle.isNotEmpty
-    ).toList();
+    final validChapters =
+        latestChapters
+            .where(
+              (chapter) =>
+                  chapter.title.isNotEmpty && chapter.seriesTitle.isNotEmpty,
+            )
+            .toList();
 
     if (validChapters.isEmpty) {
-      return const Center(
-        child: Text('No chapters available'),
-      );
+      return const Center(child: Text('No chapters available'));
     }
 
     return RefreshIndicator(
@@ -1351,18 +1391,19 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
           crossAxisSpacing: 8,
         ),
         itemCount: validChapters.length,
-        itemBuilder: (context, index) => ChapterCard(
-          chapter: validChapters[index],
-          onTap: () async {
-            final fullUrl = await _ensureFullUrl(validChapters[index].url);
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => WebViewScreen(url: fullUrl),
-              ),
-            );
-          },
-        ),
+        itemBuilder:
+            (context, index) => ChapterCard(
+              chapter: validChapters[index],
+              onTap: () async {
+                final fullUrl = await _ensureFullUrl(validChapters[index].url);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => WebViewScreen(url: fullUrl),
+                  ),
+                );
+              },
+            ),
       ),
     );
   }
@@ -1371,11 +1412,12 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
     if (url.startsWith('http://') || url.startsWith('https://')) {
       return url;
     }
-    
+
     // Get the current server from settings
     final settingsService = SettingsService();
-    final baseUrl = await settingsService.getCurrentServer() ?? 'https://ln.hako.vn';
-    
+    final baseUrl =
+        await settingsService.getCurrentServer() ?? 'https://ln.hako.vn';
+
     // Remove any leading slash to prevent double slashes
     final cleanPath = url.startsWith('/') ? url.substring(1) : url;
     return '$baseUrl/$cleanPath';
@@ -1391,7 +1433,7 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AspectRatio(
-              aspectRatio: 2/3,
+              aspectRatio: 2 / 3,
               child: Container(color: Colors.white),
             ),
             Padding(
@@ -1405,11 +1447,7 @@ class _LibraryScreenState extends State<LibraryScreen> with TickerProviderStateM
                     color: Colors.white,
                   ),
                   const SizedBox(height: 8),
-                  Container(
-                    height: 12,
-                    width: 100,
-                    color: Colors.white,
-                  ),
+                  Container(height: 12, width: 100, color: Colors.white),
                 ],
               ),
             ),

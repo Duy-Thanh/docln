@@ -5,6 +5,7 @@ import '../modules/announcement.dart';
 import '../screens/custom_toast.dart';
 import '../modules/light_novel.dart';
 import '../modules/chapter.dart';
+
 class CrawlerService {
   static const List<String> servers = [
     'https://ln.hako.vn',
@@ -14,17 +15,22 @@ class CrawlerService {
   Future<String?> _getWorkingServer() async {
     for (String server in servers) {
       try {
-        final response = await http.get(
-          Uri.parse(server),
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36'
-          },
-        ).timeout(
-          const Duration(seconds: 60),
-          onTimeout: () {
-            throw Exception('Failed to connect to the server: $server: Connection timeout');
-          },
-        );
+        final response = await http
+            .get(
+              Uri.parse(server),
+              headers: {
+                'User-Agent':
+                    'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
+              },
+            )
+            .timeout(
+              const Duration(seconds: 60),
+              onTimeout: () {
+                throw Exception(
+                  'Failed to connect to the server: $server: Connection timeout',
+                );
+              },
+            );
 
         if (response.statusCode == 200) {
           return server;
@@ -38,7 +44,7 @@ class CrawlerService {
     return null;
   }
 
-    Future<List<Chapter>> getLatestChapters(BuildContext context) async {
+  Future<List<Chapter>> getLatestChapters(BuildContext context) async {
     try {
       final workingServer = await _getWorkingServer();
       if (workingServer == null) {
@@ -48,14 +54,14 @@ class CrawlerService {
       final response = await http.get(
         Uri.parse('$workingServer'),
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36'
+          'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36',
         },
       );
 
       if (response.statusCode == 200) {
         final document = parser.parse(response.body);
         final chapterElements = document.querySelectorAll('.thumb-item-flow');
-        
+
         return chapterElements.map((element) {
           final html = element.outerHtml;
           return Chapter.fromHtml(html);
@@ -69,7 +75,7 @@ class CrawlerService {
       return [];
     }
   }
-  
+
   Future<List<Announcement>> getAnnouncements(BuildContext context) async {
     try {
       final workingServer = await _getWorkingServer();
@@ -81,7 +87,8 @@ class CrawlerService {
       final response = await http.get(
         Uri.parse(workingServer),
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36'
+          'User-Agent':
+              'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
         },
       );
 
@@ -90,29 +97,61 @@ class CrawlerService {
         final announcementsDiv = document.getElementById('announcements');
 
         if (announcementsDiv != null) {
-          final announcements = announcementsDiv
-            .getElementsByClassName('annoucement-item')
-            .map((element) {
-              final anchorTag = element.getElementsByTagName('a').first;
-              return Announcement(
-                title: anchorTag.text,
-                url: workingServer + anchorTag.attributes['href']!,
-                color: anchorTag.attributes['style']?.replaceAll(RegExp(r'color:\s*'), ''),
-              );
-            })
-            .toList();
+          final announcements = <Announcement>[];
 
+          // Get announcement items either through class or based on structure
+          final announcementItems = announcementsDiv.getElementsByClassName(
+            'annoucement-item',
+          );
+
+          for (var element in announcementItems) {
+            try {
+              final anchorTag = element.getElementsByTagName('a').first;
+              final title = anchorTag.text.trim();
+              final relativeUrl = anchorTag.attributes['href'] ?? '';
+              final url =
+                  relativeUrl.startsWith('http')
+                      ? relativeUrl
+                      : '$workingServer$relativeUrl';
+
+              // Extract color with proper regex
+              String? color;
+              final styleAttr = anchorTag.attributes['style'] ?? '';
+              if (styleAttr.contains('color:')) {
+                // The regex now matches any characters between "color:" and the end of the attribute or a semicolon
+                final colorMatch = RegExp(
+                  r'color:\s*(.*?)(?:;|"|\s*$)',
+                ).firstMatch(styleAttr);
+                if (colorMatch != null && colorMatch.group(1) != null) {
+                  color = colorMatch.group(1)!.trim();
+                }
+              }
+
+              announcements.add(
+                Announcement(title: title, url: url, color: color),
+              );
+            } catch (e) {
+              print('Error parsing announcement item: $e');
+              continue;
+            }
+          }
+
+          print('Found ${announcements.length} announcements');
           return announcements;
         } else {
-          throw Exception('Server error (${response.statusCode}). Please try again later.');
+          print('No announcements div found');
+          return [];
         }
       }
 
       return [];
     } catch (e) {
       print('Error fetching announcements: $e');
-      CustomToast.show(context, 'Error fetching announcements: $e'); // Use custom toast
-      throw Exception('Error fetching announcements.'); // Throw exception to be caught in LibraryScreen
+      CustomToast.show(
+        context,
+        'Error fetching announcements: $e',
+      ); // Use custom toast
+      return []; // Return empty list instead of throwing to prevent crashes
     }
   }
 
@@ -124,51 +163,62 @@ class CrawlerService {
         return [];
       }
 
-      final response = await http.get(
-        Uri.parse(server)
-      );
+      final response = await http.get(Uri.parse(server));
       if (response.statusCode == 200) {
         final document = parser.parse(response.body);
-        final novelElements = document.querySelectorAll('.daily-recent_views .popular-thumb-item');
-        
+        final novelElements = document.querySelectorAll(
+          '.daily-recent_views .popular-thumb-item',
+        );
+
         final novels = <LightNovel>[];
-        
+
         for (var element in novelElements) {
           try {
-            final titleElement = element.querySelector('.thumb_attr.series-title a');
+            final titleElement = element.querySelector(
+              '.thumb_attr.series-title a',
+            );
             final coverElement = element.querySelector('.content.img-in-ratio');
             final linkElement = element.querySelector('.thumb-wrapper a');
 
-            if (titleElement != null && coverElement != null && linkElement != null) {
+            if (titleElement != null &&
+                coverElement != null &&
+                linkElement != null) {
               final title = titleElement.text.trim();
               final relativeUrl = linkElement.attributes['href'] ?? '';
               // Convert relative URL to absolute URL
-              final url = relativeUrl.startsWith('http') 
-                  ? relativeUrl 
-                  : '$server$relativeUrl';
+              final url =
+                  relativeUrl.startsWith('http')
+                      ? relativeUrl
+                      : '$server$relativeUrl';
               final id = relativeUrl.split('/').last;
-              
+
               // Extract cover URL from style attribute
               final styleAttr = coverElement.attributes['style'] ?? '';
-              final coverUrlMatch = RegExp(r"url\('([^']+)'\)").firstMatch(styleAttr);
-              final coverUrl = coverUrlMatch?.group(1) ?? 'https://ln.hako.vn/img/nocover.jpg';
+              final coverUrlMatch = RegExp(
+                r"url\('([^']+)'\)",
+              ).firstMatch(styleAttr);
+              final coverUrl =
+                  coverUrlMatch?.group(1) ??
+                  'https://ln.hako.vn/img/nocover.jpg';
 
-              novels.add(LightNovel(
-                id: id,
-                title: title,
-                coverUrl: coverUrl,
-                url: url,  // Now using the absolute URL
-              ));
+              novels.add(
+                LightNovel(
+                  id: id,
+                  title: title,
+                  coverUrl: coverUrl,
+                  url: url, // Now using the absolute URL
+                ),
+              );
             }
           } catch (e) {
             print('Error parsing novel element: $e');
             continue;
           }
         }
-        
+
         return novels;
       }
-      
+
       CustomToast.show(context, 'Failed to fetch popular novels');
       return [];
     } catch (e) {
@@ -186,38 +236,49 @@ class CrawlerService {
         return [];
       }
 
-      final response = await http.get(
-        Uri.parse(server)
-      );
+      final response = await http.get(Uri.parse(server));
 
       if (response.statusCode == 200) {
         final document = parser.parse(response.body);
         // Updated selector to match the creative novels section
-        final novelElements = document.querySelectorAll('.thumb-section-flow.original.one-row .thumb-item-flow:not(.see-more)');
-        
+        final novelElements = document.querySelectorAll(
+          '.thumb-section-flow.original.one-row .thumb-item-flow:not(.see-more)',
+        );
+
         final novels = <LightNovel>[];
-        
+
         for (var element in novelElements) {
           try {
-            final titleElement = element.querySelector('.thumb_attr.series-title a');
+            final titleElement = element.querySelector(
+              '.thumb_attr.series-title a',
+            );
             final coverElement = element.querySelector('.content.img-in-ratio');
-            final chapterElement = element.querySelector('.thumb_attr.chapter-title a');
-            final volumeElement = element.querySelector('.thumb_attr.volume-title');
+            final chapterElement = element.querySelector(
+              '.thumb_attr.chapter-title a',
+            );
+            final volumeElement = element.querySelector(
+              '.thumb_attr.volume-title',
+            );
 
             if (titleElement != null && coverElement != null) {
               final title = titleElement.text.trim();
               final relativeUrl = titleElement.attributes['href'] ?? '';
-              final url = relativeUrl.startsWith('http') 
-                  ? relativeUrl 
-                  : '$server$relativeUrl';
+              final url =
+                  relativeUrl.startsWith('http')
+                      ? relativeUrl
+                      : '$server$relativeUrl';
               final id = relativeUrl.split('/').last;
-              
+
               // Get cover URL from data-bg attribute
               String coverUrl = coverElement.attributes['data-bg'] ?? '';
               if (coverUrl.isEmpty) {
                 final styleAttr = coverElement.attributes['style'] ?? '';
-                final coverUrlMatch = RegExp(r'url\("([^"]+)"\)').firstMatch(styleAttr);
-                coverUrl = coverUrlMatch?.group(1) ?? 'https://ln.hako.vn/img/nocover.jpg';
+                final coverUrlMatch = RegExp(
+                  r'url\("([^"]+)"\)',
+                ).firstMatch(styleAttr);
+                coverUrl =
+                    coverUrlMatch?.group(1) ??
+                    'https://ln.hako.vn/img/nocover.jpg';
               }
 
               // Extract chapter number if available
@@ -225,7 +286,9 @@ class CrawlerService {
               String? latestChapter;
               if (chapterElement != null) {
                 final chapterText = chapterElement.text;
-                final chapterMatch = RegExp(r'Chương (\d+)').firstMatch(chapterText);
+                final chapterMatch = RegExp(
+                  r'Chương (\d+)',
+                ).firstMatch(chapterText);
                 if (chapterMatch != null) {
                   chapters = int.tryParse(chapterMatch.group(1) ?? '');
                 }
@@ -235,25 +298,27 @@ class CrawlerService {
               // Extract volume title
               final volumeTitle = volumeElement?.text.trim();
 
-              novels.add(LightNovel(
-                id: id,
-                title: title,
-                coverUrl: coverUrl,
-                url: url,
-                chapters: chapters,
-                latestChapter: latestChapter,
-                volumeTitle: volumeTitle,
-              ));
+              novels.add(
+                LightNovel(
+                  id: id,
+                  title: title,
+                  coverUrl: coverUrl,
+                  url: url,
+                  chapters: chapters,
+                  latestChapter: latestChapter,
+                  volumeTitle: volumeTitle,
+                ),
+              );
             }
           } catch (e) {
             print('Error parsing creative novel element: $e');
             continue;
           }
         }
-        
+
         return novels;
       }
-      
+
       CustomToast.show(context, 'Failed to fetch creative novels');
       return [];
     } catch (e) {
@@ -264,7 +329,10 @@ class CrawlerService {
   }
 
   // Add method to extract novel details
-  Future<Map<String, dynamic>> getNovelDetails(String url, BuildContext context) async {
+  Future<Map<String, dynamic>> getNovelDetails(
+    String url,
+    BuildContext context,
+  ) async {
     try {
       final workingServer = await _getWorkingServer();
       if (workingServer == null) {
@@ -274,26 +342,29 @@ class CrawlerService {
       final response = await http.get(
         Uri.parse('$workingServer$url'),
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36'
+          'User-Agent':
+              'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
         },
       );
 
       if (response.statusCode == 200) {
         final document = parser.parse(response.body);
-        
+
         return {
           'title': document.querySelector('.series-name')?.text ?? '',
           'author': document.querySelector('.author')?.text ?? '',
           'status': document.querySelector('.status')?.text ?? '',
-          'genres': document.querySelectorAll('.genre').map((e) => e.text).toList(),
+          'genres':
+              document.querySelectorAll('.genre').map((e) => e.text).toList(),
           'summary': document.querySelector('.summary')?.text ?? '',
-          'chapters': document.querySelectorAll('.chapter-item').map((e) {
-            return {
-              'title': e.querySelector('.chapter-title')?.text ?? '',
-              'url': e.querySelector('a')?.attributes['href'] ?? '',
-              'date': e.querySelector('.chapter-time')?.text ?? '',
-            };
-          }).toList(),
+          'chapters':
+              document.querySelectorAll('.chapter-item').map((e) {
+                return {
+                  'title': e.querySelector('.chapter-title')?.text ?? '',
+                  'url': e.querySelector('a')?.attributes['href'] ?? '',
+                  'date': e.querySelector('.chapter-time')?.text ?? '',
+                };
+              }).toList(),
         };
       }
 
