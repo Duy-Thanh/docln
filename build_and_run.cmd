@@ -4,10 +4,6 @@ SET ANDROID_HOME=%USERPROFILE%\AppData\Local\Android\Sdk
 SET ANDROID_SDK_ROOT=%ANDROID_HOME%
 SET ANDROID_PLATFORM_TOOLS=%ANDROID_HOME%\platform-tools
 
-echo Starting Android Emulator with cold boot...
-:: The -no-snapshot-load flag forces a cold boot
-start "" "%ANDROID_SDK_ROOT%\emulator\emulator.exe" -avd Medium_Phone_API_36 -no-snapshot-load -no-snapshot-save
-
 :: Wait for the emulator to fully boot
 echo Waiting for emulator to boot...
 :wait_for_boot

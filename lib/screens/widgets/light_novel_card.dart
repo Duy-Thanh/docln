@@ -21,7 +21,7 @@ class LightNovelCard extends StatefulWidget {
   State<LightNovelCard> createState() => _LightNovelCardState();
 }
 
-class _LightNovelCardState extends State<LightNovelCard> 
+class _LightNovelCardState extends State<LightNovelCard>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _scaleAnimation;
@@ -43,18 +43,12 @@ class _LightNovelCardState extends State<LightNovelCard>
     _scaleAnimation = Tween<double>(
       begin: 1.0,
       end: 0.95,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOutCubic,
-    ));
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
 
     _rotationAnimation = Tween<double>(
       begin: 0.0,
       end: 0.01,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeInOut,
-    ));
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
 
     _imageProvider = NetworkImage(widget.novel.coverUrl);
   }
@@ -64,22 +58,22 @@ class _LightNovelCardState extends State<LightNovelCard>
     super.didChangeDependencies();
     if (!_isImagePrecached && _imageProvider != null) {
       precacheImage(_imageProvider!, context)
-        .then((_) {
-          if (mounted) {
-            setState(() {
-              _isLoading = false;
-              _isImagePrecached = true;
-            });
-          }
-        })
-        .catchError((_) {
-          if (mounted) {
-            setState(() {
-              _hasError = true;
-              _isImagePrecached = true;
-            });
-          }
-        });
+          .then((_) {
+            if (mounted) {
+              setState(() {
+                _isLoading = false;
+                _isImagePrecached = true;
+              });
+            }
+          })
+          .catchError((_) {
+            if (mounted) {
+              setState(() {
+                _hasError = true;
+                _isImagePrecached = true;
+              });
+            }
+          });
     }
   }
 
@@ -106,13 +100,18 @@ class _LightNovelCardState extends State<LightNovelCard>
         },
         onTapCancel: () => _controller.reverse(),
         child: AnimatedBuilder(
-          animation: Listenable.merge([_controller, _scaleAnimation, _rotationAnimation]),
+          animation: Listenable.merge([
+            _controller,
+            _scaleAnimation,
+            _rotationAnimation,
+          ]),
           builder: (context, child) {
             return Transform(
               alignment: Alignment.center,
-              transform: Matrix4.identity()
-                ..scale(_scaleAnimation.value)
-                ..rotateZ(_rotationAnimation.value),
+              transform:
+                  Matrix4.identity()
+                    ..scale(_scaleAnimation.value)
+                    ..rotateZ(_rotationAnimation.value),
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
@@ -139,14 +138,23 @@ class _LightNovelCardState extends State<LightNovelCard>
                             children: [
                               _buildCoverImage(isDark),
                               _buildGradientOverlay(),
-                              if (widget.showRating && widget.novel.rating != null)
-                                _buildRatingBadge(colorScheme, textTheme, isDark),
+                              if (widget.showRating &&
+                                  widget.novel.rating != null)
+                                _buildRatingBadge(
+                                  colorScheme,
+                                  textTheme,
+                                  isDark,
+                                ),
                             ],
                           ),
                         ),
                         Expanded(
                           flex: 45,
-                          child: _buildInfoContainer(colorScheme, textTheme, isDark),
+                          child: _buildInfoContainer(
+                            colorScheme,
+                            textTheme,
+                            isDark,
+                          ),
                         ),
                       ],
                     ),
@@ -229,7 +237,11 @@ class _LightNovelCardState extends State<LightNovelCard>
     );
   }
 
-  Widget _buildRatingBadge(ColorScheme colorScheme, TextTheme textTheme, bool isDark) {
+  Widget _buildRatingBadge(
+    ColorScheme colorScheme,
+    TextTheme textTheme,
+    bool isDark,
+  ) {
     return Positioned(
       top: 8,
       right: 8,
@@ -269,7 +281,11 @@ class _LightNovelCardState extends State<LightNovelCard>
     );
   }
 
-  Widget _buildInfoContainer(ColorScheme colorScheme, TextTheme textTheme, bool isDark) {
+  Widget _buildInfoContainer(
+    ColorScheme colorScheme,
+    TextTheme textTheme,
+    bool isDark,
+  ) {
     return ClipRRect(
       child: BackdropFilter(
         filter: ui.ImageFilter.blur(sigmaX: 3, sigmaY: 3),
@@ -288,62 +304,67 @@ class _LightNovelCardState extends State<LightNovelCard>
   }
 
   Widget _buildInfoContent(ColorScheme colorScheme, TextTheme textTheme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Title container that takes full width
-        Container(
-          width: double.infinity,  // Forces full width
-          child: Text(
-            widget.novel.title,
-            style: textTheme.titleSmall?.copyWith(
-              fontSize: 13,
-              height: 1.2,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.1,
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Title container that takes full width
+            Text(
+              widget.novel.title,
+              style: textTheme.titleSmall?.copyWith(
+                fontSize: 13,
+                height: 1.2,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.1,
+              ),
             ),
-          ),
+            if (widget.showChapterInfo) ...[
+              if (widget.novel.volumeTitle != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  widget.novel.volumeTitle!,
+                  style: textTheme.bodySmall?.copyWith(
+                    fontSize: 11,
+                    height: 1.2,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+              if (widget.novel.latestChapter != null) ...[
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: colorScheme.primary.withOpacity(0.1),
+                    ),
+                  ),
+                  child: Text(
+                    widget.novel.latestChapter!,
+                    style: textTheme.bodySmall?.copyWith(
+                      fontSize: 11,
+                      height: 1.2,
+                      color: colorScheme.primary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ],
+          ],
         ),
-        if (widget.showChapterInfo) ...[
-          if (widget.novel.volumeTitle != null) ...[
-            const SizedBox(height: 6),
-            Container(
-              width: double.infinity,  // Forces full width
-              child: Text(
-                widget.novel.volumeTitle!,
-                style: textTheme.bodySmall?.copyWith(
-                  fontSize: 11,
-                  height: 1.2,
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ],
-          if (widget.novel.latestChapter != null) ...[
-            const SizedBox(height: 4),
-            Container(
-              width: double.infinity,  // Forces container to full width
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: colorScheme.primaryContainer.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: colorScheme.primary.withOpacity(0.1),
-                ),
-              ),
-              child: Text(
-                widget.novel.latestChapter!,
-                style: textTheme.bodySmall?.copyWith(
-                  fontSize: 11,
-                  height: 1.2,
-                  color: colorScheme.primary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ],
-        ],
-      ],
+      ),
     );
   }
 }
