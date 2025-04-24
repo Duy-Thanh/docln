@@ -1,11 +1,4 @@
 @echo off
-echo Killing any existing emulator processes...
-taskkill /F /IM "qemu-system-x86_64.exe" /T > nul 2>&1
-taskkill /F /IM "emulator.exe" /T > nul 2>&1
-taskkill /F /IM "adb.exe" /T > nul 2>&1
-
-:: Wait a moment to ensure processes are killed
-timeout /t 2 /nobreak > nul
 
 SET ANDROID_HOME=%USERPROFILE%\AppData\Local\Android\Sdk
 SET ANDROID_SDK_ROOT=%ANDROID_HOME%
