@@ -825,9 +825,9 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
-            if (result.url.isNotEmpty) {
+            if (result.seriesUrl.isNotEmpty) {
               HapticFeedback.mediumImpact();
-              _launchUrl(result.url);
+              _launchUrl(result.seriesUrl);
             }
           },
           borderRadius: BorderRadius.circular(16),
@@ -999,9 +999,9 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                         splashColor: primaryColor.withOpacity(0.1),
                         highlightColor: primaryColor.withOpacity(0.05),
                         onTap: () {
-                          if (result.url.isNotEmpty) {
+                          if (result.seriesUrl.isNotEmpty) {
                             HapticFeedback.mediumImpact();
-                            _launchUrl(result.url);
+                            _launchUrl(result.seriesUrl);
                           }
                         },
                         borderRadius: BorderRadius.circular(16),
