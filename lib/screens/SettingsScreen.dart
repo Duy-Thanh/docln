@@ -589,7 +589,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              Text('© 2024 CyberDay Studios',
+              Text('© 2024 - 2025 CyberDay Studios',
                 style: TextStyle(color: Colors.grey[600]),
               ),
               const SizedBox(height: 16),
