@@ -1,6 +1,7 @@
 import 'package:docln/services/update_service.dart';
 import 'package:flutter/material.dart';
 import '../screens/LibraryScreen.dart';
+import '../screens/SearchScreen.dart';
 import '../screens/SettingsScreen.dart';
 import '../screens/widgets/update_dialog.dart';
 import 'dart:ui';
@@ -31,7 +32,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _optimizeScreen();
     _screens = [
       LibraryScreen(),
-      const Center(child: Text('Search')),
+      const SearchScreen(),
       const Center(child: Text('Bookmarks')),
       const Center(child: Text('History')),
       SettingsScreen(
