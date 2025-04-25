@@ -852,9 +852,9 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Novel cover with fixed height instead of AspectRatio
+                        // Novel cover with increased height
                         SizedBox(
-                          height: 120, // Reduced to give even more room for text
+                          height: 150, // Increased from 120px to 150px
                           child: Stack(
                             children: [
                               // Cover image
