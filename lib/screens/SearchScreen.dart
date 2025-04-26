@@ -146,7 +146,7 @@ class _SearchScreenState extends State<SearchScreen>
     }
   }
 
-  void _launchUrl(String url) async {
+  void _launchUrl(String url, SearchResult result) async {
     if (!mounted) return;
 
     if (await canLaunchUrl(Uri.parse(url))) {
@@ -157,8 +157,8 @@ class _SearchScreenState extends State<SearchScreen>
               (context) => LightNovelDetailsScreen(
                 novel: LightNovel(
                   id: url.split('/').last,
-                  title: _searchResponse?.keyword ?? "Light Novel",
-                  coverUrl: "https://ln.hako.vn/img/nocover.jpg",
+                  title: result.seriesTitle,
+                  coverUrl: result.coverUrl,
                   url: url,
                 ),
                 novelUrl: url,
@@ -864,7 +864,7 @@ class _SearchScreenState extends State<SearchScreen>
           onTap: () {
             if (result.seriesUrl.isNotEmpty) {
               HapticFeedback.mediumImpact();
-              _launchUrl(result.seriesUrl);
+              _launchUrl(result.seriesUrl, result);
             }
           },
           borderRadius: BorderRadius.circular(16),
@@ -1060,7 +1060,7 @@ class _SearchScreenState extends State<SearchScreen>
                         onTap: () {
                           if (result.seriesUrl.isNotEmpty) {
                             HapticFeedback.mediumImpact();
-                            _launchUrl(result.seriesUrl);
+                            _launchUrl(result.seriesUrl, result);
                           }
                         },
                         borderRadius: BorderRadius.circular(16),
