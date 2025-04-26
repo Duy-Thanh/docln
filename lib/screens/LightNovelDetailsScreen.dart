@@ -33,6 +33,7 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
   int? _wordCount;
   int? _views;
   String? _lastUpdated;
+  String _novelType = '';
 
   @override
   void initState() {
@@ -53,6 +54,9 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
         // Extract genres from the summary if none were found directly
         List<String> extractedGenres = [];
         String summary = novelDetails['summary'] ?? '';
+
+        // Get novel type if available
+        String novelType = novelDetails['novelType'] ?? 'Truyện dịch';
 
         // Attempt to extract genres from the summary text
         if ((novelDetails['genres'] as List<dynamic>?)?.isEmpty ?? true) {
@@ -135,6 +139,7 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
           _wordCount = wordCount;
           _views = views;
           _lastUpdated = lastUpdated;
+          _novelType = novelType;
           _isLoading = false;
         });
 
@@ -143,6 +148,7 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
         print('Genres: $_genres');
         print('Author: $_author');
         print('Status: $_status');
+        print('Novel Type: $_novelType');
         print('Description length: ${_description.length}');
         print('Chapters count: ${_chapters.length}');
 
@@ -293,7 +299,7 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Cover image with "Truyện dịch" label
+                // Cover image with novel type label
                 Stack(
                   children: [
                     ClipRRect(
@@ -330,32 +336,33 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
                         ),
                       ),
                     ),
-                    // "Truyện dịch" label
-                    Positioned(
-                      top: 0,
-                      left: 0,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black87,
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(12),
-                            bottomRight: Radius.circular(12),
+                    // Novel type label
+                    if (_novelType.isNotEmpty)
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
                           ),
-                        ),
-                        child: const Text(
-                          'Truyện dịch',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
+                          decoration: BoxDecoration(
+                            color: Colors.black87,
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(12),
+                              bottomRight: Radius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            _novelType,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
-                    ),
                   ],
                 ),
                 const SizedBox(width: 16),
@@ -537,7 +544,7 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
                       ),
                     ),
                     icon: const Icon(Icons.book, size: 18),
-                    label: const Text('Đọc ngay'),
+                    label: const Text('Read Now'),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -545,7 +552,7 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
                   flex: 2,
                   child: OutlinedButton.icon(
                     onPressed: () {
-                      CustomToast.show(context, 'Tắt nhận thông báo');
+                      CustomToast.show(context, 'Notifications disabled');
                     },
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -581,7 +588,7 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             _buildStatItemEnhanced(
-              'Lần cuối',
+              'Last Update',
               _lastUpdated ?? 'N/A',
               Icons.access_time,
               colorScheme.primary,
@@ -589,7 +596,7 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
             ),
             _buildVerticalDivider(),
             _buildStatItemEnhanced(
-              'Số từ',
+              'Word Count',
               _formatNumber(_wordCount),
               Icons.format_list_numbered,
               colorScheme.primary,
@@ -1323,7 +1330,7 @@ ${_genres.join(', ')}
                       color: colorScheme.primary,
                     ),
                     label: Text(
-                      'Xem tất cả ${displayChapters.length} chương',
+                      'View all ${displayChapters.length} chapters',
                       style: textTheme.labelMedium?.copyWith(
                         color: colorScheme.primary,
                         fontWeight: FontWeight.bold,

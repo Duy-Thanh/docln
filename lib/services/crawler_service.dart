@@ -351,6 +351,37 @@ class CrawlerService {
         final statusElement = _findElementWithLabel(document, 'Tình trạng');
         final summaryElement = document.querySelector('.summary-content');
 
+        // Extract novel type (Original, Truyện dịch, etc.)
+        String novelType = 'Truyện dịch'; // Default value
+
+        // Try to find the type label in multiple places
+        final novelTypeElement = document.querySelector('.series-type');
+        if (novelTypeElement != null) {
+          novelType = novelTypeElement.text.trim();
+        } else {
+          // Alternative way: check if it's in the series name section
+          final seriesTypeTag = document.querySelector('.series-name .badge');
+          if (seriesTypeTag != null) {
+            novelType = seriesTypeTag.text.trim();
+          } else {
+            // Check if it has an "Original" tag anywhere
+            final originalTag = document.querySelector('.type-original');
+            if (originalTag != null) {
+              novelType = 'Original';
+            }
+          }
+        }
+
+        // If nothing found, see if summary contains the type
+        if (novelType.isEmpty && summaryElement != null) {
+          final summaryText = summaryElement.text.trim();
+          if (summaryText.contains('Truyện dịch')) {
+            novelType = 'Truyện dịch';
+          } else if (summaryText.contains('Original')) {
+            novelType = 'Original';
+          }
+        }
+
         // Extract genres
         final genreElements = document.querySelectorAll('.series-gerne-item');
         final genres =
@@ -371,46 +402,62 @@ class CrawlerService {
 
           if (titleElement != null) {
             final title = titleElement.text.trim();
-            final chapterUrl = titleElement.attributes['href'] ?? '';
+            final url = titleElement.attributes['href'] ?? '';
             final date = dateElement?.text.trim() ?? '';
 
-            chapters.add({'title': title, 'url': chapterUrl, 'date': date});
+            chapters.add({'title': title, 'url': url, 'date': date});
           }
         }
 
-        // Extract stats information using a more compatible approach
-        final wordCountElement = _findStatElement(document, 'Số từ');
-        final viewsElement = _findStatElement(document, 'Lượt xem');
-        final ratingElement = _findStatElement(document, 'Đánh giá');
-        final lastUpdatedElement = _findLastUpdatedElement(document);
-
-        // Extract word count
+        // Extract word count, views, and rating
         int? wordCount;
-        if (wordCountElement != null) {
-          final wordCountText = wordCountElement.text.trim();
-          final numericValue = wordCountText.replaceAll(RegExp(r'[^0-9]'), '');
-          wordCount = int.tryParse(numericValue);
-        }
-
-        // Extract views
         int? views;
-        if (viewsElement != null) {
-          final viewsText = viewsElement.text.trim();
-          final numericValue = viewsText.replaceAll(RegExp(r'[^0-9]'), '');
-          views = int.tryParse(numericValue);
-        }
-
-        // Extract rating and reviews
         double? rating;
         int? reviews;
+
+        // Find fact items
+        final wordCountElement = _findFactElement(document, 'Số từ');
+        final viewsElement = _findFactElement(document, 'Lượt xem');
+        final ratingElement = _findFactElement(document, 'Đánh giá');
+        final lastUpdatedElement = _findFactElement(document, 'Cập nhật');
+
+        // Parse word count
+        if (wordCountElement != null) {
+          final wordCountStr = wordCountElement.text.replaceAll(
+            RegExp(r'[^0-9]'),
+            '',
+          );
+          wordCount = int.tryParse(wordCountStr);
+        }
+
+        // Parse views
+        if (viewsElement != null) {
+          final viewsStr = viewsElement.text.replaceAll(RegExp(r'[^0-9]'), '');
+          views = int.tryParse(viewsStr);
+        }
+
+        // Parse rating
         if (ratingElement != null) {
           final ratingText = ratingElement.text.trim();
+          // Check for pattern like "4.5 / 5 - 123 đánh giá"
+          final ratingMatch = RegExp(
+            r'(\d+\.?\d*)\s*\/\s*\d+(?:\s*-\s*(\d+)\s*đánh giá)?',
+          ).firstMatch(ratingText);
 
-          // Extract rating using string operations
-          final parts = ratingText.split('/');
-          if (parts.length >= 1) {
-            // Try to parse the rating part
-            rating = double.tryParse(parts[0].trim().replaceAll(',', '.'));
+          if (ratingMatch != null && ratingMatch.group(1) != null) {
+            rating = double.tryParse(ratingMatch.group(1)!);
+            // Try to parse reviews count
+            if (ratingMatch.group(2) != null) {
+              reviews = int.tryParse(ratingMatch.group(2)!);
+            }
+          } else {
+            // Try alternative pattern if the first one doesn't match
+            final parts = ratingText.split('-');
+            if (parts.isNotEmpty) {
+              final ratingPart = parts[0].trim();
+              final ratingVal = ratingPart.split('/')[0].trim();
+              rating = double.tryParse(ratingVal);
+            }
 
             // Try to parse the reviews part if available
             if (parts.length >= 2) {
@@ -455,6 +502,7 @@ class CrawlerService {
           'reviews': reviews,
           'lastUpdated': lastUpdated,
           'alternativeTitles': alternativeTitles,
+          'novelType': novelType,
         };
       }
 
@@ -481,31 +529,6 @@ class CrawlerService {
     return null;
   }
 
-  // Helper method to find statistics element by label
-  dom.Element? _findStatElement(dom.Document document, String label) {
-    final statItems = document.querySelectorAll('.statistic-item');
-    for (final item in statItems) {
-      final nameElement = item.querySelector('.statistic-name');
-      if (nameElement != null && nameElement.text.contains(label)) {
-        return item.querySelector('.statistic-value');
-      }
-    }
-    return null;
-  }
-
-  // Helper method to find last updated element
-  dom.Element? _findLastUpdatedElement(dom.Document document) {
-    final statItems = document.querySelectorAll('.statistic-item');
-    for (final item in statItems) {
-      final nameElement = item.querySelector('.statistic-name');
-      if (nameElement != null && nameElement.text.contains('Lần cuối')) {
-        final valueElement = item.querySelector('.statistic-value');
-        return valueElement?.querySelector('time') ?? valueElement;
-      }
-    }
-    return null;
-  }
-
   // Helper method to find fact element by label
   dom.Element? _findFactElement(dom.Document document, String label) {
     final factItems = document.querySelectorAll('.fact-item');
@@ -515,6 +538,16 @@ class CrawlerService {
         return item.querySelector('.fact-value');
       }
     }
+
+    // If not found in fact items, try the statistic items as fallback
+    final statItems = document.querySelectorAll('.statistic-item');
+    for (final item in statItems) {
+      final nameElement = item.querySelector('.statistic-name');
+      if (nameElement != null && nameElement.text.contains(label)) {
+        return item.querySelector('.statistic-value');
+      }
+    }
+
     return null;
   }
 
