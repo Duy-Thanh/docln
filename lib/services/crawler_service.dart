@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart'; // Import for BuildContext
 import 'package:html/parser.dart' as parser;
 import 'package:http/http.dart' as http;
+import 'package:html/dom.dart' as dom;
 import '../modules/announcement.dart';
 import '../screens/custom_toast.dart';
 import '../modules/light_novel.dart';
@@ -334,45 +335,220 @@ class CrawlerService {
     BuildContext context,
   ) async {
     try {
-      final workingServer = await _getWorkingServer();
-      if (workingServer == null) {
-        throw Exception('No working server available');
-      }
-
-      final response = await http.get(
-        Uri.parse('$workingServer$url'),
-        headers: {
-          'User-Agent':
-              'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
-        },
-      );
+      final response = await http.get(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final document = parser.parse(response.body);
 
+        // Extract basic info
+        final titleElement = document.querySelector('.series-name a');
+        final coverElement = document.querySelector(
+          '.series-cover .content.img-in-ratio',
+        );
+
+        // Find author and status using a more compatible approach instead of :contains()
+        final authorElement = _findElementWithLabel(document, 'Tác giả');
+        final statusElement = _findElementWithLabel(document, 'Tình trạng');
+        final summaryElement = document.querySelector('.summary-content');
+
+        // Extract genres
+        final genreElements = document.querySelectorAll('.series-gerne-item');
+        final genres =
+            genreElements
+                .where((e) => !e.text.contains('...'))
+                .map((e) => e.text.trim())
+                .toList();
+
+        // Extract chapters
+        final chapterElements = document.querySelectorAll('.chapter-name');
+        final chapters = <Map<String, dynamic>>[];
+
+        for (var element in chapterElements) {
+          final titleElement = element.querySelector('a');
+          final dateElement = element.nextElementSibling?.querySelector(
+            '.chapter-time',
+          );
+
+          if (titleElement != null) {
+            final title = titleElement.text.trim();
+            final chapterUrl = titleElement.attributes['href'] ?? '';
+            final date = dateElement?.text.trim() ?? '';
+
+            chapters.add({'title': title, 'url': chapterUrl, 'date': date});
+          }
+        }
+
+        // Extract stats information using a more compatible approach
+        final wordCountElement = _findStatElement(document, 'Số từ');
+        final viewsElement = _findStatElement(document, 'Lượt xem');
+        final ratingElement = _findStatElement(document, 'Đánh giá');
+        final lastUpdatedElement = _findLastUpdatedElement(document);
+
+        // Extract word count
+        int? wordCount;
+        if (wordCountElement != null) {
+          final wordCountText = wordCountElement.text.trim();
+          final numericValue = wordCountText.replaceAll(RegExp(r'[^0-9]'), '');
+          wordCount = int.tryParse(numericValue);
+        }
+
+        // Extract views
+        int? views;
+        if (viewsElement != null) {
+          final viewsText = viewsElement.text.trim();
+          final numericValue = viewsText.replaceAll(RegExp(r'[^0-9]'), '');
+          views = int.tryParse(numericValue);
+        }
+
+        // Extract rating and reviews
+        double? rating;
+        int? reviews;
+        if (ratingElement != null) {
+          final ratingText = ratingElement.text.trim();
+
+          // Extract rating using string operations
+          final parts = ratingText.split('/');
+          if (parts.length >= 1) {
+            // Try to parse the rating part
+            rating = double.tryParse(parts[0].trim().replaceAll(',', '.'));
+
+            // Try to parse the reviews part if available
+            if (parts.length >= 2) {
+              // Extract only digits from the second part
+              final reviewsStr = parts[1].replaceAll(RegExp(r'[^0-9]'), '');
+              reviews = int.tryParse(reviewsStr);
+            }
+          }
+        }
+
+        // Extract last updated
+        String? lastUpdated;
+        if (lastUpdatedElement != null) {
+          lastUpdated = lastUpdatedElement.text.trim();
+        }
+
+        // Extract alternative titles
+        final altTitlesElement = _findFactElement(document, 'Tên khác');
+        final alternativeTitles = <String>[];
+
+        if (altTitlesElement != null) {
+          final altTitlesBlocks = altTitlesElement.querySelectorAll('.block');
+          for (final block in altTitlesBlocks) {
+            final title = block.text.trim();
+            if (title.isNotEmpty) {
+              alternativeTitles.add(title);
+            }
+          }
+        }
+
         return {
-          'title': document.querySelector('.series-name')?.text ?? '',
-          'author': document.querySelector('.author')?.text ?? '',
-          'status': document.querySelector('.status')?.text ?? '',
-          'genres':
-              document.querySelectorAll('.genre').map((e) => e.text).toList(),
-          'summary': document.querySelector('.summary')?.text ?? '',
-          'chapters':
-              document.querySelectorAll('.chapter-item').map((e) {
-                return {
-                  'title': e.querySelector('.chapter-title')?.text ?? '',
-                  'url': e.querySelector('a')?.attributes['href'] ?? '',
-                  'date': e.querySelector('.chapter-time')?.text ?? '',
-                };
-              }).toList(),
+          'title': titleElement?.text.trim() ?? '',
+          'cover': _extractCoverUrl(coverElement),
+          'author': authorElement?.text.trim() ?? '',
+          'status': statusElement?.text.trim() ?? '',
+          'summary': summaryElement?.text.trim() ?? '',
+          'genres': genres,
+          'chapters': chapters,
+          'wordCount': wordCount,
+          'views': views,
+          'rating': rating,
+          'reviews': reviews,
+          'lastUpdated': lastUpdated,
+          'alternativeTitles': alternativeTitles,
         };
       }
 
-      throw Exception('Failed to fetch novel details');
+      throw Exception('Failed to load novel details');
     } catch (e) {
-      print('Error fetching novel details: $e');
-      CustomToast.show(context, 'Error fetching novel details: $e');
-      return {};
+      print('Error getting novel details: $e');
+      CustomToast.show(context, 'Error loading novel details: $e');
+      return {
+        'summary': 'Unable to load novel details. Please try again later.',
+      };
     }
+  }
+
+  // Helper method to find element with specific label
+  dom.Element? _findElementWithLabel(dom.Document document, String label) {
+    final infoItems = document.querySelectorAll('.info-item');
+    for (final item in infoItems) {
+      final nameElement = item.querySelector('.info-name');
+      if (nameElement != null && nameElement.text.contains(label)) {
+        return item.querySelector('.info-value a') ??
+            item.querySelector('.info-value');
+      }
+    }
+    return null;
+  }
+
+  // Helper method to find statistics element by label
+  dom.Element? _findStatElement(dom.Document document, String label) {
+    final statItems = document.querySelectorAll('.statistic-item');
+    for (final item in statItems) {
+      final nameElement = item.querySelector('.statistic-name');
+      if (nameElement != null && nameElement.text.contains(label)) {
+        return item.querySelector('.statistic-value');
+      }
+    }
+    return null;
+  }
+
+  // Helper method to find last updated element
+  dom.Element? _findLastUpdatedElement(dom.Document document) {
+    final statItems = document.querySelectorAll('.statistic-item');
+    for (final item in statItems) {
+      final nameElement = item.querySelector('.statistic-name');
+      if (nameElement != null && nameElement.text.contains('Lần cuối')) {
+        final valueElement = item.querySelector('.statistic-value');
+        return valueElement?.querySelector('time') ?? valueElement;
+      }
+    }
+    return null;
+  }
+
+  // Helper method to find fact element by label
+  dom.Element? _findFactElement(dom.Document document, String label) {
+    final factItems = document.querySelectorAll('.fact-item');
+    for (final item in factItems) {
+      final nameElement = item.querySelector('.fact-name');
+      if (nameElement != null && nameElement.text.contains(label)) {
+        return item.querySelector('.fact-value');
+      }
+    }
+    return null;
+  }
+
+  // Extracts the cover URL from the cover element
+  String _extractCoverUrl(dom.Element? coverElement) {
+    if (coverElement == null) {
+      return 'https://ln.hako.vn/img/nocover.jpg';
+    }
+
+    // Try to get from data-bg attribute
+    String? dataBg = coverElement.attributes['data-bg'];
+    if (dataBg != null && dataBg.isNotEmpty) {
+      return dataBg;
+    }
+
+    // Try to get from background-image style
+    String? style = coverElement.attributes['style'];
+    if (style != null && style.contains('url(')) {
+      // Extract URL from style using string operations instead of RegExp
+      int startIndex = style.indexOf('url(') + 4;
+      int endIndex = style.indexOf(')', startIndex);
+      if (startIndex < endIndex) {
+        String url = style.substring(startIndex, endIndex);
+        // Remove quotes if they exist
+        if (url.startsWith('"') && url.endsWith('"')) {
+          url = url.substring(1, url.length - 1);
+        } else if (url.startsWith("'") && url.endsWith("'")) {
+          url = url.substring(1, url.length - 1);
+        }
+        return url;
+      }
+    }
+
+    // If all else fails, return default image
+    return 'https://ln.hako.vn/img/nocover.jpg';
   }
 }

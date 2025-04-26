@@ -8,6 +8,10 @@ class LightNovel {
   final String? volumeTitle;
   final double? rating;
   final int? reviews;
+  final List<String>? alternativeTitles;
+  final int? wordCount;
+  final int? views;
+  final String? lastUpdated;
 
   LightNovel({
     required this.id,
@@ -19,6 +23,10 @@ class LightNovel {
     this.volumeTitle,
     this.rating,
     this.reviews,
+    this.alternativeTitles,
+    this.wordCount,
+    this.views,
+    this.lastUpdated,
   });
 
   factory LightNovel.fromJson(Map<String, dynamic> json) {
@@ -32,6 +40,10 @@ class LightNovel {
       volumeTitle: json['volumeTitle'],
       rating: json['rating']?.toDouble(),
       reviews: json['reviews'],
+      alternativeTitles: json['alternativeTitles']?.cast<String>(),
+      wordCount: json['wordCount'],
+      views: json['views'],
+      lastUpdated: json['lastUpdated'],
     );
   }
 
@@ -46,6 +58,10 @@ class LightNovel {
       'volumeTitle': volumeTitle,
       'rating': rating,
       'reviews': reviews,
+      'alternativeTitles': alternativeTitles,
+      'wordCount': wordCount,
+      'views': views,
+      'lastUpdated': lastUpdated,
     };
   }
 }

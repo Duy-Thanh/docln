@@ -15,6 +15,7 @@ import 'widgets/chapter_card.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter/services.dart';
 import '../services/performance_service.dart';
+import '../screens/LightNovelDetailsScreen.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -659,7 +660,11 @@ class _LibraryScreenState extends State<LibraryScreen>
                         () => Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => WebViewScreen(url: novel.url),
+                            builder:
+                                (context) => LightNovelDetailsScreen(
+                                  novel: novel,
+                                  novelUrl: novel.url,
+                                ),
                           ),
                         ),
                   ),
@@ -832,7 +837,11 @@ class _LibraryScreenState extends State<LibraryScreen>
                 () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => WebViewScreen(url: novels[index].url),
+                    builder:
+                        (context) => LightNovelDetailsScreen(
+                          novel: novels[index],
+                          novelUrl: novels[index].url,
+                        ),
                   ),
                 ),
           );
@@ -926,7 +935,11 @@ class _LibraryScreenState extends State<LibraryScreen>
                     () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => WebViewScreen(url: novel.url),
+                        builder:
+                            (context) => LightNovelDetailsScreen(
+                              novel: novel,
+                              novelUrl: novel.url,
+                            ),
                       ),
                     ),
               );

@@ -9,6 +9,8 @@ import '../services/theme_services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../screens/webview_screen.dart';
 import 'dart:math' as math;
+import '../screens/LightNovelDetailsScreen.dart';
+import '../modules/light_novel.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({Key? key}) : super(key: key);
@@ -17,52 +19,52 @@ class SearchScreen extends StatefulWidget {
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderStateMixin {
+class _SearchScreenState extends State<SearchScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   final SearchService _searchService = SearchService();
   final FocusNode _searchFocusNode = FocusNode();
-  
+
   // Initialize controllers explicitly, not using late
   AnimationController? _animationController;
   Animation<double>? _fadeAnimation;
   Animation<double>? _scaleAnimation;
-  
+
   bool _isLoading = false;
   String _errorMessage = '';
   SearchResponse? _searchResponse;
   int _currentPage = 1;
   bool _isSearchBarFocused = false;
   bool _isDisposed = false; // Track if widget is disposed
-  
+
   // Popular searches for suggestions
-  final List<String> _popularSearches = ['Overlord', 'Re:Zero', 'Mushoku Tensei', 'Sword Art Online'];
+  final List<String> _popularSearches = [
+    'Overlord',
+    'Re:Zero',
+    'Mushoku Tensei',
+    'Sword Art Online',
+  ];
 
   @override
   void initState() {
     super.initState();
-    
+
     // Initialize animations safely
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
-    
+
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animationController!,
-        curve: Curves.easeOut,
-      )
+      CurvedAnimation(parent: _animationController!, curve: Curves.easeOut),
     );
-    
+
     _scaleAnimation = Tween<double>(begin: 0.95, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animationController!,
-        curve: Curves.easeOut,
-      )
+      CurvedAnimation(parent: _animationController!, curve: Curves.easeOut),
     );
-    
+
     _searchFocusNode.addListener(_onFocusChange);
-    
+
     // Start the animation when screen loads - with safety check
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _animationController != null) {
@@ -70,7 +72,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
       }
     });
   }
-  
+
   void _onFocusChange() {
     if (mounted) {
       setState(() {
@@ -90,11 +92,12 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
 
   Future<void> _performSearch({int page = 1}) async {
     if (!mounted) return;
-    
-    final String searchTerm = page == 1 
-        ? _searchController.text.trim() 
-        : (_searchResponse?.keyword ?? _searchController.text.trim());
-    
+
+    final String searchTerm =
+        page == 1
+            ? _searchController.text.trim()
+            : (_searchResponse?.keyword ?? _searchController.text.trim());
+
     if (searchTerm.isEmpty) return;
 
     // If it's a new search (page 1), update the search field
@@ -121,9 +124,9 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     try {
       // Add haptic feedback when searching
       HapticFeedback.mediumImpact();
-      
+
       final response = await _searchService.search(searchTerm, page: page);
-      
+
       // Use the animation controller for smooth transition of results
       if (mounted && _animationController != null) {
         _animationController!.reset();
@@ -145,19 +148,28 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
 
   void _launchUrl(String url) async {
     if (!mounted) return;
-    
+
     if (await canLaunchUrl(Uri.parse(url))) {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => WebViewScreen(url: url),
+          builder:
+              (context) => LightNovelDetailsScreen(
+                novel: LightNovel(
+                  id: url.split('/').last,
+                  title: _searchResponse?.keyword ?? "Light Novel",
+                  coverUrl: "https://ln.hako.vn/img/nocover.jpg",
+                  url: url,
+                ),
+                novelUrl: url,
+              ),
         ),
       );
     } else {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not launch $url')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not launch $url')));
     }
   }
 
@@ -166,21 +178,21 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     try {
       // First apply the domain fix from SearchService
       String url = SearchService.fixImageUrl(originalUrl);
-      
+
       // If the URL still contains docln.net, apply a more aggressive fix
       if (url.contains('docln.net')) {
         // Try a different domain if the original is from docln.net
         Uri uri = Uri.parse(url);
         String path = uri.path;
-        
-        // Replace with hako.vip domain 
+
+        // Replace with hako.vip domain
         if (uri.host.startsWith('i.')) {
           return 'https://i.hako.vip$path';
         } else if (uri.host.startsWith('i2.')) {
           return 'https://i2.hako.vip$path';
         }
       }
-      
+
       return url;
     } catch (e) {
       // If anything goes wrong with URL manipulation, return default
@@ -192,15 +204,15 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   Widget _buildCoverImage(String imageUrl, double height, bool isDarkMode) {
     // List of possible domains to try
     final domains = [
-      '',  // Original URL
+      '', // Original URL
       'i.hako.vip',
       'i2.hako.vip',
       'ln.hako.vn',
     ];
-    
+
     // Create a fixed URL
     String fixedUrl = _getFixedImageUrl(imageUrl);
-    
+
     return CachedNetworkImage(
       imageUrl: fixedUrl,
       height: height,
@@ -213,16 +225,15 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         print('Image error: $error for URL: $fixedUrl');
       },
       httpHeaders: const {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36',
+        'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36',
       },
-      placeholder: (context, url) => Shimmer.fromColors(
-        baseColor: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
-        highlightColor: isDarkMode ? Colors.grey[700]! : Colors.grey[100]!,
-        child: Container(
-          height: height,
-          color: Colors.white,
-        ),
-      ),
+      placeholder:
+          (context, url) => Shimmer.fromColors(
+            baseColor: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
+            highlightColor: isDarkMode ? Colors.grey[700]! : Colors.grey[100]!,
+            child: Container(height: height, color: Colors.white),
+          ),
       errorWidget: (context, url, error) {
         // Try each domain in sequence if the original fails
         for (int i = 1; i < domains.length; i++) {
@@ -231,40 +242,42 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
               Uri uri = Uri.parse(url);
               String path = uri.path;
               String newUrl = 'https://${domains[i]}$path';
-              
+
               // Return a new CachedNetworkImage with the next domain
               return CachedNetworkImage(
                 imageUrl: newUrl,
                 height: height,
                 width: double.infinity,
                 fit: BoxFit.cover,
-                placeholder: (context, url) => Shimmer.fromColors(
-                  baseColor: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
-                  highlightColor: isDarkMode ? Colors.grey[700]! : Colors.grey[100]!,
-                  child: Container(
-                    height: height,
-                    color: Colors.white,
-                  ),
-                ),
-                // Final fallback is a generic image placeholder
-                errorWidget: (context, url, error) => Container(
-                  height: height,
-                  color: isDarkMode ? Colors.grey[800] : Colors.grey[300],
-                  child: Center(
-                    child: Icon(
-                      Icons.image_not_supported,
-                      color: isDarkMode ? Colors.grey[600] : Colors.grey[400],
-                      size: height / 3,
+                placeholder:
+                    (context, url) => Shimmer.fromColors(
+                      baseColor:
+                          isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
+                      highlightColor:
+                          isDarkMode ? Colors.grey[700]! : Colors.grey[100]!,
+                      child: Container(height: height, color: Colors.white),
                     ),
-                  ),
-                ),
+                // Final fallback is a generic image placeholder
+                errorWidget:
+                    (context, url, error) => Container(
+                      height: height,
+                      color: isDarkMode ? Colors.grey[800] : Colors.grey[300],
+                      child: Center(
+                        child: Icon(
+                          Icons.image_not_supported,
+                          color:
+                              isDarkMode ? Colors.grey[600] : Colors.grey[400],
+                          size: height / 3,
+                        ),
+                      ),
+                    ),
               );
             } catch (e) {
               continue; // Try next domain if URI parsing fails
             }
           }
         }
-        
+
         // If all domains fail, show a placeholder
         return Container(
           height: height,
@@ -284,35 +297,34 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     // Safety check for animation controller
-    if (_animationController == null || _fadeAnimation == null || _scaleAnimation == null) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+    if (_animationController == null ||
+        _fadeAnimation == null ||
+        _scaleAnimation == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    
+
     final themeService = Provider.of<ThemeServices>(context);
     final isDarkMode = themeService.themeMode == ThemeMode.dark;
-    final primaryColor = isDarkMode ? Colors.deepOrangeAccent : Colors.deepOrange;
+    final primaryColor =
+        isDarkMode ? Colors.deepOrangeAccent : Colors.deepOrange;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Search'),
         elevation: 0,
         backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
-        systemOverlayStyle: isDarkMode 
-          ? SystemUiOverlayStyle.light
-          : SystemUiOverlayStyle.dark,
+        systemOverlayStyle:
+            isDarkMode ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       ),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: isDarkMode 
-              ? [Colors.grey[900]!, Colors.grey[850]!]
-              : [Colors.white, Colors.grey[50]!],
+            colors:
+                isDarkMode
+                    ? [Colors.grey[900]!, Colors.grey[850]!]
+                    : [Colors.white, Colors.grey[50]!],
           ),
         ),
         child: Column(
@@ -326,23 +338,20 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                   // Ensure values are clamped to valid ranges
                   final scale = _scaleAnimation!.value.clamp(0.5, 1.0);
                   final opacity = _fadeAnimation!.value.clamp(0.0, 1.0);
-                  
+
                   return Transform.scale(
                     scale: scale,
-                    child: Opacity(
-                      opacity: opacity,
-                      child: child,
-                    ),
+                    child: Opacity(opacity: opacity, child: child),
                   );
                 },
                 child: _buildAnimatedSearchBar(isDarkMode, primaryColor),
               ),
             ),
-            
+
             // Popular searches or suggestions with proper animation safety
             if (_searchController.text.isEmpty && _searchResponse == null)
               _buildSafeAnimatedSuggestions(isDarkMode, primaryColor),
-              
+
             // Search results
             Expanded(
               child: AnimatedBuilder(
@@ -350,11 +359,14 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                 builder: (context, child) {
                   // Ensure values are clamped to valid ranges
                   final opacity = _fadeAnimation!.value.clamp(0.0, 1.0);
-                  
+
                   return Opacity(
                     opacity: opacity,
                     child: Transform.translate(
-                      offset: Offset(0, 20 * (1 - _fadeAnimation!.value.clamp(0.0, 1.0))),
+                      offset: Offset(
+                        0,
+                        20 * (1 - _fadeAnimation!.value.clamp(0.0, 1.0)),
+                      ),
                       child: child,
                     ),
                   );
@@ -375,7 +387,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
       builder: (context, child) {
         // Ensure opacity is clamped to valid range
         final opacity = _fadeAnimation!.value.clamp(0.0, 1.0);
-        
+
         return Opacity(
           opacity: opacity,
           child: Transform.translate(
@@ -387,7 +399,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
       child: _buildSearchSuggestions(isDarkMode, primaryColor),
     );
   }
-  
+
   Widget _buildAnimatedSearchBar(bool isDarkMode, Color primaryColor) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -398,9 +410,10 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         borderRadius: BorderRadius.circular(_isSearchBarFocused ? 16 : 28),
         boxShadow: [
           BoxShadow(
-            color: _isSearchBarFocused
-                ? primaryColor.withOpacity(0.2)
-                : Colors.black.withOpacity(0.1),
+            color:
+                _isSearchBarFocused
+                    ? primaryColor.withOpacity(0.2)
+                    : Colors.black.withOpacity(0.1),
             blurRadius: _isSearchBarFocused ? 8 : 4,
             offset: const Offset(0, 2),
             spreadRadius: _isSearchBarFocused ? 1 : 0,
@@ -421,44 +434,49 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
             padding: const EdgeInsets.all(10),
             child: Icon(
               Icons.search_rounded,
-              color: _isSearchBarFocused
-                  ? primaryColor
-                  : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+              color:
+                  _isSearchBarFocused
+                      ? primaryColor
+                      : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
               size: 24,
             ),
           ),
-          suffixIcon: _searchController.text.isNotEmpty
-              ? TweenAnimationBuilder<double>(
-                  duration: const Duration(milliseconds: 300),
-                  tween: Tween<double>(begin: 0.0, end: 1.0),
-                  builder: (context, value, child) {
-                    // Ensure value is valid
-                    final safeValue = value.clamp(0.0, 1.0);
-                    
-                    return Transform.scale(
-                      scale: safeValue,
-                      child: Opacity(
-                        opacity: safeValue,
-                        child: IconButton(
-                          icon: const Icon(Icons.clear_rounded),
-                          onPressed: () {
-                            if (mounted) {
-                              setState(() {
-                                _searchController.clear();
-                                _searchResponse = null;
-                                // Provide haptic feedback
-                                HapticFeedback.lightImpact();
-                              });
-                            }
-                          },
-                          splashRadius: 20,
-                          color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+          suffixIcon:
+              _searchController.text.isNotEmpty
+                  ? TweenAnimationBuilder<double>(
+                    duration: const Duration(milliseconds: 300),
+                    tween: Tween<double>(begin: 0.0, end: 1.0),
+                    builder: (context, value, child) {
+                      // Ensure value is valid
+                      final safeValue = value.clamp(0.0, 1.0);
+
+                      return Transform.scale(
+                        scale: safeValue,
+                        child: Opacity(
+                          opacity: safeValue,
+                          child: IconButton(
+                            icon: const Icon(Icons.clear_rounded),
+                            onPressed: () {
+                              if (mounted) {
+                                setState(() {
+                                  _searchController.clear();
+                                  _searchResponse = null;
+                                  // Provide haptic feedback
+                                  HapticFeedback.lightImpact();
+                                });
+                              }
+                            },
+                            splashRadius: 20,
+                            color:
+                                isDarkMode
+                                    ? Colors.grey[400]
+                                    : Colors.grey[600],
+                          ),
                         ),
-                      ),
-                    );
-                  },
-                )
-              : null,
+                      );
+                    },
+                  )
+                  : null,
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 16),
           fillColor: Colors.transparent,
@@ -507,7 +525,11 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   }
 
   // Safe version of suggestion item with proper value clamping
-  Widget _buildSafeSuggestionItem(int index, bool isDarkMode, Color primaryColor) {
+  Widget _buildSafeSuggestionItem(
+    int index,
+    bool isDarkMode,
+    Color primaryColor,
+  ) {
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0.0, end: 1.0),
       duration: Duration(milliseconds: 400 + (index * 100)),
@@ -515,13 +537,10 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
       builder: (context, value, child) {
         // Ensure values are valid
         final safeValue = value.clamp(0.0, 1.0);
-        
+
         return Transform.scale(
           scale: safeValue,
-          child: Opacity(
-            opacity: safeValue,
-            child: child,
-          ),
+          child: Opacity(opacity: safeValue, child: child),
         );
       },
       child: InkWell(
@@ -536,17 +555,14 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         borderRadius: BorderRadius.circular(20),
         child: Chip(
           label: Text(_popularSearches[index]),
-          avatar: Icon(
-            Icons.trending_up,
-            size: 16,
-            color: primaryColor,
-          ),
-          backgroundColor: isDarkMode 
-              ? Colors.grey[800]!.withOpacity(0.7) 
-              : Colors.grey[200]!.withOpacity(0.7),
+          avatar: Icon(Icons.trending_up, size: 16, color: primaryColor),
+          backgroundColor:
+              isDarkMode
+                  ? Colors.grey[800]!.withOpacity(0.7)
+                  : Colors.grey[200]!.withOpacity(0.7),
           side: BorderSide(
             width: 1,
-            color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!
+            color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
           ),
           elevation: 1,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -594,9 +610,14 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                 }
 
                 final result = _searchResponse!.results[index];
-                
+
                 // Staggered animation for grid items with proper safety
-                return _buildSafeAnimatedResultItem(index, result, isDarkMode, primaryColor);
+                return _buildSafeAnimatedResultItem(
+                  index,
+                  result,
+                  isDarkMode,
+                  primaryColor,
+                );
               },
             ),
           ),
@@ -621,7 +642,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
               // Ensure values are valid
               final safeValue = value.clamp(0.0, 1.0);
               final safeScale = (0.5 + (safeValue * 0.5)).clamp(0.5, 1.0);
-              
+
               return Transform.scale(
                 scale: safeScale,
                 child: Opacity(opacity: safeValue, child: child),
@@ -659,7 +680,9 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
               foregroundColor: Colors.white,
               backgroundColor: primaryColor,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(30),
+              ),
               elevation: 2,
             ),
           ),
@@ -681,7 +704,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
             builder: (context, value, child) {
               // Ensure values are valid
               final safeValue = value.clamp(0.0, 1.0);
-              
+
               return Transform.scale(
                 scale: safeValue,
                 child: Opacity(opacity: safeValue, child: child),
@@ -728,8 +751,11 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
             builder: (context, value, child) {
               // Ensure values are valid
               final safeValue = value.clamp(0.0, 1.0);
-              final safeAngle = ((1 - safeValue) * math.pi / 10).clamp(0.0, math.pi / 10);
-              
+              final safeAngle = ((1 - safeValue) * math.pi / 10).clamp(
+                0.0,
+                math.pi / 10,
+              );
+
               return Transform.scale(
                 scale: safeValue,
                 child: Transform.rotate(
@@ -782,7 +808,9 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
               foregroundColor: Colors.white,
               backgroundColor: primaryColor,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(30),
+              ),
               elevation: 2,
             ),
           ),
@@ -792,7 +820,12 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   }
 
   // Safe animated result item with proper value clamping
-  Widget _buildSafeAnimatedResultItem(int index, SearchResult result, bool isDarkMode, Color primaryColor) {
+  Widget _buildSafeAnimatedResultItem(
+    int index,
+    SearchResult result,
+    bool isDarkMode,
+    Color primaryColor,
+  ) {
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0.0, end: 1.0),
       duration: Duration(milliseconds: 400 + (index % 10) * 50),
@@ -801,7 +834,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         // Ensure values are valid
         final safeValue = value.clamp(0.0, 1.0);
         final safeScale = (0.8 + (0.2 * safeValue)).clamp(0.8, 1.0);
-        
+
         return Transform.scale(
           scale: safeScale,
           child: Opacity(
@@ -817,7 +850,11 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     );
   }
 
-  Widget _buildAnimatedSearchResultItem(SearchResult result, bool isDarkMode, Color primaryColor) {
+  Widget _buildAnimatedSearchResultItem(
+    SearchResult result,
+    bool isDarkMode,
+    Color primaryColor,
+  ) {
     return Hero(
       tag: 'search_${result.seriesTitle}_${result.chapterUrl}',
       child: Material(
@@ -859,9 +896,13 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                             children: [
                               // Cover image
                               SizedBox.expand(
-                                child: _buildCoverImage(result.coverUrl, 0, isDarkMode),
+                                child: _buildCoverImage(
+                                  result.coverUrl,
+                                  0,
+                                  isDarkMode,
+                                ),
                               ),
-                              
+
                               // Gradient overlay at bottom of cover
                               Positioned(
                                 left: 0,
@@ -881,7 +922,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                                   ),
                                 ),
                               ),
-                              
+
                               // Original tag with animation
                               if (result.isOriginal)
                                 Positioned(
@@ -893,18 +934,27 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                                     curve: Curves.easeOut,
                                     builder: (context, value, child) {
                                       final safeValue = value.clamp(0.0, 1.0);
-                                      final safeAngle = ((1 - safeValue) * math.pi / 10).clamp(0.0, math.pi / 10);
-                                      
+                                      final safeAngle = ((1 - safeValue) *
+                                              math.pi /
+                                              10)
+                                          .clamp(0.0, math.pi / 10);
+
                                       return Transform.scale(
                                         scale: safeValue,
                                         child: Transform.rotate(
                                           angle: safeAngle,
-                                          child: Opacity(opacity: safeValue, child: child),
+                                          child: Opacity(
+                                            opacity: safeValue,
+                                            child: child,
+                                          ),
                                         ),
                                       );
                                     },
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: Colors.green.withOpacity(0.85),
                                         borderRadius: BorderRadius.circular(8),
@@ -920,7 +970,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                                     ),
                                   ),
                                 ),
-                              
+
                               // Volume info at bottom of cover
                               Positioned(
                                 left: 8,
@@ -946,11 +996,14 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                             ],
                           ),
                         ),
-                        
+
                         // Info section that uses remaining card space
                         Expanded(
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
                             color: isDarkMode ? Colors.grey[850] : Colors.white,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -961,22 +1014,28 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14,
-                                    color: isDarkMode ? Colors.white : Colors.black87,
+                                    color:
+                                        isDarkMode
+                                            ? Colors.white
+                                            : Colors.black87,
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                
+
                                 const SizedBox(height: 4),
-                                
+
                                 // Chapter title that fills remaining space
                                 Expanded(
                                   child: Text(
                                     result.chapterTitle,
                                     style: TextStyle(
-                                      fontSize: 13, 
+                                      fontSize: 13,
                                       height: 1.2,
-                                      color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
+                                      color:
+                                          isDarkMode
+                                              ? Colors.grey[400]
+                                              : Colors.grey[700],
                                     ),
                                     overflow: TextOverflow.ellipsis,
                                     // Allow as many lines as fit in the available space
@@ -990,7 +1049,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                       ],
                     ),
                   ),
-                  
+
                   // Ripple effect container
                   Positioned.fill(
                     child: Material(
@@ -1044,7 +1103,9 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                   width: double.infinity,
                   decoration: const BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(12),
+                    ),
                   ),
                 ),
                 Padding(
@@ -1139,14 +1200,17 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: isDarkMode 
-              ? [Colors.grey[900]!.withOpacity(0.0), Colors.grey[900]!]
-              : [Colors.white.withOpacity(0.0), Colors.white],
+          colors:
+              isDarkMode
+                  ? [Colors.grey[900]!.withOpacity(0.0), Colors.grey[900]!]
+                  : [Colors.white.withOpacity(0.0), Colors.white],
         ),
-        border: Border(top: BorderSide(
-          color: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
-          width: 0.5,
-        )),
+        border: Border(
+          top: BorderSide(
+            color: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
+            width: 0.5,
+          ),
+        ),
       ),
       child: Column(
         children: [
@@ -1167,18 +1231,22 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                 // Pagination buttons
                 _buildPageButton(
                   icon: Icons.first_page_rounded,
-                  onTap: _searchResponse!.currentPage > 1
-                      ? () => _performSearch(page: 1)
-                      : null,
+                  onTap:
+                      _searchResponse!.currentPage > 1
+                          ? () => _performSearch(page: 1)
+                          : null,
                   isActive: _searchResponse!.currentPage > 1,
                   isDarkMode: isDarkMode,
                   primaryColor: primaryColor,
                 ),
                 _buildPageButton(
                   icon: Icons.navigate_before_rounded,
-                  onTap: _searchResponse!.currentPage > 1
-                      ? () => _performSearch(page: _searchResponse!.currentPage - 1)
-                      : null,
+                  onTap:
+                      _searchResponse!.currentPage > 1
+                          ? () => _performSearch(
+                            page: _searchResponse!.currentPage - 1,
+                          )
+                          : null,
                   isActive: _searchResponse!.currentPage > 1,
                   isDarkMode: isDarkMode,
                   primaryColor: primaryColor,
@@ -1186,19 +1254,28 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                 _buildPageNumbers(isDarkMode, primaryColor),
                 _buildPageButton(
                   icon: Icons.navigate_next_rounded,
-                  onTap: _searchResponse!.currentPage < _searchResponse!.totalPages
-                      ? () => _performSearch(page: _searchResponse!.currentPage + 1)
-                      : null,
-                  isActive: _searchResponse!.currentPage < _searchResponse!.totalPages,
+                  onTap:
+                      _searchResponse!.currentPage < _searchResponse!.totalPages
+                          ? () => _performSearch(
+                            page: _searchResponse!.currentPage + 1,
+                          )
+                          : null,
+                  isActive:
+                      _searchResponse!.currentPage <
+                      _searchResponse!.totalPages,
                   isDarkMode: isDarkMode,
                   primaryColor: primaryColor,
                 ),
                 _buildPageButton(
                   icon: Icons.last_page_rounded,
-                  onTap: _searchResponse!.currentPage < _searchResponse!.totalPages
-                      ? () => _performSearch(page: _searchResponse!.totalPages)
-                      : null,
-                  isActive: _searchResponse!.currentPage < _searchResponse!.totalPages,
+                  onTap:
+                      _searchResponse!.currentPage < _searchResponse!.totalPages
+                          ? () =>
+                              _performSearch(page: _searchResponse!.totalPages)
+                          : null,
+                  isActive:
+                      _searchResponse!.currentPage <
+                      _searchResponse!.totalPages,
                   isDarkMode: isDarkMode,
                   primaryColor: primaryColor,
                 ),
@@ -1223,25 +1300,30 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(20),
         child: InkWell(
-          onTap: isActive ? () {
-            HapticFeedback.lightImpact();
-            onTap?.call();
-          } : null,
+          onTap:
+              isActive
+                  ? () {
+                    HapticFeedback.lightImpact();
+                    onTap?.call();
+                  }
+                  : null,
           borderRadius: BorderRadius.circular(20),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: isActive 
-                  ? (isDarkMode ? Colors.grey[800] : Colors.grey[100])
-                  : Colors.transparent,
+              color:
+                  isActive
+                      ? (isDarkMode ? Colors.grey[800] : Colors.grey[100])
+                      : Colors.transparent,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Icon(
               icon,
-              color: isActive
-                  ? (isDarkMode ? primaryColor : primaryColor)
-                  : (isDarkMode ? Colors.grey[700] : Colors.grey[400]),
+              color:
+                  isActive
+                      ? (isDarkMode ? primaryColor : primaryColor)
+                      : (isDarkMode ? Colors.grey[700] : Colors.grey[400]),
               size: 24,
             ),
           ),
@@ -1252,29 +1334,29 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
 
   Widget _buildPageNumbers(bool isDarkMode, Color primaryColor) {
     if (_searchResponse == null) return const SizedBox();
-    
+
     final currentPage = _searchResponse!.currentPage;
     final totalPages = _searchResponse!.totalPages;
-    
+
     // Dynamically adjust visible pages based on screen width
     int maxVisiblePages = 3;
     double screenWidth = MediaQuery.of(context).size.width;
     if (screenWidth > 400) {
       maxVisiblePages = 5;
     }
-    
+
     int startPage = (currentPage - (maxVisiblePages ~/ 2)).clamp(1, totalPages);
     int endPage = (startPage + maxVisiblePages - 1).clamp(1, totalPages);
-    
+
     if (endPage == totalPages) {
       startPage = (endPage - maxVisiblePages + 1).clamp(1, totalPages);
     }
-    
+
     List<Widget> pageButtons = [];
-    
+
     for (int i = startPage; i <= endPage; i++) {
       final isCurrentPage = i == currentPage;
-      
+
       pageButtons.add(
         TweenAnimationBuilder<double>(
           tween: Tween<double>(begin: 0.8, end: 1.0),
@@ -1290,38 +1372,51 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: isCurrentPage ? null : () {
-                  HapticFeedback.lightImpact();
-                  _performSearch(page: i);
-                },
+                onTap:
+                    isCurrentPage
+                        ? null
+                        : () {
+                          HapticFeedback.lightImpact();
+                          _performSearch(page: i);
+                        },
                 borderRadius: BorderRadius.circular(20),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: isCurrentPage
-                        ? primaryColor
-                        : (isDarkMode ? Colors.grey[800] : Colors.grey[200]),
-                    borderRadius: BorderRadius.circular(isCurrentPage ? 12 : 18),
-                    boxShadow: isCurrentPage
-                        ? [
-                            BoxShadow(
-                              color: primaryColor.withOpacity(0.4),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            )
-                          ]
-                        : null,
+                    color:
+                        isCurrentPage
+                            ? primaryColor
+                            : (isDarkMode
+                                ? Colors.grey[800]
+                                : Colors.grey[200]),
+                    borderRadius: BorderRadius.circular(
+                      isCurrentPage ? 12 : 18,
+                    ),
+                    boxShadow:
+                        isCurrentPage
+                            ? [
+                              BoxShadow(
+                                color: primaryColor.withOpacity(0.4),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ]
+                            : null,
                   ),
                   child: Center(
                     child: Text(
                       '$i',
                       style: TextStyle(
-                        color: isCurrentPage
-                            ? Colors.white
-                            : (isDarkMode ? Colors.grey[400] : Colors.grey[700]),
-                        fontWeight: isCurrentPage ? FontWeight.bold : FontWeight.normal,
+                        color:
+                            isCurrentPage
+                                ? Colors.white
+                                : (isDarkMode
+                                    ? Colors.grey[400]
+                                    : Colors.grey[700]),
+                        fontWeight:
+                            isCurrentPage ? FontWeight.bold : FontWeight.normal,
                         fontSize: 14,
                       ),
                     ),
@@ -1333,10 +1428,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         ),
       );
     }
-    
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: pageButtons,
-    );
+
+    return Row(mainAxisSize: MainAxisSize.min, children: pageButtons);
   }
 }

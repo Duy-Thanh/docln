@@ -23,7 +23,8 @@ class ThemeServices extends ChangeNotifier {
   Future<void> init() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      _themeMode = prefs.getBool('darkMode') == true ? ThemeMode.dark : ThemeMode.light;
+      _themeMode =
+          prefs.getBool('darkMode') == true ? ThemeMode.dark : ThemeMode.light;
       _textSize = (prefs.getDouble('textSize') ?? 16.0).clamp(12.0, 24.0);
       print('🔤 Initialized text size: $_textSize');
       notifyListeners();
@@ -84,24 +85,137 @@ class ThemeServices extends ChangeNotifier {
       'bodySmall': 12.0,
     };
 
+    const primaryColor = Color(0xFF4361EE);
+    const secondaryColor = Color(0xFFFF6B6B);
+
     // Apply scale factor to all sizes
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      primaryColor: Colors.blue,
+      primaryColor: primaryColor,
+      colorScheme: ColorScheme.light(
+        primary: primaryColor,
+        secondary: secondaryColor,
+        tertiary: const Color(0xFF4CC9F0),
+        surface: Colors.white,
+        background: const Color(0xFFF8F9FA),
+        surfaceVariant: const Color(0xFFEEF2FF),
+        primaryContainer: const Color(0xFFD8E2FF),
+        secondaryContainer: const Color(0xFFFFE8E8),
+      ),
       textTheme: TextTheme(
-        displayLarge: TextStyle(fontSize: baseSizes['displayLarge']! * _textScaleFactor),
-        displayMedium: TextStyle(fontSize: baseSizes['displayMedium']! * _textScaleFactor),
-        displaySmall: TextStyle(fontSize: baseSizes['displaySmall']! * _textScaleFactor),
-        headlineLarge: TextStyle(fontSize: baseSizes['headlineLarge']! * _textScaleFactor),
-        headlineMedium: TextStyle(fontSize: baseSizes['headlineMedium']! * _textScaleFactor),
-        headlineSmall: TextStyle(fontSize: baseSizes['headlineSmall']! * _textScaleFactor),
-        titleLarge: TextStyle(fontSize: baseSizes['titleLarge']! * _textScaleFactor),
-        titleMedium: TextStyle(fontSize: baseSizes['titleMedium']! * _textScaleFactor),
-        titleSmall: TextStyle(fontSize: baseSizes['titleSmall']! * _textScaleFactor),
-        bodyLarge: TextStyle(fontSize: baseSizes['bodyLarge']! * _textScaleFactor),
-        bodyMedium: TextStyle(fontSize: baseSizes['bodyMedium']! * _textScaleFactor),
-        bodySmall: TextStyle(fontSize: baseSizes['bodySmall']! * _textScaleFactor),
+        displayLarge: TextStyle(
+          fontSize: baseSizes['displayLarge']! * _textScaleFactor,
+          fontWeight: FontWeight.bold,
+          letterSpacing: -0.5,
+        ),
+        displayMedium: TextStyle(
+          fontSize: baseSizes['displayMedium']! * _textScaleFactor,
+          fontWeight: FontWeight.bold,
+          letterSpacing: -0.3,
+        ),
+        displaySmall: TextStyle(
+          fontSize: baseSizes['displaySmall']! * _textScaleFactor,
+          fontWeight: FontWeight.bold,
+        ),
+        headlineLarge: TextStyle(
+          fontSize: baseSizes['headlineLarge']! * _textScaleFactor,
+          fontWeight: FontWeight.w600,
+        ),
+        headlineMedium: TextStyle(
+          fontSize: baseSizes['headlineMedium']! * _textScaleFactor,
+          fontWeight: FontWeight.w600,
+        ),
+        headlineSmall: TextStyle(
+          fontSize: baseSizes['headlineSmall']! * _textScaleFactor,
+          fontWeight: FontWeight.w600,
+        ),
+        titleLarge: TextStyle(
+          fontSize: baseSizes['titleLarge']! * _textScaleFactor,
+          fontWeight: FontWeight.w600,
+        ),
+        titleMedium: TextStyle(
+          fontSize: baseSizes['titleMedium']! * _textScaleFactor,
+          fontWeight: FontWeight.w500,
+        ),
+        titleSmall: TextStyle(
+          fontSize: baseSizes['titleSmall']! * _textScaleFactor,
+          fontWeight: FontWeight.w500,
+        ),
+        bodyLarge: TextStyle(
+          fontSize: baseSizes['bodyLarge']! * _textScaleFactor,
+          letterSpacing: 0.2,
+        ),
+        bodyMedium: TextStyle(
+          fontSize: baseSizes['bodyMedium']! * _textScaleFactor,
+          letterSpacing: 0.2,
+        ),
+        bodySmall: TextStyle(
+          fontSize: baseSizes['bodySmall']! * _textScaleFactor,
+          letterSpacing: 0.2,
+        ),
+      ),
+      cardTheme: CardTheme(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        clipBehavior: Clip.antiAlias,
+      ),
+      appBarTheme: const AppBarTheme(
+        elevation: 0,
+        centerTitle: false,
+        backgroundColor: Colors.white,
+        foregroundColor: primaryColor,
+        titleTextStyle: TextStyle(
+          color: Colors.black87,
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+        iconTheme: IconThemeData(color: primaryColor),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          foregroundColor: Colors.white,
+          backgroundColor: primaryColor,
+          elevation: 2,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: primaryColor,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(foregroundColor: primaryColor),
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        elevation: 8,
+        backgroundColor: Colors.white,
+        selectedItemColor: primaryColor,
+        unselectedItemColor: Colors.grey,
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: primaryColor.withOpacity(0.1),
+        labelStyle: TextStyle(
+          color: primaryColor,
+          fontSize: 12 * _textScaleFactor,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      tabBarTheme: TabBarTheme(
+        labelColor: primaryColor,
+        unselectedLabelColor: Colors.grey,
+        indicator: BoxDecoration(
+          border: Border(bottom: BorderSide(color: primaryColor, width: 2)),
+        ),
       ),
     );
   }
@@ -123,23 +237,148 @@ class ThemeServices extends ChangeNotifier {
       'bodySmall': 12.0,
     };
 
+    const primaryColor = Color(0xFF4CC9F0);
+    const secondaryColor = Color(0xFFFF6B6B);
+
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
-      primaryColor: Colors.blue,
+      primaryColor: primaryColor,
+      colorScheme: ColorScheme.dark(
+        primary: primaryColor,
+        secondary: secondaryColor,
+        tertiary: const Color(0xFF4361EE),
+        surface: const Color(0xFF1E1E1E),
+        background: const Color(0xFF121212),
+        surfaceVariant: const Color(0xFF2A2A2A),
+        primaryContainer: const Color(0xFF20385B),
+        secondaryContainer: const Color(0xFF662B2B),
+      ),
       textTheme: TextTheme(
-        displayLarge: TextStyle(fontSize: baseSizes['displayLarge']! * _textScaleFactor),
-        displayMedium: TextStyle(fontSize: baseSizes['displayMedium']! * _textScaleFactor),
-        displaySmall: TextStyle(fontSize: baseSizes['displaySmall']! * _textScaleFactor),
-        headlineLarge: TextStyle(fontSize: baseSizes['headlineLarge']! * _textScaleFactor),
-        headlineMedium: TextStyle(fontSize: baseSizes['headlineMedium']! * _textScaleFactor),
-        headlineSmall: TextStyle(fontSize: baseSizes['headlineSmall']! * _textScaleFactor),
-        titleLarge: TextStyle(fontSize: baseSizes['titleLarge']! * _textScaleFactor),
-        titleMedium: TextStyle(fontSize: baseSizes['titleMedium']! * _textScaleFactor),
-        titleSmall: TextStyle(fontSize: baseSizes['titleSmall']! * _textScaleFactor),
-        bodyLarge: TextStyle(fontSize: baseSizes['bodyLarge']! * _textScaleFactor),
-        bodyMedium: TextStyle(fontSize: baseSizes['bodyMedium']! * _textScaleFactor),
-        bodySmall: TextStyle(fontSize: baseSizes['bodySmall']! * _textScaleFactor),
+        displayLarge: TextStyle(
+          fontSize: baseSizes['displayLarge']! * _textScaleFactor,
+          fontWeight: FontWeight.bold,
+          letterSpacing: -0.5,
+          color: Colors.white,
+        ),
+        displayMedium: TextStyle(
+          fontSize: baseSizes['displayMedium']! * _textScaleFactor,
+          fontWeight: FontWeight.bold,
+          letterSpacing: -0.3,
+          color: Colors.white,
+        ),
+        displaySmall: TextStyle(
+          fontSize: baseSizes['displaySmall']! * _textScaleFactor,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
+        headlineLarge: TextStyle(
+          fontSize: baseSizes['headlineLarge']! * _textScaleFactor,
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+        ),
+        headlineMedium: TextStyle(
+          fontSize: baseSizes['headlineMedium']! * _textScaleFactor,
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+        ),
+        headlineSmall: TextStyle(
+          fontSize: baseSizes['headlineSmall']! * _textScaleFactor,
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+        ),
+        titleLarge: TextStyle(
+          fontSize: baseSizes['titleLarge']! * _textScaleFactor,
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+        ),
+        titleMedium: TextStyle(
+          fontSize: baseSizes['titleMedium']! * _textScaleFactor,
+          fontWeight: FontWeight.w500,
+          color: Colors.white,
+        ),
+        titleSmall: TextStyle(
+          fontSize: baseSizes['titleSmall']! * _textScaleFactor,
+          fontWeight: FontWeight.w500,
+          color: Colors.white,
+        ),
+        bodyLarge: TextStyle(
+          fontSize: baseSizes['bodyLarge']! * _textScaleFactor,
+          letterSpacing: 0.2,
+          color: Colors.white.withOpacity(0.9),
+        ),
+        bodyMedium: TextStyle(
+          fontSize: baseSizes['bodyMedium']! * _textScaleFactor,
+          letterSpacing: 0.2,
+          color: Colors.white.withOpacity(0.9),
+        ),
+        bodySmall: TextStyle(
+          fontSize: baseSizes['bodySmall']! * _textScaleFactor,
+          letterSpacing: 0.2,
+          color: Colors.white.withOpacity(0.8),
+        ),
+      ),
+      cardTheme: CardTheme(
+        elevation: 4,
+        color: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        clipBehavior: Clip.antiAlias,
+      ),
+      appBarTheme: const AppBarTheme(
+        elevation: 0,
+        centerTitle: false,
+        backgroundColor: Color(0xFF121212),
+        titleTextStyle: TextStyle(
+          color: Colors.white,
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+        iconTheme: IconThemeData(color: primaryColor),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          foregroundColor: Colors.white,
+          backgroundColor: primaryColor,
+          elevation: 3,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: primaryColor,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(foregroundColor: primaryColor),
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        elevation: 8,
+        backgroundColor: Color(0xFF1E1E1E),
+        selectedItemColor: primaryColor,
+        unselectedItemColor: Colors.grey,
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: primaryColor.withOpacity(0.2),
+        labelStyle: TextStyle(
+          color: primaryColor,
+          fontSize: 12 * _textScaleFactor,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      tabBarTheme: TabBarTheme(
+        labelColor: primaryColor,
+        unselectedLabelColor: Colors.grey,
+        indicator: BoxDecoration(
+          border: Border(bottom: BorderSide(color: primaryColor, width: 2)),
+        ),
       ),
     );
   }
