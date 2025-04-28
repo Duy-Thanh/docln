@@ -4,6 +4,7 @@ import '../screens/LibraryScreen.dart';
 import '../screens/SearchScreen.dart';
 import '../screens/SettingsScreen.dart';
 import '../screens/BookmarksScreen.dart';
+import '../screens/HistoryScreen.dart';
 import '../screens/widgets/update_dialog.dart';
 import 'dart:ui';
 import '../services/performance_service.dart';
@@ -67,7 +68,7 @@ class _HomeScreenState extends State<HomeScreen> {
       LibraryScreen(),
       const SearchScreen(),
       const BookmarksScreen(),
-      const Center(child: Text('History')),
+      const HistoryScreen(),
       SettingsScreen(
         key: _settingsKey,
         onSettingsChanged: (hasChanges) {

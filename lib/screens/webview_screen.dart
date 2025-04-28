@@ -13,6 +13,9 @@ import 'package:translator/translator.dart';
 import 'dart:math' show min;
 import 'dart:math' show Random;
 import '../services/performance_service.dart';
+import '../screens/HistoryScreen.dart';
+import 'package:provider/provider.dart';
+import '../modules/light_novel.dart';
 
 class WebViewScreen extends StatefulWidget {
   final String url;
@@ -148,6 +151,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 }
                 _updateNavigationState();
                 _injectScripts();
+
+                // Add to history when page loads
+                _addToHistory(url);
               },
               onWebResourceError: (WebResourceError error) {
                 print('Web resource error: ${error.description}'); // Debug log
@@ -1472,6 +1478,94 @@ class _WebViewScreenState extends State<WebViewScreen> {
   @override
   void dispose() {
     super.dispose();
+  }
+
+  // Function to add the current novel to history
+  void _addToHistory(String url) {
+    if (!mounted) return;
+
+    try {
+      // Extract novel info from the URL
+      final Uri uri = Uri.parse(url);
+      final pathSegments = uri.pathSegments;
+
+      // Only process novel pages, not other pages
+      if (pathSegments.contains('truyen') || pathSegments.contains('novel')) {
+        // Extract novel ID, title and chapter if possible
+        String novelId = '';
+        String novelTitle = '';
+        String? chapterTitle;
+
+        // Check if it's a chapter page or novel page
+        bool isChapterPage =
+            pathSegments.contains('chuong') || pathSegments.contains('chapter');
+
+        // Extract novel ID and set a placeholder title
+        if (pathSegments.length >= 2) {
+          novelId = pathSegments.last;
+          novelTitle = novelId.replaceAll(
+            '-',
+            ' ',
+          ); // Simple conversion for display
+        }
+
+        // Try to get title from the page
+        _controller
+            ?.runJavaScriptReturningResult('''
+          (function() {
+            // Try to find the title in different ways
+            var title = document.querySelector('.series-name')?.innerText || 
+                       document.querySelector('.story-title')?.innerText ||
+                       document.querySelector('h1')?.innerText ||
+                       document.title;
+                       
+            // Try to find current chapter if on a chapter page
+            var chapter = document.querySelector('.chapter-title')?.innerText ||
+                         document.querySelector('.chap-title')?.innerText;
+                         
+            return { title: title || "", chapter: chapter || "" };
+          })();
+        ''')
+            .then((result) {
+              // Parse the result
+              if (result != null) {
+                try {
+                  final Map<String, dynamic> data = jsonDecode(
+                    result.toString(),
+                  );
+                  novelTitle = data['title'] as String? ?? novelTitle;
+                  chapterTitle = data['chapter'] as String?;
+
+                  // Create a minimal LightNovel object and save to history
+                  final novel = LightNovel(
+                    id: novelId,
+                    title: novelTitle,
+                    coverUrl:
+                        'https://ln.hako.vn/img/nocover.jpg', // Default cover
+                    url:
+                        isChapterPage
+                            ? url.split('/chuong')[0]
+                            : url, // Remove chapter from URL if it's a chapter page
+                  );
+
+                  // Add to history
+                  final historyService = Provider.of<HistoryService>(
+                    context,
+                    listen: false,
+                  );
+                  historyService.addToHistory(novel, chapterTitle);
+                } catch (e) {
+                  print('Error parsing page info: $e');
+                }
+              }
+            })
+            .catchError((e) {
+              print('Error getting page info: $e');
+            });
+      }
+    } catch (e) {
+      print('Error adding to history: $e');
+    }
   }
 }
 

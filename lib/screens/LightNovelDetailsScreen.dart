@@ -9,6 +9,7 @@ import 'package:timeago/timeago.dart' as timeago;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/bookmark_service.dart';
+import '../screens/HistoryScreen.dart';
 import 'package:provider/provider.dart';
 
 class LightNovelDetailsScreen extends StatefulWidget {
@@ -39,17 +40,32 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
   int? _views;
   String? _lastUpdated;
   String _novelType = '';
+  bool _loadError = false;
 
   @override
   void initState() {
     super.initState();
     _loadNovelDetails();
+
+    // Add to reading history
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        // Add to history when the screen is first viewed
+        Provider.of<HistoryService>(
+          context,
+          listen: false,
+        ).addToHistory(widget.novel, widget.novel.latestChapter);
+      }
+    });
   }
 
   Future<void> _loadNovelDetails() async {
-    try {
-      setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _loadError = false;
+    });
 
+    try {
       final novelDetails = await _crawlerService.getNovelDetails(
         widget.novelUrl,
         context,
@@ -146,6 +162,12 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
           _lastUpdated = lastUpdated;
           _novelType = novelType;
           _isLoading = false;
+
+          // Update history with the loaded chapter information
+          Provider.of<HistoryService>(
+            context,
+            listen: false,
+          ).addToHistory(widget.novel, widget.novel.latestChapter);
         });
 
         // Debug information
