@@ -36,6 +36,28 @@ jobs:
           flutter-version: '3.29.3'
           channel: 'stable'
       
+      - name: Get dependencies
+        run: flutter pub get
+      
+      - name: Fix app_settings plugin
+        run: |
+          # Path to the problematic file
+          PLUGIN_FILE="$(find ~/.pub-cache -name 'AppSettingsPlugin.swift')"
+          if [ -f "$PLUGIN_FILE" ]; then
+            echo "Patching app_settings plugin at $PLUGIN_FILE"
+            # Make a backup of the original file
+            cp "$PLUGIN_FILE" "${PLUGIN_FILE}.bak"
+            
+            # Fix the Swift compiler error by modifying the problematic line
+            sed -i '' 's/@available\(.*\) class/@available\1\nclass/' "$PLUGIN_FILE"
+            
+            # Verify the changes
+            echo "Modified file:"
+            cat "$PLUGIN_FILE"
+          else
+            echo "AppSettingsPlugin.swift not found"
+          fi
+          
       - name: Configure iOS project
         run: |
           cd ios
@@ -127,9 +149,6 @@ jobs:
           EOF
           
           cd ..
-          
-      - name: Get dependencies
-        run: flutter pub get
         
       - name: Build APK
         env:
