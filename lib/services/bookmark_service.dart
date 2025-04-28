@@ -1,0 +1,102 @@
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import '../modules/light_novel.dart';
+
+class BookmarkService extends ChangeNotifier {
+  static final BookmarkService _instance = BookmarkService._internal();
+  factory BookmarkService() => _instance;
+
+  BookmarkService._internal();
+
+  static const String _bookmarksKey = 'bookmarked_novels';
+  List<LightNovel> _bookmarkedNovels = [];
+
+  List<LightNovel> get bookmarkedNovels => _bookmarkedNovels;
+
+  Future<void> init() async {
+    await loadBookmarks();
+  }
+
+  Future<void> loadBookmarks() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? bookmarksJson = prefs.getString(_bookmarksKey);
+
+      if (bookmarksJson != null) {
+        final List<dynamic> bookmarksList = jsonDecode(bookmarksJson);
+        _bookmarkedNovels =
+            bookmarksList.map((json) => LightNovel.fromJson(json)).toList();
+      }
+
+      notifyListeners();
+    } catch (e) {
+      print('Error loading bookmarks: $e');
+      _bookmarkedNovels = [];
+      notifyListeners();
+    }
+  }
+
+  Future<void> saveBookmarks() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String bookmarksJson = jsonEncode(
+        _bookmarkedNovels.map((novel) => novel.toJson()).toList(),
+      );
+
+      await prefs.setString(_bookmarksKey, bookmarksJson);
+    } catch (e) {
+      print('Error saving bookmarks: $e');
+    }
+  }
+
+  Future<bool> addBookmark(LightNovel novel) async {
+    try {
+      // Check if novel is already bookmarked
+      if (_isBookmarked(novel.id)) {
+        return false;
+      }
+
+      _bookmarkedNovels.add(novel);
+      await saveBookmarks();
+      notifyListeners();
+      return true;
+    } catch (e) {
+      print('Error adding bookmark: $e');
+      return false;
+    }
+  }
+
+  Future<bool> removeBookmark(String novelId) async {
+    try {
+      final initialLength = _bookmarkedNovels.length;
+      _bookmarkedNovels.removeWhere((novel) => novel.id == novelId);
+
+      if (_bookmarkedNovels.length < initialLength) {
+        await saveBookmarks();
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('Error removing bookmark: $e');
+      return false;
+    }
+  }
+
+  bool _isBookmarked(String novelId) {
+    return _bookmarkedNovels.any((novel) => novel.id == novelId);
+  }
+
+  bool isBookmarked(String novelId) {
+    return _isBookmarked(novelId);
+  }
+
+  Future<void> toggleBookmark(LightNovel novel) async {
+    if (_isBookmarked(novel.id)) {
+      await removeBookmark(novel.id);
+    } else {
+      await addBookmark(novel);
+    }
+  }
+}

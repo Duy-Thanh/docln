@@ -3,9 +3,30 @@ import 'package:flutter/material.dart';
 import '../screens/LibraryScreen.dart';
 import '../screens/SearchScreen.dart';
 import '../screens/SettingsScreen.dart';
+import '../screens/BookmarksScreen.dart';
 import '../screens/widgets/update_dialog.dart';
 import 'dart:ui';
 import '../services/performance_service.dart';
+
+// Create a service for handling navigation
+class NavigationService {
+  static final NavigationService _instance = NavigationService._internal();
+  factory NavigationService() => _instance;
+  NavigationService._internal();
+
+  // Reference to the HomeScreen state
+  _HomeScreenState? _homeScreenState;
+
+  // Register the HomeScreen state
+  void registerHomeScreen(_HomeScreenState state) {
+    _homeScreenState = state;
+  }
+
+  // Navigate to a specific tab
+  void navigateToTab(int index) {
+    _homeScreenState?.navigateToTab(index);
+  }
+}
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,6 +41,16 @@ class _HomeScreenState extends State<HomeScreen> {
   final _settingsKey = GlobalKey<SettingsScreenState>();
   bool _isCheckingForUpdates = false;
 
+  // Add a method to change the selected index from outside
+  void navigateToTab(int index) {
+    if (index >= 0 && index < _screens.length) {
+      _onTabSelected(index);
+    }
+  }
+
+  // Expose the current index for external access
+  int get selectedIndex => _selectedIndex;
+
   Future<void> _optimizeScreen() async {
     await PerformanceService.optimizeScreen('HomeScreen');
   }
@@ -30,10 +61,12 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _optimizeScreen();
+    // Register this state with the NavigationService
+    NavigationService().registerHomeScreen(this);
     _screens = [
       LibraryScreen(),
       const SearchScreen(),
-      const Center(child: Text('Bookmarks')),
+      const BookmarksScreen(),
       const Center(child: Text('History')),
       SettingsScreen(
         key: _settingsKey,
@@ -42,6 +75,15 @@ class _HomeScreenState extends State<HomeScreen> {
         },
       ),
     ];
+  }
+
+  @override
+  void dispose() {
+    // Unregister from the NavigationService when disposed
+    if (NavigationService()._homeScreenState == this) {
+      NavigationService()._homeScreenState = null;
+    }
+    super.dispose();
   }
 
   @override

@@ -8,6 +8,8 @@ import '../screens/webview_screen.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../services/bookmark_service.dart';
+import 'package:provider/provider.dart';
 
 class LightNovelDetailsScreen extends StatefulWidget {
   final LightNovel novel;
@@ -228,13 +230,7 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
                 foregroundColor: Theme.of(context).colorScheme.primary,
               ),
             ),
-          IconButton(
-            icon: const Icon(Icons.bookmark_border),
-            onPressed: () {
-              // TODO: Implement add to library functionality
-              CustomToast.show(context, 'Added to bookmarks');
-            },
-          ),
+          BookmarkButton(novel: widget.novel),
           IconButton(
             icon: const Icon(Icons.more_vert),
             onPressed: () {
@@ -1584,6 +1580,11 @@ ${_genres.join(', ')}
 
   void _showMoreOptions(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final bookmarkService = Provider.of<BookmarkService>(
+      context,
+      listen: false,
+    );
+    final isBookmarked = bookmarkService.isBookmarked(widget.novel.id);
 
     showModalBottomSheet(
       context: context,
@@ -1610,6 +1611,19 @@ ${_genres.join(', ')}
                 onTap: () {
                   Navigator.pop(context);
                   _shareNovel();
+                },
+              ),
+              ListTile(
+                leading: Icon(
+                  isBookmarked ? Icons.bookmark : Icons.bookmark_add_outlined,
+                  color: colorScheme.primary,
+                ),
+                title: Text(
+                  isBookmarked ? 'Remove from bookmarks' : 'Add to bookmarks',
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _toggleBookmark();
                 },
               ),
               ListTile(
@@ -1880,5 +1894,183 @@ ${_genres.join(', ')}
     } catch (e) {
       CustomToast.show(context, 'Could not open URL: $e');
     }
+  }
+
+  void _toggleBookmark() {
+    final bookmarkService = Provider.of<BookmarkService>(
+      context,
+      listen: false,
+    );
+    final isCurrentlyBookmarked = bookmarkService.isBookmarked(widget.novel.id);
+
+    // Toggle the bookmark
+    bookmarkService.toggleBookmark(widget.novel).then((_) {
+      final isNowBookmarked = bookmarkService.isBookmarked(widget.novel.id);
+
+      // Show toast
+      CustomToast.show(
+        context,
+        isNowBookmarked
+            ? '${widget.novel.title} added to bookmarks'
+            : '${widget.novel.title} removed from bookmarks',
+      );
+
+      // If we just added a bookmark (not removed), show the animation
+      if (isNowBookmarked && !isCurrentlyBookmarked) {
+        _showBookmarkAnimation();
+      }
+    });
+  }
+
+  void _showBookmarkAnimation() {
+    // Create the overlay for the animation
+    final OverlayState overlayState = Overlay.of(context);
+    OverlayEntry? overlayEntry;
+
+    overlayEntry = OverlayEntry(
+      builder: (context) {
+        return Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: Material(
+            color: Colors.transparent,
+            child: Center(
+              child: TweenAnimationBuilder<double>(
+                duration: const Duration(milliseconds: 800),
+                curve: Curves.elasticOut,
+                tween: Tween<double>(begin: 0.0, end: 1.0),
+                onEnd: () {
+                  // Remove the overlay after the animation completes
+                  Future.delayed(const Duration(milliseconds: 200), () {
+                    overlayEntry?.remove();
+                  });
+                },
+                builder: (context, value, child) {
+                  return Transform.scale(
+                    scale: value,
+                    child: Opacity(
+                      opacity: 1.0 - (value * 0.5),
+                      child: Icon(
+                        Icons.bookmark,
+                        size: 120,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.primary.withOpacity(0.7),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    // Add the overlay to the screen
+    overlayState.insert(overlayEntry);
+  }
+}
+
+// Add this class at the top of the file, outside any other class
+class BookmarkButton extends StatefulWidget {
+  final LightNovel novel;
+  final Color? activeColor;
+  final double size;
+
+  const BookmarkButton({
+    Key? key,
+    required this.novel,
+    this.activeColor,
+    this.size = 24.0,
+  }) : super(key: key);
+
+  @override
+  State<BookmarkButton> createState() => _BookmarkButtonState();
+}
+
+class _BookmarkButtonState extends State<BookmarkButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.3).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.elasticOut,
+        reverseCurve: Curves.easeInBack,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _toggleBookmark(BuildContext context, bool isBookmarked) {
+    final bookmarkService = Provider.of<BookmarkService>(
+      context,
+      listen: false,
+    );
+
+    // Start animation
+    if (!isBookmarked) {
+      _controller.forward().then((_) => _controller.reverse());
+    }
+
+    // Toggle bookmark
+    bookmarkService.toggleBookmark(widget.novel).then((_) {
+      final newState = bookmarkService.isBookmarked(widget.novel.id);
+      CustomToast.show(
+        context,
+        newState
+            ? '${widget.novel.title} added to bookmarks'
+            : '${widget.novel.title} removed from bookmarks',
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final activeColor = widget.activeColor ?? theme.colorScheme.primary;
+
+    return Consumer<BookmarkService>(
+      builder: (context, bookmarkService, child) {
+        final isBookmarked = bookmarkService.isBookmarked(widget.novel.id);
+
+        return AnimatedBuilder(
+          animation: _scaleAnimation,
+          builder: (context, child) {
+            return Transform.scale(
+              scale: isBookmarked ? _scaleAnimation.value : 1.0,
+              child: IconButton(
+                icon: Icon(
+                  isBookmarked
+                      ? Icons.bookmark
+                      : Icons.bookmark_border_outlined,
+                  color: isBookmarked ? activeColor : null,
+                  size: widget.size,
+                ),
+                onPressed: () => _toggleBookmark(context, isBookmarked),
+                tooltip:
+                    isBookmarked ? 'Remove from bookmarks' : 'Add to bookmarks',
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 }

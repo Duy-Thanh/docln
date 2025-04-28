@@ -6,6 +6,7 @@ import '../../modules/light_novel.dart';
 class LightNovelCard extends StatefulWidget {
   final LightNovel novel;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
   final bool showRating;
   final bool showChapterInfo;
 
@@ -13,6 +14,7 @@ class LightNovelCard extends StatefulWidget {
     Key? key,
     required this.novel,
     required this.onTap,
+    this.onLongPress,
     this.showRating = false,
     this.showChapterInfo = false,
   }) : super(key: key);
@@ -98,6 +100,7 @@ class _LightNovelCardState extends State<LightNovelCard>
           _controller.reverse();
           widget.onTap();
         },
+        onLongPress: widget.onLongPress,
         onTapCancel: () => _controller.reverse(),
         child: AnimatedBuilder(
           animation: Listenable.merge([
