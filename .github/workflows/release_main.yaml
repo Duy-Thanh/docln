@@ -36,6 +36,104 @@ jobs:
           flutter-version: '3.29.3'
           channel: 'stable'
       
+      - name: Update Flutter dependencies
+        run: |
+          # Ensure webview_flutter is compatible
+          flutter pub upgrade webview_flutter_android webview_flutter_wkwebview
+          flutter pub get
+      
+      - name: Configure iOS project
+        run: |
+          cd ios
+          
+          # Create Firebase configuration placeholder if needed
+          if [ ! -f "firebase_app_id_file.json" ]; then
+            echo '{"file_generated_by":"docln","GOOGLE_APP_ID":"placeholder"}' > firebase_app_id_file.json
+          fi
+          
+          # Update the Podfile to specify iOS 13.0 as minimum and make other adjustments
+          cat > Podfile << EOF
+          platform :ios, '13.0'
+
+          # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
+          ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+          project 'Runner', {
+            'Debug' => :debug,
+            'Profile' => :release,
+            'Release' => :release,
+          }
+
+          def flutter_root
+            generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
+            unless File.exist?(generated_xcode_build_settings_path)
+              raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
+            end
+
+            File.foreach(generated_xcode_build_settings_path) do |line|
+              matches = line.match(/FLUTTER_ROOT\=(.*)/)
+              return matches[1].strip if matches
+            end
+            raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try deleting Generated.xcconfig, then run flutter pub get"
+          end
+
+          require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
+
+          flutter_ios_podfile_setup
+
+          target 'Runner' do
+            use_frameworks!
+            use_modular_headers!
+
+            flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+            target 'RunnerTests' do
+              inherit! :search_paths
+            end
+          end
+
+          post_install do |installer|
+            installer.pods_project.targets.each do |target|
+              flutter_additional_ios_build_settings(target)
+              
+              # Add additional configuration for iOS compatibility
+              target.build_configurations.each do |config|
+                config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+                
+                # Fix for Xcode 15 warnings
+                config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'
+                
+                # Add arm64 to excluded architectures for simulators on Apple Silicon
+                if config.build_settings['SDKROOT'] == 'iphonesimulator'
+                  config.build_settings["EXCLUDED_ARCHS[sdk=iphonesimulator*]"] = "arm64"
+                end
+              end
+            end
+          end
+          EOF
+          
+          # Update Runner project deployment target
+          sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = .*/IPHONEOS_DEPLOYMENT_TARGET = 13.0;/g' Runner.xcodeproj/project.pbxproj
+          
+          # Create export options plist file
+          cat > exportOptions.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>development</string>
+              <key>compileBitcode</key>
+              <false/>
+              <key>uploadBitcode</key>
+              <false/>
+              <key>signingStyle</key>
+              <string>automatic</string>
+          </dict>
+          </plist>
+          EOF
+          
+          cd ..
+          
       - name: Get dependencies
         run: flutter pub get
         
@@ -53,25 +151,17 @@ jobs:
       #     STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
       #   run: flutter build appbundle --release --obfuscate --split-debug-info=build/app/outputs/symbols
       
-      - name: Update iOS minimum deployment target
-        run: |
-          cd ios
-          # Update the Podfile to specify iOS 13.0 as minimum
-          sed -i '' 's/# platform :ios, .*/platform :ios, '"'"'13.0'"'"'/' Podfile
-          
-          # Also check if Runner project needs to be updated
-          /usr/libexec/PlistBuddy -c "Set :IPHONEOS_DEPLOYMENT_TARGET 13.0" Runner/Info.plist || true
-          
-          # Return to root directory
-          cd ..
-      
       - name: Build unsigned iOS app
         run: |
+          # Build the Flutter app for iOS
           flutter build ios --release --no-codesign
+          
           cd ios
           mkdir -p build/ios/ipa
+          
           # Create a simple archive without signing
           xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Release -sdk iphoneos -archivePath build/Runner.xcarchive archive -allowProvisioningUpdates CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO IPHONEOS_DEPLOYMENT_TARGET=13.0
+          
           # Package as IPA (this creates a simple IPA without proper signing)
           cd build/Runner.xcarchive/Products/Applications
           mkdir -p Payload
