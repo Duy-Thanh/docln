@@ -5,6 +5,9 @@ import './widgets/chapter_card.dart';
 import '../services/crawler_service.dart';
 import '../screens/custom_toast.dart';
 import '../screens/webview_screen.dart';
+import 'package:timeago/timeago.dart' as timeago;
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class LightNovelDetailsScreen extends StatefulWidget {
   final LightNovel novel;
@@ -588,8 +591,8 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             _buildStatItemEnhanced(
-              'Last Update',
-              _lastUpdated ?? 'N/A',
+              'Last Updated',
+              _formatDate(_lastUpdated),
               Icons.access_time,
               colorScheme.primary,
               textTheme,
@@ -654,6 +657,7 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
   ) {
     return Expanded(
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(icon, size: 20, color: iconColor),
           const SizedBox(height: 4),
@@ -663,11 +667,83 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
               fontWeight: FontWeight.bold,
               fontSize: 14,
             ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          Text(label, style: textTheme.bodySmall?.copyWith(fontSize: 12)),
+          Text(
+            label,
+            style: textTheme.bodySmall?.copyWith(fontSize: 12),
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );
+  }
+
+  String _formatDate(String? dateStr) {
+    if (dateStr == null || dateStr.isEmpty) return 'N/A';
+
+    try {
+      // Try to parse date in format dd/MM/yyyy HH:mm:ss
+      final parts = dateStr.split(' ');
+      if (parts.length >= 2) {
+        final datePart = parts[0].split('/');
+        final timePart = parts[1].split(':');
+
+        if (datePart.length == 3 && timePart.length >= 2) {
+          final day = int.parse(datePart[0]);
+          final month = int.parse(datePart[1]);
+          final year = int.parse(datePart[2]);
+          final hour = int.parse(timePart[0]);
+          final minute = int.parse(timePart[1]);
+          final second = timePart.length > 2 ? int.parse(timePart[2]) : 0;
+
+          final date = DateTime(year, month, day, hour, minute, second);
+          final now = DateTime.now();
+
+          // Calculate years, months, days more accurately
+          int years = now.year - date.year;
+          int months = now.month - date.month;
+          int days = now.day - date.day;
+
+          // Adjust for negative months or days
+          if (days < 0) {
+            // Go back one month and add days of that month
+            months--;
+            // Get the last day of the previous month
+            final prevMonth = DateTime(now.year, now.month, 0);
+            days += prevMonth.day;
+          }
+
+          if (months < 0) {
+            years--;
+            months += 12;
+          }
+
+          // Get the total hours/minutes/seconds difference for recent updates
+          final difference = now.difference(date);
+
+          // Custom compact time format with calendar-accurate months and years
+          if (years > 0) {
+            return '${years}y ago';
+          } else if (months > 0) {
+            return '${months}mo ago';
+          } else if (days > 0) {
+            return '${days}d ago';
+          } else if (difference.inHours > 0) {
+            return '${difference.inHours}h ago';
+          } else if (difference.inMinutes > 0) {
+            return '${difference.inMinutes}m ago';
+          } else {
+            return '${difference.inSeconds}s ago';
+          }
+        }
+      }
+      return dateStr; // Return original if can't parse
+    } catch (e) {
+      return dateStr; // Return original on error
+    }
   }
 
   Widget _buildAlternativeTitlesSection() {
@@ -1507,6 +1583,8 @@ ${_genres.join(', ')}
   }
 
   void _showMoreOptions(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -1516,17 +1594,29 @@ ${_genres.join(', ')}
           (context) => Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Handle at the top of bottom sheet
+              Container(
+                margin: const EdgeInsets.only(top: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
               ListTile(
-                leading: const Icon(Icons.share),
+                leading: Icon(Icons.share, color: colorScheme.primary),
                 title: const Text('Share'),
                 onTap: () {
                   Navigator.pop(context);
-                  CustomToast.show(context, 'Sharing ${widget.novel.title}');
-                  // TODO: Implement share functionality
+                  _shareNovel();
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.open_in_browser),
+                leading: Icon(
+                  Icons.open_in_browser,
+                  color: colorScheme.primary,
+                ),
                 title: const Text('Open in browser'),
                 onTap: () {
                   Navigator.pop(context);
@@ -1539,18 +1629,256 @@ ${_genres.join(', ')}
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.report_outlined),
+                leading: Icon(
+                  Icons.report_outlined,
+                  color: colorScheme.primary,
+                ),
                 title: const Text('Report issue'),
                 onTap: () {
                   Navigator.pop(context);
-                  CustomToast.show(
-                    context,
-                    'Report functionality will be added soon',
-                  );
+                  _showReportIssueDialog();
                 },
               ),
             ],
           ),
     );
+  }
+
+  void _shareNovel() {
+    final String novelTitle = widget.novel.title;
+    final String shareText =
+        'Check out this light novel: $novelTitle\n${widget.novelUrl}';
+
+    Share.share(shareText, subject: 'Light Novel Recommendation')
+        .then((_) {
+          // Optional: Analytics tracking for shares
+        })
+        .catchError((error) {
+          CustomToast.show(context, 'Error sharing: $error');
+        });
+  }
+
+  void _showReportIssueDialog() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text(
+              'Report an Issue',
+              style: textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'What issue are you experiencing with this novel?',
+                  style: textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 16),
+                _buildReportOption(
+                  icon: Icons.broken_image_outlined,
+                  title: 'Broken images',
+                  onTap: () => _submitReport('Broken images', widget.novelUrl),
+                ),
+                _buildReportOption(
+                  icon: Icons.translate,
+                  title: 'Translation errors',
+                  onTap:
+                      () =>
+                          _submitReport('Translation errors', widget.novelUrl),
+                ),
+                _buildReportOption(
+                  icon: Icons.format_indent_decrease,
+                  title: 'Formatting issues',
+                  onTap:
+                      () => _submitReport('Formatting issues', widget.novelUrl),
+                ),
+                _buildReportOption(
+                  icon: Icons.error_outline,
+                  title: 'Content errors',
+                  onTap: () => _submitReport('Content errors', widget.novelUrl),
+                ),
+                _buildReportOption(
+                  icon: Icons.security,
+                  title: 'Inappropriate content',
+                  onTap:
+                      () => _submitReport(
+                        'Inappropriate content',
+                        widget.novelUrl,
+                      ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(color: colorScheme.primary),
+                ),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Widget _buildReportOption({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return InkWell(
+      onTap: () {
+        Navigator.pop(context);
+        onTap();
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: colorScheme.primary),
+            const SizedBox(width: 12),
+            Text(title),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _submitReport(String issueType, String novelUrl) {
+    try {
+      // Create a simplified version of the title without special characters
+      final simplifiedTitle =
+          widget.novel.title.length > 30
+              ? '${widget.novel.title.substring(0, 30)}...'
+              : widget.novel.title;
+
+      // Use a simpler subject line with fewer special characters
+      final subject = 'Report: $issueType';
+      final body =
+          'Novel: $simplifiedTitle\nIssue Type: $issueType\nURL: $novelUrl\n\nPlease describe the issue in detail:';
+
+      // Try the mailto URL first
+      final Uri emailUri = Uri(
+        scheme: 'mailto',
+        path: 'support@docln.net',
+        query:
+            'subject=${Uri.encodeComponent(subject)}&body=${Uri.encodeComponent(body)}',
+      );
+
+      _launchEmailWithFallback(emailUri, subject, body);
+    } catch (e) {
+      CustomToast.show(context, 'Error creating report: $e');
+    }
+  }
+
+  Future<void> _launchEmailWithFallback(
+    Uri emailUri,
+    String subject,
+    String body,
+  ) async {
+    try {
+      final canLaunch = await canLaunchUrl(emailUri);
+      if (canLaunch) {
+        await launchUrl(emailUri);
+      } else {
+        // If mailto fails, try a direct intent on Android or show manual instructions
+        CustomToast.show(
+          context,
+          'Could not open email client. Please email support@docln.net manually.',
+          duration: const Duration(seconds: 6),
+        );
+
+        // Show a dialog with manual instructions
+        _showManualReportInstructions(subject, body);
+      }
+    } catch (e) {
+      _showManualReportInstructions(subject, body);
+      print('Email launch error: $e');
+    }
+  }
+
+  void _showManualReportInstructions(String subject, String body) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text(
+              'Manual Report Instructions',
+              style: textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Please send an email with the following details:',
+                  style: textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surfaceVariant,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'To: support@docln.net',
+                        style: textTheme.bodyMedium,
+                      ),
+                      Text('Subject: $subject', style: textTheme.bodyMedium),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Body:',
+                        style: textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(body, style: textTheme.bodyMedium),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  // Copy to clipboard option could be added here
+                },
+                child: Text('OK', style: TextStyle(color: colorScheme.primary)),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Future<void> _launchUrl(Uri uri) async {
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      } else {
+        throw 'Could not launch $uri';
+      }
+    } catch (e) {
+      CustomToast.show(context, 'Could not open URL: $e');
+    }
   }
 }

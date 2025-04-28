@@ -419,7 +419,7 @@ class CrawlerService {
         final wordCountElement = _findFactElement(document, 'Số từ');
         final viewsElement = _findFactElement(document, 'Lượt xem');
         final ratingElement = _findFactElement(document, 'Đánh giá');
-        final lastUpdatedElement = _findFactElement(document, 'Cập nhật');
+        final lastUpdatedElement = _findFactElement(document, 'Lần cuối');
 
         // Parse word count
         if (wordCountElement != null) {
@@ -471,7 +471,16 @@ class CrawlerService {
         // Extract last updated
         String? lastUpdated;
         if (lastUpdatedElement != null) {
-          lastUpdated = lastUpdatedElement.text.trim();
+          // Try to find the timeago element first
+          final timeElement = lastUpdatedElement.querySelector('time.timeago');
+          if (timeElement != null) {
+            // Get the title attribute which contains the full date
+            lastUpdated =
+                timeElement.attributes['title'] ?? timeElement.text.trim();
+          } else {
+            // Fallback to the text content
+            lastUpdated = lastUpdatedElement.text.trim();
+          }
         }
 
         // Extract alternative titles

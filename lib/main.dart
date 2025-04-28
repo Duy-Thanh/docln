@@ -22,9 +22,7 @@ import 'dart:ui';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   FlutterError.onError = (errorDetails) {
     FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
@@ -39,9 +37,7 @@ void main() async {
   // Add this test event
   await FirebaseAnalytics.instance.logEvent(
     name: 'app_opened',
-    parameters: {
-      'time': DateTime.now().toString(),
-    },
+    parameters: {'time': DateTime.now().toString()},
   );
 
   final themeService = ThemeServices();
@@ -55,11 +51,13 @@ void main() async {
   ]);
 
   // Set initial system UI styling
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    systemNavigationBarColor: Colors.transparent,
-    systemNavigationBarDividerColor: Colors.transparent,
-  ));
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarDividerColor: Colors.transparent,
+    ),
+  );
 
   // Lock orientation to portrait
   SystemChrome.setPreferredOrientations([
@@ -72,7 +70,9 @@ void main() async {
       providers: [
         ChangeNotifierProvider<ThemeServices>.value(value: themeService),
         ChangeNotifierProvider<LanguageService>.value(value: languageService),
-        ChangeNotifierProvider<NotificationService>.value(value: notificationService),
+        ChangeNotifierProvider<NotificationService>.value(
+          value: notificationService,
+        ),
       ],
       child: const MainApp(),
     ),
@@ -83,7 +83,9 @@ class MainApp extends StatelessWidget {
   const MainApp({super.key});
 
   static FirebaseAnalytics analytics = FirebaseAnalytics.instance;
-  static FirebaseAnalyticsObserver observer = FirebaseAnalyticsObserver(analytics: analytics);
+  static FirebaseAnalyticsObserver observer = FirebaseAnalyticsObserver(
+    analytics: analytics,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -102,10 +104,7 @@ class MainApp extends StatelessWidget {
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
-            supportedLocales: const [
-              Locale('en', ''),
-              Locale('vi', ''),
-            ],
+            supportedLocales: const [Locale('en', ''), Locale('vi', '')],
             builder: (context, child) {
               // Ensure proper MediaQuery inheritance
               final mediaQuery = MediaQuery.of(context);
