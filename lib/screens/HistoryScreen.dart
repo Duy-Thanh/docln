@@ -17,6 +17,8 @@ class HistoryService extends ChangeNotifier {
   List<HistoryItem> _historyItems = [];
   List<HistoryItem> get historyItems => _historyItems;
 
+  static const String _historyKey = 'reading_history';
+
   // Add a history item
   void addToHistory(LightNovel novel, String? chapterTitle) {
     // Check if already exists
@@ -63,13 +65,39 @@ class HistoryService extends ChangeNotifier {
 
   // Load history from storage
   Future<void> loadHistory() async {
-    // TODO: Implement actual storage with shared_preferences
-    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? historyJson = prefs.getString(_historyKey);
+
+      if (historyJson != null) {
+        final List<dynamic> historyList = jsonDecode(historyJson);
+        _historyItems =
+            historyList.map((json) => HistoryItem.fromJson(json)).toList();
+
+        // Sort by most recent first
+        _historyItems.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      }
+
+      notifyListeners();
+    } catch (e) {
+      print('Error loading history: $e');
+      _historyItems = [];
+      notifyListeners();
+    }
   }
 
   // Save history to storage
   Future<void> _saveHistory() async {
-    // TODO: Implement actual storage with shared_preferences
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String historyJson = jsonEncode(
+        _historyItems.map((item) => item.toJson()).toList(),
+      );
+
+      await prefs.setString(_historyKey, historyJson);
+    } catch (e) {
+      print('Error saving history: $e');
+    }
   }
 }
 
