@@ -36,12 +36,6 @@ jobs:
           flutter-version: '3.29.3'
           channel: 'stable'
       
-      - name: Update Flutter dependencies
-        run: |
-          # Ensure webview_flutter is compatible
-          flutter pub upgrade webview_flutter_android webview_flutter_wkwebview
-          flutter pub get
-      
       - name: Configure iOS project
         run: |
           cd ios
