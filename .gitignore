@@ -12,7 +12,7 @@ migrate_working_dir/
 datas/
 
 # Completely removed iOS and macOS supported
-ios/
+# ios/
 macos/
 
 # IntelliJ related
