@@ -150,12 +150,12 @@ jobs:
           
       #     cd ..
         
-      # - name: Build APK
-      #   env:
-      #     KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-      #     KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-      #     STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-      #   run: flutter build apk --release --obfuscate --split-debug-info=build/app/outputs/symbols
+      - name: Build APK
+        env:
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+        run: flutter build apk --release --obfuscate --split-debug-info=build/app/outputs/symbols
 
       # - name: Build App Bundle
       #   env:
