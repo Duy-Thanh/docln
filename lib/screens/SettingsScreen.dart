@@ -9,6 +9,8 @@ import 'dart:async'; // For TimeoutException
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:ui';
 import '../services/settings_services.dart';
+import '../services/proxy_service.dart';
+import '../services/dns_service.dart';
 import '../screens/custom_toast.dart';
 import '../services/update_service.dart';
 import '../screens/widgets/update_dialog.dart';
@@ -18,34 +20,27 @@ import '../services/performance_service.dart';
 // GridPainter class at the top level
 class GridPainter extends CustomPainter {
   final Color color;
-  
+
   GridPainter({required this.color});
-  
+
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1;
-      
+    final paint =
+        Paint()
+          ..color = color
+          ..strokeWidth = 1;
+
     const spacing = 30.0;
-    
+
     for (double i = 0; i < size.width; i += spacing) {
-      canvas.drawLine(
-        Offset(i, 0),
-        Offset(i, size.height),
-        paint,
-      );
+      canvas.drawLine(Offset(i, 0), Offset(i, size.height), paint);
     }
-    
+
     for (double i = 0; i < size.height; i += spacing) {
-      canvas.drawLine(
-        Offset(0, i),
-        Offset(size.width, i),
-        paint,
-      );
+      canvas.drawLine(Offset(0, i), Offset(size.width, i), paint);
     }
   }
-  
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -59,8 +54,10 @@ class SettingsScreen extends StatefulWidget {
   SettingsScreenState createState() => SettingsScreenState();
 }
 
-class SettingsScreenState extends State<SettingsScreen> with SingleTickerProviderStateMixin {
+class SettingsScreenState extends State<SettingsScreen>
+    with SingleTickerProviderStateMixin {
   final SettingsService _settingsService = SettingsService();
+  final CrawlerService _crawlerService = CrawlerService();
   bool isDarkMode = false;
   String? currentServer;
   double textSize = 16.0;
@@ -68,9 +65,22 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
   String? selectedLanguage;
   bool isDataSaverEnabled = false;
 
+  // Proxy settings
+  bool isProxyEnabled = false;
+  String proxyType = 'None';
+  TextEditingController proxyAddressController = TextEditingController();
+  TextEditingController proxyPortController = TextEditingController();
+  TextEditingController proxyUsernameController = TextEditingController();
+  TextEditingController proxyPasswordController = TextEditingController();
+
+  // DNS settings
+  bool isDnsEnabled = false;
+  String dnsProvider = 'Default';
+  TextEditingController customDnsController = TextEditingController();
+
   bool _hasUnsavedChanges = false;
   late AnimationController _animationController;
-  
+
   // Initialize with default values
   late bool _initialDarkMode = false;
   late double _initialTextSize = 16.0;
@@ -78,6 +88,19 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
   late String? _initialLanguage = 'English';
   late bool _initialDataSaver = false;
   late String? _initialServer;
+
+  // Initial proxy settings
+  late bool _initialProxyEnabled = false;
+  late String _initialProxyType = 'None';
+  late String _initialProxyAddress = '';
+  late String _initialProxyPort = '';
+  late String _initialProxyUsername = '';
+  late String _initialProxyPassword = '';
+
+  // Initial DNS settings
+  late bool _initialDnsEnabled = false;
+  late String _initialDnsProvider = 'Default';
+  late String _initialCustomDns = '';
 
   @override
   void initState() {
@@ -90,7 +113,10 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
     // Initialize settings from providers
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final themeService = Provider.of<ThemeServices>(context, listen: false);
-      final languageService = Provider.of<LanguageService>(context, listen: false);
+      final languageService = Provider.of<LanguageService>(
+        context,
+        listen: false,
+      );
       setState(() {
         isDarkMode = themeService.themeMode == ThemeMode.dark;
         selectedLanguage = languageService.currentLocale.languageCode;
@@ -107,6 +133,11 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
   @override
   void dispose() {
     _animationController.dispose();
+    proxyAddressController.dispose();
+    proxyPortController.dispose();
+    proxyUsernameController.dispose();
+    proxyPasswordController.dispose();
+    customDnsController.dispose();
     super.dispose();
   }
 
@@ -114,16 +145,20 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
     try {
       final prefs = await SharedPreferences.getInstance();
       final themeService = Provider.of<ThemeServices>(context, listen: false);
-      final notificationService = Provider.of<NotificationService>(context, listen: false);
-      
+      final notificationService = Provider.of<NotificationService>(
+        context,
+        listen: false,
+      );
+
       // Check notification permission status
       final hasPermission = await notificationService.checkPermission();
-      
+
       setState(() {
         isDarkMode = prefs.getBool('darkMode') ?? false;
         textSize = themeService.textSize.clamp(12.0, 24.0);
         // Only enable notifications if we have permission
-        isNotificationsEnabled = hasPermission && (prefs.getBool('isNotifications') ?? true);
+        isNotificationsEnabled =
+            hasPermission && (prefs.getBool('isNotifications') ?? true);
         selectedLanguage = prefs.getString('language') ?? 'English';
         isDataSaverEnabled = prefs.getBool('dataSaver') ?? false;
 
@@ -135,6 +170,8 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
       });
 
       await _loadCurrentServer();
+      await _loadProxySettings();
+      await _loadDnsSettings();
     } catch (e) {
       print('Error loading settings: $e');
       setState(() {
@@ -146,37 +183,84 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
     }
   }
 
+  Future<void> _loadProxySettings() async {
+    try {
+      // Load proxy settings
+      isProxyEnabled = await _settingsService.isProxyEnabled();
+      proxyType = await _settingsService.getProxyType();
+      proxyAddressController.text = await _settingsService.getProxyAddress();
+      proxyPortController.text = await _settingsService.getProxyPort();
+      proxyUsernameController.text = await _settingsService.getProxyUsername();
+      proxyPasswordController.text = await _settingsService.getProxyPassword();
+
+      // Store initial values
+      _initialProxyEnabled = isProxyEnabled;
+      _initialProxyType = proxyType;
+      _initialProxyAddress = proxyAddressController.text;
+      _initialProxyPort = proxyPortController.text;
+      _initialProxyUsername = proxyUsernameController.text;
+      _initialProxyPassword = proxyPasswordController.text;
+    } catch (e) {
+      print('Error loading proxy settings: $e');
+    }
+  }
+
+  Future<void> _loadDnsSettings() async {
+    try {
+      // Load DNS settings
+      isDnsEnabled = await _settingsService.isDnsEnabled();
+      dnsProvider = await _settingsService.getDnsProvider();
+      customDnsController.text = await _settingsService.getCustomDns();
+
+      // Store initial values
+      _initialDnsEnabled = isDnsEnabled;
+      _initialDnsProvider = dnsProvider;
+      _initialCustomDns = customDnsController.text;
+    } catch (e) {
+      print('Error loading DNS settings: $e');
+    }
+  }
+
   void _checkForChanges() {
     setState(() {
-      _hasUnsavedChanges = 
-        isDarkMode != _initialDarkMode ||
-        textSize != _initialTextSize ||
-        isNotificationsEnabled != _initialNotifications ||
-        selectedLanguage != _initialLanguage ||
-        isDataSaverEnabled != _initialDataSaver ||
-        currentServer != _initialServer;
+      _hasUnsavedChanges =
+          isDarkMode != _initialDarkMode ||
+          textSize != _initialTextSize ||
+          isNotificationsEnabled != _initialNotifications ||
+          selectedLanguage != _initialLanguage ||
+          isDataSaverEnabled != _initialDataSaver ||
+          currentServer != _initialServer ||
+          isProxyEnabled != _initialProxyEnabled ||
+          proxyType != _initialProxyType ||
+          proxyAddressController.text != _initialProxyAddress ||
+          proxyPortController.text != _initialProxyPort ||
+          proxyUsernameController.text != _initialProxyUsername ||
+          proxyPasswordController.text != _initialProxyPassword ||
+          isDnsEnabled != _initialDnsEnabled ||
+          dnsProvider != _initialDnsProvider ||
+          customDnsController.text != _initialCustomDns;
     });
   }
 
   void _onSettingChanged(Function() change) {
     change();
-    final hasChanges = 
-      isDarkMode != _initialDarkMode ||
-      textSize != _initialTextSize ||
-      isNotificationsEnabled != _initialNotifications ||
-      selectedLanguage != _initialLanguage ||
-      isDataSaverEnabled != _initialDataSaver ||
-      currentServer != _initialServer;
-    
-    print('Settings changed:'); // Debug prints
-    print('Dark mode: $isDarkMode vs $_initialDarkMode');
-    print('Text size: $textSize vs $_initialTextSize');
-    print('Notifications: $isNotificationsEnabled vs $_initialNotifications');
-    print('Language: $selectedLanguage vs $_initialLanguage');
-    print('Data saver: $isDataSaverEnabled vs $_initialDataSaver');
-    print('Server: $currentServer vs $_initialServer');
-    print('Has changes: $hasChanges');
-    
+    final hasChanges =
+        isDarkMode != _initialDarkMode ||
+        textSize != _initialTextSize ||
+        isNotificationsEnabled != _initialNotifications ||
+        selectedLanguage != _initialLanguage ||
+        isDataSaverEnabled != _initialDataSaver ||
+        currentServer != _initialServer ||
+        isProxyEnabled != _initialProxyEnabled ||
+        proxyType != _initialProxyType ||
+        proxyAddressController.text != _initialProxyAddress ||
+        proxyPortController.text != _initialProxyPort ||
+        proxyUsernameController.text != _initialProxyUsername ||
+        proxyPasswordController.text != _initialProxyPassword ||
+        isDnsEnabled != _initialDnsEnabled ||
+        dnsProvider != _initialDnsProvider ||
+        customDnsController.text != _initialCustomDns;
+
     setState(() {
       _hasUnsavedChanges = hasChanges;
     });
@@ -199,8 +283,16 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
     try {
       final prefs = await SharedPreferences.getInstance();
       final themeService = Provider.of<ThemeServices>(context, listen: false);
-      final languageService = Provider.of<LanguageService>(context, listen: false);
-      final notificationService = Provider.of<NotificationService>(context, listen: false);
+      final languageService = Provider.of<LanguageService>(
+        context,
+        listen: false,
+      );
+      final notificationService = Provider.of<NotificationService>(
+        context,
+        listen: false,
+      );
+      final proxyService = ProxyService();
+      final dnsService = DnsService();
 
       // Save all settings
       await Future.wait([
@@ -211,7 +303,25 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
         prefs.setString('language', selectedLanguage ?? 'English'),
         prefs.setBool('dataSaver', isDataSaverEnabled),
         _settingsService.saveCurrentServer(currentServer ?? ''),
+
+        // Save proxy settings
+        _settingsService.setProxyEnabled(isProxyEnabled),
+        _settingsService.setProxyType(proxyType),
+        _settingsService.setProxyAddress(proxyAddressController.text),
+        _settingsService.setProxyPort(proxyPortController.text),
+        _settingsService.setProxyUsername(proxyUsernameController.text),
+        _settingsService.setProxyPassword(proxyPasswordController.text),
+
+        // Save DNS settings
+        _settingsService.setDnsEnabled(isDnsEnabled),
+        _settingsService.setDnsProvider(dnsProvider),
+        _settingsService.setCustomDns(customDnsController.text),
       ]);
+
+      // Update proxy, DNS, and crawler services with new settings
+      await proxyService.updateProxySettings();
+      await dnsService.updateDnsSettings();
+      await _crawlerService.refreshSettings();
 
       // If notifications were just enabled, request permission
       if (isNotificationsEnabled && !_initialNotifications) {
@@ -220,17 +330,21 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
           setState(() {
             isNotificationsEnabled = false;
           });
-          CustomToast.show(context, 'Failed to enable notifications: Permission denied');
+          CustomToast.show(
+            context,
+            'Failed to enable notifications: Permission denied',
+          );
           return;
         }
-        
+
         // Show confirmation notification
         await notificationService.showNotification(
           title: 'Notifications Enabled',
-          body: 'You will now receive updates for new chapters and announcements',
+          body:
+              'You will now receive updates for new chapters and announcements',
         );
       }
-      
+
       setState(() {
         _initialDarkMode = isDarkMode;
         _initialTextSize = textSize;
@@ -238,6 +352,20 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
         _initialLanguage = selectedLanguage;
         _initialDataSaver = isDataSaverEnabled;
         _initialServer = currentServer;
+
+        // Update initial proxy settings
+        _initialProxyEnabled = isProxyEnabled;
+        _initialProxyType = proxyType;
+        _initialProxyAddress = proxyAddressController.text;
+        _initialProxyPort = proxyPortController.text;
+        _initialProxyUsername = proxyUsernameController.text;
+        _initialProxyPassword = proxyPasswordController.text;
+
+        // Update initial DNS settings
+        _initialDnsEnabled = isDnsEnabled;
+        _initialDnsProvider = dnsProvider;
+        _initialCustomDns = customDnsController.text;
+
         _hasUnsavedChanges = false;
       });
 
@@ -264,10 +392,24 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
       selectedLanguage = _initialLanguage;
       isDataSaverEnabled = _initialDataSaver;
       currentServer = _initialServer;
+
+      // Revert proxy settings
+      isProxyEnabled = _initialProxyEnabled;
+      proxyType = _initialProxyType;
+      proxyAddressController.text = _initialProxyAddress;
+      proxyPortController.text = _initialProxyPort;
+      proxyUsernameController.text = _initialProxyUsername;
+      proxyPasswordController.text = _initialProxyPassword;
+
+      // Revert DNS settings
+      isDnsEnabled = _initialDnsEnabled;
+      dnsProvider = _initialDnsProvider;
+      customDnsController.text = _initialCustomDns;
+
       _hasUnsavedChanges = false;
     });
     // Reset the text size in ThemeService
-    themeService.setTextSize(_initialTextSize);  // Changed from resetTextSize to setTextSize
+    themeService.setTextSize(_initialTextSize);
     widget.onSettingsChanged?.call(false);
   }
 
@@ -276,7 +418,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
     try {
       CustomToast.show(context, 'Checking for updates...');
       final updateInfo = await UpdateService.checkForUpdates();
-      
+
       if (!mounted) return;
 
       if (updateInfo != null) {
@@ -303,122 +445,132 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
       // Show explanation dialog before requesting permission
       final bool? proceed = await showDialog<bool>(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.notifications_active, color: Colors.blue),
-              SizedBox(width: 8),
-              Text('Enable Notifications'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Would you like to receive notifications for:',
-                style: TextStyle(fontWeight: FontWeight.w500),
+        builder:
+            (context) => AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.notifications_active, color: Colors.blue),
+                  SizedBox(width: 8),
+                  Text('Enable Notifications'),
+                ],
               ),
-              const SizedBox(height: 16),
-              _buildNotificationBenefit(
-                icon: Icons.new_releases,
-                text: 'New chapter releases',
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Would you like to receive notifications for:',
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildNotificationBenefit(
+                    icon: Icons.new_releases,
+                    text: 'New chapter releases',
+                  ),
+                  _buildNotificationBenefit(
+                    icon: Icons.campaign,
+                    text: 'Important announcements',
+                  ),
+                  _buildNotificationBenefit(
+                    icon: Icons.update,
+                    text: 'App updates',
+                  ),
+                ],
               ),
-              _buildNotificationBenefit(
-                icon: Icons.campaign,
-                text: 'Important announcements',
-              ),
-              _buildNotificationBenefit(
-                icon: Icons.update,
-                text: 'App updates',
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Not Now'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Not Now'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Enable'),
+                ),
+              ],
             ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Enable'),
-            ),
-          ],
-        ),
       );
 
       if (proceed != true) {
         return;
       }
 
-      final notificationService = Provider.of<NotificationService>(context, listen: false);
+      final notificationService = Provider.of<NotificationService>(
+        context,
+        listen: false,
+      );
       final granted = await notificationService.requestPermission();
-      
+
       if (!granted) {
         if (!context.mounted) return;
-        
+
         // Show settings guidance dialog if permission denied
         await showDialog(
           context: context,
-          builder: (context) => AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.notifications_off, color: Colors.grey),
-                SizedBox(width: 8),
-                Text('Permission Required'),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.notifications_off_outlined,
-                  size: 48,
-                  color: Colors.grey,
+          builder:
+              (context) => AlertDialog(
+                title: const Row(
+                  children: [
+                    Icon(Icons.notifications_off, color: Colors.grey),
+                    SizedBox(width: 8),
+                    Text('Permission Required'),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                const Text(
-                  'To receive notifications, you need to enable them in your device settings.',
-                  textAlign: TextAlign.center,
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.notifications_off_outlined,
+                      size: 48,
+                      color: Colors.grey,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'To receive notifications, you need to enable them in your device settings.',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'You can change this anytime in your device settings.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'You can change this anytime in your device settings.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      // Update the switch to reflect the actual state
+                      _onSettingChanged(
+                        () => setState(() => isNotificationsEnabled = false),
+                      );
+                    },
+                    child: const Text('Maybe Later'),
                   ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  // Update the switch to reflect the actual state
-                  _onSettingChanged(() => setState(() => isNotificationsEnabled = false));
-                },
-                child: const Text('Maybe Later'),
+                  FilledButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      // Update the switch to reflect the actual state
+                      _onSettingChanged(
+                        () => setState(() => isNotificationsEnabled = false),
+                      );
+                      // Open device settings
+                      final notificationService =
+                          Provider.of<NotificationService>(
+                            context,
+                            listen: false,
+                          );
+                      notificationService.openSettings();
+                    },
+                    child: const Text('Open Settings'),
+                  ),
+                ],
               ),
-              FilledButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  // Update the switch to reflect the actual state
-                  _onSettingChanged(() => setState(() => isNotificationsEnabled = false));
-                  // Open device settings
-                  final notificationService = Provider.of<NotificationService>(context, listen: false);
-                  notificationService.openSettings();
-                },
-                child: const Text('Open Settings'),
-              ),
-            ],
-          ),
         );
         return;
       }
     }
-    
+
     // If we get here, either permissions were granted or we're turning notifications off
     _onSettingChanged(() {
       setState(() => isNotificationsEnabled = value);
@@ -435,9 +587,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
         children: [
           Icon(icon, size: 20, color: Colors.blue),
           const SizedBox(width: 12),
-          Expanded(
-            child: Text(text),
-          ),
+          Expanded(child: Text(text)),
         ],
       ),
     );
@@ -445,234 +595,283 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
 
   void _showTextSizeDialog() {
     double tempSize = textSize.clamp(12.0, 24.0);
-    
+
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Text Size'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('A', style: TextStyle(fontSize: 12)),
-                  Expanded(
-                    child: Slider(
-                      value: tempSize,
-                      min: 12.0,
-                      max: 24.0,
-                      divisions: 12,
-                      label: tempSize.round().toString(),
-                      onChanged: (value) {
-                        setDialogState(() => tempSize = value);
-                        final themeService = Provider.of<ThemeServices>(context, listen: false);
-                        themeService.setTextSize(value); // Pass the actual size
-                      },
-                    ),
+      builder:
+          (context) => StatefulBuilder(
+            builder:
+                (context, setDialogState) => AlertDialog(
+                  title: const Text('Text Size'),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('A', style: TextStyle(fontSize: 12)),
+                          Expanded(
+                            child: Slider(
+                              value: tempSize,
+                              min: 12.0,
+                              max: 24.0,
+                              divisions: 12,
+                              label: tempSize.round().toString(),
+                              onChanged: (value) {
+                                setDialogState(() => tempSize = value);
+                                final themeService = Provider.of<ThemeServices>(
+                                  context,
+                                  listen: false,
+                                );
+                                themeService.setTextSize(
+                                  value,
+                                ); // Pass the actual size
+                              },
+                            ),
+                          ),
+                          const Text('A', style: TextStyle(fontSize: 24)),
+                        ],
+                      ),
+                      Text(
+                        'Preview Text',
+                        style: TextStyle(fontSize: tempSize),
+                      ),
+                    ],
                   ),
-                  const Text('A', style: TextStyle(fontSize: 24)),
-                ],
-              ),
-              Text('Preview Text', style: TextStyle(fontSize: tempSize)),
-            ],
+                  actions: [
+                    TextButton(
+                      onPressed: () {
+                        final themeService = Provider.of<ThemeServices>(
+                          context,
+                          listen: false,
+                        );
+                        themeService.setTextSize(_initialTextSize);
+                        Navigator.pop(context);
+                      },
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        _onSettingChanged(
+                          () => setState(() => textSize = tempSize),
+                        );
+                        Navigator.pop(context);
+                      },
+                      child: const Text('Apply'),
+                    ),
+                  ],
+                ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                final themeService = Provider.of<ThemeServices>(context, listen: false);
-                themeService.setTextSize(_initialTextSize);
-                Navigator.pop(context);
-              },
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                _onSettingChanged(() => setState(() => textSize = tempSize));
-                Navigator.pop(context);
-              },
-              child: const Text('Apply'),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
   // Update the language bottom sheet to use the new _changeLanguage method
   void _showLanguageBottomSheet() {
-    final languages = ['English', 'Tiếng Việt', 'Français', 'Española', 'Deutsch', 
-                      'Italiana', 'Nederlands', 'Português', 'Русский', '日本語', 
-                      '한국인', '中国人'];
-    
+    final languages = [
+      'English',
+      'Tiếng Việt',
+      'Français',
+      'Española',
+      'Deutsch',
+      'Italiana',
+      'Nederlands',
+      'Português',
+      'Русский',
+      '日本語',
+      '한국인',
+      '中国人',
+    ];
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        minChildSize: 0.5,
-        maxChildSize: 0.9,
-        expand: false,
-        builder: (context, controller) => Column(
-          children: [
-            Container(
-              margin: const EdgeInsets.symmetric(vertical: 8),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                'Select Language',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                controller: controller,
-                itemCount: languages.length,
-                itemBuilder: (context, index) {
-                  final language = languages[index];
-                  return ListTile(
-                    leading: Radio<String>(
-                      value: language,
-                      groupValue: selectedLanguage,
-                      onChanged: (value) async {
-                        if (value != null) {
-                          Navigator.pop(context);
-                          await _changeLanguage(value);
-                        }
-                      },
+      builder:
+          (context) => DraggableScrollableSheet(
+            initialChildSize: 0.7,
+            minChildSize: 0.5,
+            maxChildSize: 0.9,
+            expand: false,
+            builder:
+                (context, controller) => Column(
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
-                    title: Text(language),
-                    onTap: () async {
-                      Navigator.pop(context);
-                      await _changeLanguage(language);
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text(
+                        'Select Language',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        controller: controller,
+                        itemCount: languages.length,
+                        itemBuilder: (context, index) {
+                          final language = languages[index];
+                          return ListTile(
+                            leading: Radio<String>(
+                              value: language,
+                              groupValue: selectedLanguage,
+                              onChanged: (value) async {
+                                if (value != null) {
+                                  Navigator.pop(context);
+                                  await _changeLanguage(value);
+                                }
+                              },
+                            ),
+                            title: Text(language),
+                            onTap: () async {
+                              Navigator.pop(context);
+                              await _changeLanguage(language);
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+          ),
     );
   }
 
   void _showAboutDialog() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('About Light Novel Reader', textAlign: TextAlign.center),
-        content: SingleChildScrollView(
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.menu_book_rounded, size: 64, color: Colors.blue),
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: const Text(
+              'About Light Novel Reader',
+              textAlign: TextAlign.center,
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.menu_book_rounded,
+                      size: 64,
+                      color: Colors.blue,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Version 1.0.0.0',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '© 2024 - 2025 CyberDay Studios',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Developed by nekkochan',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Light Novel Reader is a free and open-source light novel reader app that allows you to read light novels online for free',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 14),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'This app is not affiliated with any of the websites it links to.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'This application is under heavy development. That means the application may contain bugs and errors. Please report any issues to the developer.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                ],
               ),
-              const SizedBox(height: 24),
-              const Text('Version 1.0.0.0',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text('© 2024 - 2025 CyberDay Studios',
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-              const SizedBox(height: 16),
-              Text('Developed by nekkochan',
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Light Novel Reader is a free and open-source light novel reader app that allows you to read light novels online for free',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'This app is not affiliated with any of the websites it links to.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'This application is under heavy development. That means the application may contain bugs and errors. Please report any issues to the developer.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
               ),
             ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
     );
   }
 
   void _showServerBottomSheet() {
     const servers = CrawlerService.servers; // Get servers from CrawlerService
-    
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.4,
-        minChildSize: 0.3,
-        maxChildSize: 0.6,
-        expand: false,
-        builder: (context, controller) => Column(
-          children: [
-            Container(
-              margin: const EdgeInsets.symmetric(vertical: 8),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                'Select Server',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                controller: controller,
-                itemCount: servers.length,
-                itemBuilder: (context, index) {
-                  final server = servers[index];
-                  final isSelected = server == currentServer;
-                  return _buildServerListItem(server, isSelected);
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
+      builder:
+          (context) => DraggableScrollableSheet(
+            initialChildSize: 0.4,
+            minChildSize: 0.3,
+            maxChildSize: 0.6,
+            expand: false,
+            builder:
+                (context, controller) => Column(
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text(
+                        'Select Server',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        controller: controller,
+                        itemCount: servers.length,
+                        itemBuilder: (context, index) {
+                          final server = servers[index];
+                          final isSelected = server == currentServer;
+                          return _buildServerListItem(server, isSelected);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+          ),
     );
   }
 
@@ -682,7 +881,10 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.blue.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+          color:
+              isSelected
+                  ? Colors.blue.withOpacity(0.1)
+                  : Colors.grey.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(
@@ -705,29 +907,30 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
     );
   }
 
-    Future<void> _changeServer(String newServer) async {
+  Future<void> _changeServer(String newServer) async {
     try {
       // Show loading indicator
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const Center(
-          child: CircularProgressIndicator(),
-        ),
+        builder: (context) => const Center(child: CircularProgressIndicator()),
       );
 
       // Test server connection
-      final response = await http.get(
-        Uri.parse(newServer),
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36'
-        },
-      ).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw Exception('Connection timeout');
-        },
-      );
+      final response = await http
+          .get(
+            Uri.parse(newServer),
+            headers: {
+              'User-Agent':
+                  'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
+            },
+          )
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              throw Exception('Connection timeout');
+            },
+          );
 
       // Pop loading dialog
       Navigator.pop(context);
@@ -745,7 +948,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
       if (Navigator.canPop(context)) {
         Navigator.pop(context);
       }
-      
+
       CustomToast.show(context, 'Failed to connect to server: ${e.toString()}');
     }
   }
@@ -754,20 +957,22 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
     try {
       _onSettingChanged(() async {
         setState(() => selectedLanguage = newLanguage);
-        
+
         // Show loading indicator
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) => const Center(
-            child: CircularProgressIndicator(),
-          ),
+          builder:
+              (context) => const Center(child: CircularProgressIndicator()),
         );
 
         try {
-          final languageService = Provider.of<LanguageService>(context, listen: false);
+          final languageService = Provider.of<LanguageService>(
+            context,
+            listen: false,
+          );
           await languageService.setLanguage(newLanguage);
-          
+
           // Pop loading dialog
           Navigator.pop(context);
           CustomToast.show(context, 'Language changed to $newLanguage');
@@ -816,7 +1021,9 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
         ),
         onTap: () async {
           await _settingsService.saveCurrentServer(server);
-          _onSettingChanged(() => _loadCurrentServer());  // This is causing the issue
+          _onSettingChanged(
+            () => _loadCurrentServer(),
+          ); // This is causing the issue
           Navigator.pop(context);
         },
       ),
@@ -883,10 +1090,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
                 ),
               ],
             ),
@@ -930,10 +1134,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
-            side: BorderSide(
-              color: Colors.grey.withOpacity(0.2),
-              width: 1,
-            ),
+            side: BorderSide(color: Colors.grey.withOpacity(0.2), width: 1),
           ),
           child: Column(children: children),
         ),
@@ -958,10 +1159,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
         ),
         child: Icon(icon, color: Colors.blue),
       ),
-      title: Text(
-        title,
-        style: const TextStyle(fontWeight: FontWeight.w500),
-      ),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
       subtitle: Text(subtitle),
       trailing: Switch.adaptive(
         value: value,
@@ -997,16 +1195,10 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.w500),
-          ),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
           Text(
             subtitle,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Colors.grey,
-            ),
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
           ),
         ],
       ),
@@ -1031,7 +1223,10 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
                       // Only update the state, don't update ThemeService yet
                       onChanged(newValue);
                       // Preview the change
-                      final themeService = Provider.of<ThemeServices>(context, listen: false);
+                      final themeService = Provider.of<ThemeServices>(
+                        context,
+                        listen: false,
+                      );
                       themeService.previewTextSize(newValue);
                     },
                   ),
@@ -1042,10 +1237,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
           ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(
-              'Preview Text',
-              style: TextStyle(fontSize: value),
-            ),
+            child: Text('Preview Text', style: TextStyle(fontSize: value)),
           ),
         ],
       ),
@@ -1126,6 +1318,666 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
     );
   }
 
+  // Add proxy settings section
+  Widget _buildProxySection() {
+    return _buildSection('Proxy Settings', [
+      _buildModernSwitchTile(
+        'Enable Proxy',
+        'Use proxy for accessing blocked content',
+        Icons.security_rounded,
+        isProxyEnabled,
+        (value) =>
+            _onSettingChanged(() => setState(() => isProxyEnabled = value)),
+      ),
+      if (isProxyEnabled) ...[
+        _buildProxyTypeTile(),
+        _buildProxyConfigurationTile(),
+        _buildProxyInfoBanner(),
+      ],
+    ]);
+  }
+
+  Widget _buildProxyTypeTile() {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.blue.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(Icons.dns_rounded, color: Colors.blue),
+      ),
+      title: const Text(
+        'Proxy Type',
+        style: TextStyle(fontWeight: FontWeight.w500),
+      ),
+      subtitle: Text(proxyType),
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: () => _showProxyTypeBottomSheet(),
+    );
+  }
+
+  Widget _buildProxyConfigurationTile() {
+    bool isCustom = proxyType == 'Custom';
+
+    return ExpansionTile(
+      tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.blue.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(Icons.settings_rounded, color: Colors.blue),
+      ),
+      title: const Text(
+        'Proxy Configuration',
+        style: TextStyle(fontWeight: FontWeight.w500),
+      ),
+      subtitle: Text(
+        '${proxyAddressController.text}:${proxyPortController.text}',
+      ),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          child: Column(
+            children: [
+              TextField(
+                controller: proxyAddressController,
+                decoration: const InputDecoration(
+                  labelText: 'Address',
+                  hintText: 'Enter proxy address (e.g., 1.1.1.1)',
+                  border: OutlineInputBorder(),
+                ),
+                enabled: isCustom,
+                onChanged: (_) => _onSettingChanged(() {}),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: proxyPortController,
+                decoration: const InputDecoration(
+                  labelText: 'Port',
+                  hintText: 'Enter proxy port (e.g., 80)',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+                enabled: isCustom,
+                onChanged: (_) => _onSettingChanged(() {}),
+              ),
+              const SizedBox(height: 12),
+              if (isCustom) ...[
+                TextField(
+                  controller: proxyUsernameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Username (Optional)',
+                    hintText: 'Enter username if required',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (_) => _onSettingChanged(() {}),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: proxyPasswordController,
+                  decoration: const InputDecoration(
+                    labelText: 'Password (Optional)',
+                    hintText: 'Enter password if required',
+                    border: OutlineInputBorder(),
+                  ),
+                  obscureText: true,
+                  onChanged: (_) => _onSettingChanged(() {}),
+                ),
+              ],
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: _testProxyConnection,
+                icon: const Icon(Icons.network_check),
+                label: const Text('Test Connection'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showProxyTypeBottomSheet() {
+    final presets = SettingsService.proxyPresets.keys.toList();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder:
+          (context) => DraggableScrollableSheet(
+            initialChildSize: 0.4,
+            minChildSize: 0.3,
+            maxChildSize: 0.6,
+            expand: false,
+            builder:
+                (context, controller) => Column(
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text(
+                        'Select Proxy Type',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        controller: controller,
+                        itemCount: presets.length,
+                        itemBuilder: (context, index) {
+                          final preset = presets[index];
+                          return ListTile(
+                            leading: Radio<String>(
+                              value: preset,
+                              groupValue: proxyType,
+                              onChanged: (value) {
+                                Navigator.pop(context);
+                                _updateProxyType(value!);
+                              },
+                            ),
+                            title: Text(preset),
+                            subtitle: _getProxyDescription(preset),
+                            onTap: () {
+                              Navigator.pop(context);
+                              _updateProxyType(preset);
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+          ),
+    );
+  }
+
+  Widget _getProxyDescription(String type) {
+    switch (type) {
+      case 'None':
+        return const Text('No proxy (direct connection)');
+      case 'Open Proxy 1':
+        return const Text('Public HTTP proxy - 91.92.209.35:3128');
+      case 'Open Proxy 2':
+        return const Text('Public HTTP proxy - 45.173.6.5:999');
+      case 'Open Proxy 3':
+        return const Text('Public HTTP proxy - 103.151.40.25:80');
+      case 'HTTP SOCKS5':
+        return const Text('SOCKS5 proxy - 216.137.184.253:80');
+      case 'Custom':
+        return const Text('Configure your own proxy settings');
+      default:
+        return const Text('');
+    }
+  }
+
+  void _updateProxyType(String type) {
+    _onSettingChanged(() {
+      setState(() {
+        proxyType = type;
+
+        // Update fields based on preset
+        if (type != 'Custom') {
+          final preset = SettingsService.proxyPresets[type];
+          if (preset != null) {
+            proxyAddressController.text = preset['address'] as String;
+            proxyPortController.text = preset['port'] as String;
+          }
+        }
+      });
+    });
+  }
+
+  Future<void> _testProxyConnection() async {
+    if (!isProxyEnabled) {
+      CustomToast.show(context, 'Please enable proxy first');
+      return;
+    }
+
+    if (proxyAddressController.text.isEmpty ||
+        proxyPortController.text.isEmpty) {
+      CustomToast.show(context, 'Proxy address and port are required');
+      return;
+    }
+
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      // Save current settings to a temporary proxy service
+      await _settingsService.setProxyEnabled(true);
+      await _settingsService.setProxyType(proxyType);
+      await _settingsService.setProxyAddress(proxyAddressController.text);
+      await _settingsService.setProxyPort(proxyPortController.text);
+      await _settingsService.setProxyUsername(proxyUsernameController.text);
+      await _settingsService.setProxyPassword(proxyPasswordController.text);
+
+      final proxyService = ProxyService();
+      await proxyService.updateProxySettings();
+
+      // Test connection to a reliable server
+      final response = await proxyService.get(
+        Uri.parse('https://www.google.com'),
+        headers: {
+          'User-Agent':
+              'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
+        },
+      );
+
+      // Pop loading dialog
+      Navigator.pop(context);
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        CustomToast.show(context, 'Proxy connection successful! ✅');
+      } else {
+        CustomToast.show(
+          context,
+          'Connection failed: Status ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      // Pop loading dialog if still showing
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      CustomToast.show(context, 'Connection failed: ${e.toString()}');
+    }
+  }
+
+  // Add a helper widget to display proxy information
+  Widget _buildProxyInfoBanner() {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blue.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.info_outline, color: Colors.blue, size: 18),
+              SizedBox(width: 8),
+              Text(
+                'About Proxies',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.blue,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Public proxies may be unreliable or slow. They can help bypass '
+            'network restrictions but may not always work.',
+            style: TextStyle(fontSize: 14),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'If one proxy doesn\'t work, try another or configure your own. '
+            'The app will automatically fall back to direct connection if the proxy fails.',
+            style: TextStyle(fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Add DNS settings section
+  Widget _buildDnsSection() {
+    return _buildSection('DNS Settings', [
+      _buildModernSwitchTile(
+        'Enable Custom DNS',
+        'Override system DNS settings (requires manual configuration)',
+        Icons.dns_rounded,
+        isDnsEnabled,
+        (value) =>
+            _onSettingChanged(() => setState(() => isDnsEnabled = value)),
+      ),
+      if (isDnsEnabled) ...[
+        _buildDnsProviderTile(),
+        _buildDnsConfigurationTile(),
+        _buildDnsInfoBanner(),
+      ],
+    ]);
+  }
+
+  Widget _buildDnsProviderTile() {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.green.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(Icons.public, color: Colors.green),
+      ),
+      title: const Text(
+        'DNS Provider',
+        style: TextStyle(fontWeight: FontWeight.w500),
+      ),
+      subtitle: Text(dnsProvider),
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: () => _showDnsProviderBottomSheet(),
+    );
+  }
+
+  Widget _buildDnsConfigurationTile() {
+    return dnsProvider == 'Custom'
+        ? ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.settings_rounded, color: Colors.green),
+          ),
+          title: const Text(
+            'DNS Configuration',
+            style: TextStyle(fontWeight: FontWeight.w500),
+          ),
+          subtitle: Text(
+            customDnsController.text.isEmpty
+                ? 'No custom DNS set'
+                : customDnsController.text,
+          ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Column(
+                children: [
+                  TextField(
+                    controller: customDnsController,
+                    decoration: const InputDecoration(
+                      labelText: 'Custom DNS',
+                      hintText: 'Enter DNS server (e.g., 1.1.1.1)',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (_) => _onSettingChanged(() {}),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: _showDnsInstructions,
+                    icon: const Icon(Icons.help_outline),
+                    label: const Text('How to Configure DNS'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        )
+        : ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 8,
+          ),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.settings_rounded, color: Colors.green),
+          ),
+          title: const Text(
+            'DNS Configuration',
+            style: TextStyle(fontWeight: FontWeight.w500),
+          ),
+          subtitle: Text(_getDnsServerForProvider()),
+          trailing: ElevatedButton.icon(
+            onPressed: _showDnsInstructions,
+            icon: const Icon(Icons.help_outline, size: 18),
+            label: const Text('How to Configure'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+              minimumSize: const Size(120, 36),
+            ),
+          ),
+        );
+  }
+
+  String _getDnsServerForProvider() {
+    if (dnsProvider == 'Default') {
+      return 'System default';
+    } else if (dnsProvider == 'Custom') {
+      return customDnsController.text.isEmpty
+          ? 'Not set'
+          : customDnsController.text;
+    } else {
+      return SettingsService.dnsProviders[dnsProvider] ?? 'Unknown';
+    }
+  }
+
+  void _showDnsProviderBottomSheet() {
+    final providers = SettingsService.dnsProviders.keys.toList();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder:
+          (context) => DraggableScrollableSheet(
+            initialChildSize: 0.6,
+            minChildSize: 0.4,
+            maxChildSize: 0.8,
+            expand: false,
+            builder:
+                (context, controller) => Column(
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text(
+                        'Select DNS Provider',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        controller: controller,
+                        itemCount: providers.length,
+                        itemBuilder: (context, index) {
+                          final provider = providers[index];
+                          return ListTile(
+                            leading: Radio<String>(
+                              value: provider,
+                              groupValue: dnsProvider,
+                              activeColor: Colors.green,
+                              onChanged: (value) {
+                                Navigator.pop(context);
+                                _updateDnsProvider(value!);
+                              },
+                            ),
+                            title: Text(provider),
+                            subtitle: _getDnsDescription(provider),
+                            onTap: () {
+                              Navigator.pop(context);
+                              _updateDnsProvider(provider);
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+          ),
+    );
+  }
+
+  Widget _getDnsDescription(String provider) {
+    switch (provider) {
+      case 'Default':
+        return const Text('Use system default DNS settings');
+      case 'Cloudflare':
+        return const Text('Fast and private DNS (1.1.1.1)');
+      case 'Cloudflare Secondary':
+        return const Text('Alternate Cloudflare DNS (1.0.0.1)');
+      case 'Google':
+        return const Text('Google public DNS (8.8.8.8)');
+      case 'Google Secondary':
+        return const Text('Alternate Google DNS (8.8.4.4)');
+      case 'OpenDNS':
+        return const Text('Cisco OpenDNS (208.67.222.222)');
+      case 'OpenDNS Secondary':
+        return const Text('Alternate OpenDNS (208.67.220.220)');
+      case 'Quad9':
+        return const Text('Security-focused DNS (9.9.9.9)');
+      case 'Custom':
+        return const Text('Configure your own DNS server');
+      default:
+        return const Text('');
+    }
+  }
+
+  void _updateDnsProvider(String newProvider) {
+    _onSettingChanged(() {
+      setState(() {
+        dnsProvider = newProvider;
+      });
+    });
+  }
+
+  void _showDnsInstructions() {
+    final dnsService = DnsService();
+    final instructions = dnsService.getDnsSetupInstructions();
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.help_outline, color: Colors.green),
+                SizedBox(width: 8),
+                Text('DNS Configuration Instructions'),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(instructions),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Note: The app cannot change system DNS settings directly. '
+                    'You need to configure DNS in your device settings.',
+                    style: TextStyle(fontStyle: FontStyle.italic),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'After changing DNS settings in your device, come back to the app and enable DNS usage here '
+                    'to help the app use fallback servers optimized for your DNS settings.',
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  // Add a helper widget to display DNS information
+  Widget _buildDnsInfoBanner() {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.green.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.green.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.info_outline, color: Colors.green, size: 18),
+              SizedBox(width: 8),
+              Text(
+                'About DNS',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.green,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8),
+          Text(
+            'DNS (Domain Name System) translates domain names to IP addresses. '
+            'Changing your DNS can help improve security, privacy, and sometimes bypass basic content restrictions.',
+            style: TextStyle(fontSize: 14),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Unlike a proxy, DNS changes affect your entire device, not just this app. '
+            'The app cannot change DNS directly - you must configure it in your device settings.',
+            style: TextStyle(fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -1134,37 +1986,44 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
         if (!_hasUnsavedChanges) {
           return;
         }
-        
-        final bool shouldPop = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: const Text('Unsaved Changes'),
-            content: const Text('You have unsaved changes. Do you want to save them before leaving?'),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  _revertSettings();  // Add this line
-                  Navigator.of(context).pop(true);
-                },
-                child: const Text('Discard'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  await _saveSettings();
-                  Navigator.of(context).pop(true);
-                },
-                child: const Text('Save'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop(false);
-                },
-                child: const Text('Cancel'),
-              ),
-            ],
-          ),
-        ) ?? false;
+
+        final bool shouldPop =
+            await showDialog<bool>(
+              context: context,
+              builder:
+                  (context) => AlertDialog(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    title: const Text('Unsaved Changes'),
+                    content: const Text(
+                      'You have unsaved changes. Do you want to save them before leaving?',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () {
+                          _revertSettings(); // Add this line
+                          Navigator.of(context).pop(true);
+                        },
+                        child: const Text('Discard'),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          await _saveSettings();
+                          Navigator.of(context).pop(true);
+                        },
+                        child: const Text('Save'),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(context).pop(false);
+                        },
+                        child: const Text('Cancel'),
+                      ),
+                    ],
+                  ),
+            ) ??
+            false;
 
         if (shouldPop) {
           Navigator.of(context).pop();
@@ -1185,7 +2044,10 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
                     Text(
                       'Settings',
                       style: TextStyle(
-                        color: Theme.of(context).primaryTextTheme.titleLarge?.color,
+                        color:
+                            Theme.of(
+                              context,
+                            ).primaryTextTheme.titleLarge?.color,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.5,
                       ),
@@ -1193,7 +2055,10 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
                     if (_hasUnsavedChanges) ...[
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.amber.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(12),
@@ -1218,7 +2083,10 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
                         return LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
-                          colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withOpacity(0.7),
+                          ],
                         ).createShader(rect);
                       },
                       blendMode: BlendMode.darken,
@@ -1227,7 +2095,10 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
                           gradient: LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
-                            colors: [Colors.blue.shade800, Colors.purple.shade500],
+                            colors: [
+                              Colors.blue.shade800,
+                              Colors.purple.shade500,
+                            ],
                           ),
                         ),
                       ),
@@ -1249,7 +2120,7 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
                 ),
               ),
             ),
-                        SliverToBoxAdapter(
+            SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -1273,7 +2144,10 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
                           icon: Icons.dark_mode_rounded,
                           title: 'Theme',
                           subtitle: isDarkMode ? 'Dark Mode' : 'Light Mode',
-                          onTap: () => _onSettingChanged(() => setState(() => isDarkMode = !isDarkMode)),
+                          onTap:
+                              () => _onSettingChanged(
+                                () => setState(() => isDarkMode = !isDarkMode),
+                              ),
                         ),
                         _buildQuickActionCard(
                           icon: Icons.text_fields_rounded,
@@ -1301,98 +2175,88 @@ class SettingsScreenState extends State<SettingsScreen> with SingleTickerProvide
             ),
             SliverList(
               delegate: SliverChildListDelegate([
-                _buildSection(
-                  'Appearance',
-                  [
-                    _buildModernSwitchTile(
-                      'Dark Mode',
-                      'Switch between light and dark theme',
-                      Icons.dark_mode_rounded,
-                      isDarkMode,
-                      (value) => _onSettingChanged(() => setState(() => isDarkMode = value)),
+                _buildSection('Appearance', [
+                  _buildModernSwitchTile(
+                    'Dark Mode',
+                    'Switch between light and dark theme',
+                    Icons.dark_mode_rounded,
+                    isDarkMode,
+                    (value) => _onSettingChanged(
+                      () => setState(() => isDarkMode = value),
                     ),
-                    _buildModernSliderTile(
-                      'Text Size',
-                      'Adjust the size of text in the app',
-                      Icons.text_fields_rounded,
-                      textSize,
-                      (value) {
-                        _onSettingChanged(() {
-                          setState(() => textSize = value);
-                        });
-                      },
+                  ),
+                  _buildModernSliderTile(
+                    'Text Size',
+                    'Adjust the size of text in the app',
+                    Icons.text_fields_rounded,
+                    textSize,
+                    (value) {
+                      _onSettingChanged(() {
+                        setState(() => textSize = value);
+                      });
+                    },
+                  ),
+                ]),
+                _buildSection('Server Settings', [
+                  _buildServerTile(),
+                  _buildModernSwitchTile(
+                    'Data Saver',
+                    'Reduce data usage when loading content',
+                    Icons.data_usage_rounded,
+                    isDataSaverEnabled,
+                    (value) => _onSettingChanged(
+                      () => setState(() => isDataSaverEnabled = value),
                     ),
-                  ],
-                ),
-                _buildSection(
-                  'Server Settings',
-                  [
-                    _buildServerTile(),
-                    _buildModernSwitchTile(
-                      'Data Saver',
-                      'Reduce data usage when loading content',
-                      Icons.data_usage_rounded,
-                      isDataSaverEnabled,
-                      (value) => _onSettingChanged(() => setState(() => isDataSaverEnabled = value)),
-                    ),
-                  ],
-                ),
-                _buildSection(
-                  'Notifications',
-                  [
-                    _buildModernSwitchTile(
-                      'Push Notifications',
-                      'Receive notification for new chapter releases, application updates and announcements',
-                      Icons.notifications_rounded,
-                      isNotificationsEnabled,
-                      (value) => _toggleNotifications(value),
-                    ),
-                  ],
-                ),
-                _buildSection(
-                  'Language',
-                  [
-                    _buildLanguageTile(),
-                  ],
-                ),
-                _buildSection(
-                  'About',
-                  [
-                    _buildAboutTile(),
-                  ],
-                ),
+                  ),
+                ]),
+                _buildProxySection(),
+                _buildDnsSection(),
+                _buildSection('Notifications', [
+                  _buildModernSwitchTile(
+                    'Push Notifications',
+                    'Receive notification for new chapter releases, application updates and announcements',
+                    Icons.notifications_rounded,
+                    isNotificationsEnabled,
+                    (value) => _toggleNotifications(value),
+                  ),
+                ]),
+                _buildSection('Language', [_buildLanguageTile()]),
+                _buildSection('About', [_buildAboutTile()]),
                 const SizedBox(height: 80), // Space for FAB
               ]),
             ),
           ],
         ),
-        floatingActionButton: _hasUnsavedChanges ? Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.blue.withOpacity(0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: FloatingActionButton.extended(
-            onPressed: _saveSettings,
-            elevation: 0,
-            backgroundColor: Colors.blue.shade600,
-            icon: const Icon(Icons.save_rounded, color: Colors.white),
-            label: const Text(
-              'Save Changes',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ),
-        ) : null,
+        floatingActionButton:
+            _hasUnsavedChanges
+                ? Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.blue.withOpacity(0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: FloatingActionButton.extended(
+                    onPressed: _saveSettings,
+                    elevation: 0,
+                    backgroundColor: Colors.blue.shade600,
+                    icon: const Icon(Icons.save_rounded, color: Colors.white),
+                    label: const Text(
+                      'Save Changes',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                )
+                : null,
       ),
     );
   }

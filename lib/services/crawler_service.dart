@@ -2,42 +2,125 @@ import 'package:flutter/material.dart'; // Import for BuildContext
 import 'package:html/parser.dart' as parser;
 import 'package:http/http.dart' as http;
 import 'package:html/dom.dart' as dom;
+import 'dart:io';
 import '../modules/announcement.dart';
 import '../screens/custom_toast.dart';
 import '../modules/light_novel.dart';
 import '../modules/chapter.dart';
+import '../services/http_client.dart';
+import '../services/dns_service.dart';
+import '../services/settings_services.dart';
 
 class CrawlerService {
+  // Primary server domains
   static const List<String> servers = [
+    'https://docln.sbs',
     'https://ln.hako.vn',
     'https://docln.net',
   ];
 
+  // Alternative domains for each server
+  static const Map<String, List<String>> alternativeServers = {
+    'https://ln.hako.vn': ['https://ln.hako.re', 'https://ln.hako.vip'],
+    'https://docln.net': ['https://docln.org', 'https://docln.co'],
+    'https://docln.sbs': ['https://docln.cc', 'https://docln.me'],
+  };
+
+  final AppHttpClient _httpClient = AppHttpClient();
+  final DnsService _dnsService = DnsService();
+  final SettingsService _settingsService = SettingsService();
+
+  bool _isDnsEnabled = false;
+  String _dnsProvider = 'Default';
+  String _customDns = '';
+
+  Future<void> initialize() async {
+    await _httpClient.initialize();
+    await _dnsService.initialize();
+    await _loadDnsSettings();
+  }
+
+  Future<void> _loadDnsSettings() async {
+    _isDnsEnabled = await _settingsService.isDnsEnabled();
+    _dnsProvider = await _settingsService.getDnsProvider();
+    _customDns = await _settingsService.getCustomDns();
+
+    if (_isDnsEnabled) {
+      print('Crawler using DNS settings: $_dnsProvider');
+      if (_dnsProvider == 'Custom') {
+        print('Custom DNS: $_customDns');
+      } else {
+        final dnsServer = SettingsService.dnsProviders[_dnsProvider] ?? '';
+        print('DNS Server: $dnsServer');
+      }
+    }
+  }
+
   Future<String?> _getWorkingServer() async {
-    for (String server in servers) {
+    // Try primary servers first
+    String? workingServer = await _tryServers(servers);
+
+    // If primary servers don't work, try alternatives
+    if (workingServer == null) {
+      print('Primary servers failed, trying alternative domains...');
+      for (final server in servers) {
+        final alternatives = alternativeServers[server] ?? [];
+        workingServer = await _tryServers(alternatives);
+        if (workingServer != null) {
+          print('Found working alternative server: $workingServer');
+          return workingServer;
+        }
+      }
+    }
+
+    return workingServer;
+  }
+
+  Future<String?> _tryServers(List<String> serverList) async {
+    for (String server in serverList) {
       try {
-        final response = await http
-            .get(
-              Uri.parse(server),
-              headers: {
-                'User-Agent':
-                    'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
-              },
-            )
-            .timeout(
-              const Duration(seconds: 60),
-              onTimeout: () {
-                throw Exception(
-                  'Failed to connect to the server: $server: Connection timeout',
-                );
-              },
-            );
+        final response = await _httpClient.get(
+          server,
+          headers: {
+            'User-Agent':
+                'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
+            'Accept':
+                'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Connection': 'keep-alive',
+          },
+        );
 
         if (response.statusCode == 200) {
           return server;
         }
       } catch (e) {
         print('Failed to connect to the server: $server. Error: $e');
+
+        // If DNS is enabled and we're having connection issues, try with direct IP lookup
+        if (_isDnsEnabled && e.toString().contains('Failed host lookup')) {
+          try {
+            print('Trying DNS lookup for $server');
+            final serverUri = Uri.parse(server);
+            String hostLookup = serverUri.host;
+
+            // Try to resolve the IP manually using the configured DNS
+            List<InternetAddress> addresses = [];
+            try {
+              addresses = await InternetAddress.lookup(hostLookup);
+              if (addresses.isNotEmpty) {
+                print('Resolved $hostLookup to ${addresses.first.address}');
+                // Unfortunately, we can't directly use the IP in HTTPS requests due to certificate issues
+                // But this verifies our DNS is working
+              }
+            } catch (dnsError) {
+              print('DNS lookup failed: $dnsError');
+            }
+          } catch (lookupError) {
+            print('Error during manual host lookup: $lookupError');
+          }
+        }
+
         continue;
       }
     }
@@ -52,8 +135,8 @@ class CrawlerService {
         throw Exception('No working server available');
       }
 
-      final response = await http.get(
-        Uri.parse('$workingServer'),
+      final response = await _httpClient.get(
+        workingServer,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36',
         },
@@ -85,8 +168,8 @@ class CrawlerService {
         throw Exception('None of the servers are working.'); // Custom message
       }
 
-      final response = await http.get(
-        Uri.parse(workingServer),
+      final response = await _httpClient.get(
+        workingServer,
         headers: {
           'User-Agent':
               'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
@@ -164,7 +247,7 @@ class CrawlerService {
         return [];
       }
 
-      final response = await http.get(Uri.parse(server));
+      final response = await _httpClient.get(server);
       if (response.statusCode == 200) {
         final document = parser.parse(response.body);
         final novelElements = document.querySelectorAll(
@@ -237,7 +320,7 @@ class CrawlerService {
         return [];
       }
 
-      final response = await http.get(Uri.parse(server));
+      final response = await _httpClient.get(server);
 
       if (response.statusCode == 200) {
         final document = parser.parse(response.body);
@@ -335,7 +418,7 @@ class CrawlerService {
     BuildContext context,
   ) async {
     try {
-      final response = await http.get(Uri.parse(url));
+      final response = await _httpClient.get(url);
 
       if (response.statusCode == 200) {
         final document = parser.parse(response.body);
@@ -560,7 +643,102 @@ class CrawlerService {
     return null;
   }
 
-  // Extracts the cover URL from the cover element
+  Future<void> refreshSettings() async {
+    await _loadDnsSettings();
+    await _httpClient.updateProxySettings();
+  }
+
+  // Fix image URLs based on DNS settings
+  String fixImageUrl(String url) {
+    // Handle common image domains that might be blocked
+    Uri? uri;
+    try {
+      uri = Uri.parse(url);
+    } catch (e) {
+      return url; // Return original if parsing fails
+    }
+
+    // Map of problematic image domains and their alternatives
+    const Map<String, List<String>> imageDomainFallbacks = {
+      'i.docln.net': ['i.hako.vip', 'i2.hako.vip', 'i.ln.hako.vn'],
+      'i2.docln.net': ['i2.hako.vip', 'i.hako.vip', 'i2.ln.hako.vn'],
+      'i3.docln.net': ['i3.hako.vip', 'i.hako.vip', 'i3.ln.hako.vn'],
+    };
+
+    // Check if the host is in our problematic domains list
+    if (imageDomainFallbacks.containsKey(uri.host)) {
+      // Replace with first fallback domain
+      final newHost = imageDomainFallbacks[uri.host]!.first;
+      print('Fixing image URL: ${uri.host} -> $newHost');
+      return url.replaceFirst(uri.host, newHost);
+    }
+
+    return url;
+  }
+
+  // Add DNS-aware image loading method
+  Future<String> getOptimizedImageUrl(String originalUrl) async {
+    if (!_isDnsEnabled) {
+      return fixImageUrl(
+        originalUrl,
+      ); // Just use the basic fix if DNS not enabled
+    }
+
+    try {
+      // Try to connect to the original URL first
+      final originalUri = Uri.parse(originalUrl);
+
+      // Prepare a list of potential URL variations
+      List<String> urlVariations = [originalUrl];
+
+      // Add fixes for common problematic domains
+      const Map<String, List<String>> imageDomainFallbacks = {
+        'i.docln.net': ['i.hako.vip', 'i2.hako.vip', 'i.ln.hako.vn'],
+        'i2.docln.net': ['i2.hako.vip', 'i.hako.vip', 'i2.ln.hako.vn'],
+        'i3.docln.net': ['i3.hako.vip', 'i.hako.vip', 'i3.ln.hako.vn'],
+      };
+
+      // If the domain is in our problem list, add alternatives
+      if (imageDomainFallbacks.containsKey(originalUri.host)) {
+        for (final alternativeHost in imageDomainFallbacks[originalUri.host]!) {
+          final alternativeUrl = originalUrl.replaceFirst(
+            originalUri.host,
+            alternativeHost,
+          );
+          urlVariations.add(alternativeUrl);
+        }
+      }
+
+      // Try each URL variation until one works
+      for (final url in urlVariations) {
+        try {
+          // Just check if the URL is accessible
+          final response = await _httpClient.get(
+            url,
+            headers: {
+              'Accept': 'image/*',
+              'Range': 'bytes=0-1024',
+            }, // Just get the header
+          );
+
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            return url; // This URL works
+          }
+        } catch (e) {
+          // Just continue to the next variation
+          continue;
+        }
+      }
+
+      // If all variations failed, return the original
+      return originalUrl;
+    } catch (e) {
+      print('Error optimizing image URL: $e');
+      return originalUrl; // Return original URL as fallback
+    }
+  }
+
+  // Override the extract cover URL method to use DNS awareness
   String _extractCoverUrl(dom.Element? coverElement) {
     if (coverElement == null) {
       return 'https://ln.hako.vn/img/nocover.jpg';
@@ -569,7 +747,7 @@ class CrawlerService {
     // Try to get from data-bg attribute
     String? dataBg = coverElement.attributes['data-bg'];
     if (dataBg != null && dataBg.isNotEmpty) {
-      return dataBg;
+      return fixImageUrl(dataBg);
     }
 
     // Try to get from background-image style
@@ -586,7 +764,7 @@ class CrawlerService {
         } else if (url.startsWith("'") && url.endsWith("'")) {
           url = url.substring(1, url.length - 1);
         }
-        return url;
+        return fixImageUrl(url);
       }
     }
 

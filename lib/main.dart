@@ -9,9 +9,13 @@ import 'services/notification_service.dart';
 import 'services/theme_services.dart';
 import 'services/language_service.dart';
 import 'services/bookmark_service.dart';
+import 'services/proxy_service.dart';
+import 'services/http_client.dart';
+import 'services/dns_service.dart';
 import 'screens/HistoryScreen.dart';
 import 'handler/system_ui_handler.dart';
 import 'screens/HomeScreen.dart';
+import 'services/crawler_service.dart';
 
 // Firebase
 import 'package:firebase_core/firebase_core.dart';
@@ -48,6 +52,10 @@ void main() async {
   final notificationService = NotificationService();
   final bookmarkService = BookmarkService();
   final historyService = HistoryService();
+  final proxyService = ProxyService();
+  final httpClient = AppHttpClient();
+  final dnsService = DnsService();
+  final crawlerService = CrawlerService();
 
   await Future.wait([
     themeService.init(),
@@ -55,6 +63,10 @@ void main() async {
     notificationService.init(),
     bookmarkService.init(),
     historyService.loadHistory(),
+    proxyService.initialize(),
+    httpClient.initialize(),
+    dnsService.initialize(),
+    crawlerService.initialize(),
   ]);
 
   // Set initial system UI styling
