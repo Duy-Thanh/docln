@@ -5,6 +5,7 @@ import './widgets/chapter_card.dart';
 import '../services/crawler_service.dart';
 import '../screens/custom_toast.dart';
 import '../screens/webview_screen.dart';
+import '../screens/reader_screen.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -546,12 +547,19 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
                               if (_chapters.isNotEmpty) {
                                 final chapterUrl = _chapters.first['url'] ?? '';
                                 final fullChapterUrl = _getFullUrl(chapterUrl);
+                                final chapterTitle =
+                                    _chapters.first['title'] ?? 'Chapter 1';
+
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                     builder:
-                                        (context) =>
-                                            WebViewScreen(url: fullChapterUrl),
+                                        (context) => ReaderScreen(
+                                          url: fullChapterUrl,
+                                          title: widget.novel.title,
+                                          novel: widget.novel,
+                                          chapterTitle: chapterTitle,
+                                        ),
                                   ),
                                 );
                               }
@@ -1344,7 +1352,15 @@ ${_genres.join(', ')}
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => WebViewScreen(url: chapterUrl),
+                      builder:
+                          (context) => ReaderScreen(
+                            url: chapterUrl,
+                            title: widget.novel.title,
+                            novel: widget.novel,
+                            chapterTitle:
+                                chapter['title'] ??
+                                'Chapter ${displayChapters.indexOf(chapter) + 1}',
+                          ),
                     ),
                   );
                 },
@@ -1566,7 +1582,14 @@ ${_genres.join(', ')}
                             context,
                             MaterialPageRoute(
                               builder:
-                                  (context) => WebViewScreen(url: chapterUrl),
+                                  (context) => ReaderScreen(
+                                    url: chapterUrl,
+                                    title: widget.novel.title,
+                                    novel: widget.novel,
+                                    chapterTitle:
+                                        chapter['title'] ??
+                                        'Chapter ${index + 1}',
+                                  ),
                             ),
                           );
                         },

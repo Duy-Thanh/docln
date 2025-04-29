@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../modules/chapter.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../screens/webview_screen.dart';
+import '../../screens/reader_screen.dart';
 import '../widgets/chapter_card.dart';
 
 class LatestChaptersSection extends StatelessWidget {
@@ -19,7 +20,7 @@ class LatestChaptersSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -59,19 +60,25 @@ class LatestChaptersSection extends StatelessWidget {
     );
   }
 
-    Widget _buildChapterItem(Chapter chapter, BuildContext context) {
-      return ChapterCard(
-        chapter: chapter,
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => WebViewScreen(url: chapter.url),
-            ),
-          );
-        },
-      );
-    }
+  Widget _buildChapterItem(Chapter chapter, BuildContext context) {
+    return ChapterCard(
+      chapter: chapter,
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder:
+                (context) => ReaderScreen(
+                  url: chapter.url,
+                  title: chapter.seriesTitle,
+                  chapterTitle: chapter.title,
+                  // novel is optional and we might not have the complete novel object from just a chapter
+                ),
+          ),
+        );
+      },
+    );
+  }
 
   Widget _buildShimmerItem() {
     return Padding(

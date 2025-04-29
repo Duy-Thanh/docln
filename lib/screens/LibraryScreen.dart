@@ -16,6 +16,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:flutter/services.dart';
 import '../services/performance_service.dart';
 import '../screens/LightNovelDetailsScreen.dart';
+import './reader_screen.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -1412,7 +1413,12 @@ class _LibraryScreenState extends State<LibraryScreen>
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => WebViewScreen(url: fullUrl),
+                    builder:
+                        (context) => ReaderScreen(
+                          url: fullUrl,
+                          title: validChapters[index].seriesTitle,
+                          chapterTitle: validChapters[index].title,
+                        ),
                   ),
                 );
               },
