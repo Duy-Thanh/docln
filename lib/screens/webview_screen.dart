@@ -16,6 +16,7 @@ import '../services/performance_service.dart';
 import '../screens/HistoryScreen.dart';
 import 'package:provider/provider.dart';
 import '../modules/light_novel.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class WebViewScreen extends StatefulWidget {
   final String url;
@@ -36,6 +37,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   bool _isReaderMode = false;
   bool _isDarkMode = false;
   double _textZoom = 100.0;
+  bool _isAdBlockEnabled = true;
 
   // List of allowed domains
   final List<String> _allowedDomains = [
@@ -75,7 +77,76 @@ class _WebViewScreenState extends State<WebViewScreen> {
   void initState() {
     super.initState();
     _optimizeScreen();
+    _loadSettings();
     _loadAdBlockRules();
+  }
+
+  Future<void> _loadSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (mounted) {
+        setState(() {
+          _isAdBlockEnabled = prefs.getBool('ad_block_enabled') ?? true;
+        });
+      }
+    } catch (e) {
+      print('Error loading settings: $e');
+    }
+  }
+
+  Future<void> _loadAdBlockRules() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      // Use the enhanced adblock service that now pulls from multiple filter lists
+      _adBlockScript = await AdBlockService.getAdBlockScript();
+
+      print('Ad blocking script loaded successfully');
+    } catch (e) {
+      print('Error loading ad block rules: $e');
+      // Use the improved fallback script if the main script fails
+      _adBlockScript = AdBlockService.getFallbackScript();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        _initWebView();
+      }
+    }
+  }
+
+  Future<void> _toggleAdBlock() async {
+    try {
+      final newState = !_isAdBlockEnabled;
+
+      // Save preference
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('ad_block_enabled', newState);
+
+      if (mounted) {
+        setState(() {
+          _isAdBlockEnabled = newState;
+        });
+
+        // Reload the page with new settings
+        if (_controller != null) {
+          _controller!.reload();
+        }
+
+        // Show toast notification
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ad blocker ${newState ? 'enabled' : 'disabled'}'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error toggling ad blocking: $e');
+    }
   }
 
   Future<String> _ensureFullUrl(String url) async {
@@ -92,19 +163,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   Future<void> _optimizeScreen() async {
     await PerformanceService.optimizeScreen('WebViewScreen');
-  }
-
-  Future<void> _loadAdBlockRules() async {
-    try {
-      _adBlockScript = await AdBlockService.getAdBlockScript();
-    } catch (e) {
-      print('Error loading ad block rules: $e');
-      _adBlockScript = AdBlockService.getFallbackScript();
-    } finally {
-      if (mounted) {
-        _initWebView();
-      }
-    }
   }
 
   Future<void> _initWebView() async {
@@ -303,23 +361,33 @@ class _WebViewScreenState extends State<WebViewScreen> {
     if (_controller == null) return;
 
     try {
-      // Inject ad blocking script
-      if (_adBlockScript != null) {
+      // Only inject ad blocking if enabled
+      if (_isAdBlockEnabled && _adBlockScript != null) {
         await _controller!.runJavaScript(_adBlockScript!);
+        print('Ad blocking script injected');
       }
 
       // Inject navbar removal script
       await _controller!.runJavaScript(_navbarRemovalScript);
 
-      // Additional cleanup
+      // Additional cleanup for reader experience
       await _controller!.runJavaScript('''
         // Remove floating elements and popups
-        document.querySelectorAll('[class*="float"], [class*="popup"], [class*="modal"]')
-          .forEach(el => el.remove());
+        document.querySelectorAll('[class*="float"], [class*="popup"], [class*="modal"], [class*="overlay"]')
+          .forEach(function(el) { el.remove(); });
           
         // Remove overflow:hidden from body and html
         document.body.style.overflow = 'auto';
         document.documentElement.style.overflow = 'auto';
+        
+        // Remove fixed position elements that might be ads
+        if (${_isAdBlockEnabled ? 'true' : 'false'}) {
+          document.querySelectorAll('div[style*="position:fixed"], div[style*="position: fixed"]').forEach(function(el) {
+            if (el.clientHeight < 200) {
+              el.remove();
+            }
+          });
+        }
       ''');
     } catch (e) {
       print('Error injecting scripts: $e');
@@ -1012,6 +1080,19 @@ class _WebViewScreenState extends State<WebViewScreen> {
                           controller: scrollController,
                           padding: EdgeInsets.zero,
                           children: [
+                            _buildOptionTile(
+                              icon: Icons.block,
+                              title: 'Ad Blocker',
+                              subtitle:
+                                  _isAdBlockEnabled
+                                      ? 'Blocking ads (enabled)'
+                                      : 'Not blocking ads (disabled)',
+                              onTap: () {
+                                Navigator.pop(context);
+                                _toggleAdBlock();
+                              },
+                              isActive: _isAdBlockEnabled,
+                            ),
                             _buildOptionTile(
                               icon: Icons.text_fields_rounded,
                               title: 'Text size',

@@ -50,6 +50,7 @@ class _BookmarksScreenState extends State<BookmarksScreen>
     // Ensure bookmarks are loaded
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
+        // Load bookmarks from shared preferences
         Provider.of<BookmarkService>(context, listen: false).loadBookmarks();
       }
     });
