@@ -771,4 +771,168 @@ class CrawlerService {
     // If all else fails, return default image
     return 'https://ln.hako.vn/img/nocover.jpg';
   }
+
+  // Add a new method to fetch chapter content
+  Future<Map<String, dynamic>> getChapterContent(
+    String url,
+    BuildContext context,
+  ) async {
+    try {
+      // Make sure the URL is absolute
+      if (!url.startsWith('http')) {
+        final baseServer = await _getWorkingServer();
+        if (baseServer == null) {
+          throw Exception('No working server available');
+        }
+        url = url.startsWith('/') ? '$baseServer$url' : '$baseServer/$url';
+      }
+
+      final response = await _httpClient.get(
+        url,
+        headers: {
+          'User-Agent':
+              'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
+          'Accept':
+              'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Failed to load chapter content: HTTP ${response.statusCode}',
+        );
+      }
+
+      final document = parser.parse(response.body);
+
+      // Extract the chapter title
+      String chapterTitle = '';
+      final titleElement = document.querySelector('.chapter-title');
+      if (titleElement != null) {
+        chapterTitle = titleElement.text.trim();
+      } else {
+        // Alternative selectors for title
+        final altTitleElement =
+            document.querySelector('h1.title') ??
+            document.querySelector('.rd_sd-name') ??
+            document.querySelector('.title-top');
+        if (altTitleElement != null) {
+          chapterTitle = altTitleElement.text.trim();
+        }
+      }
+
+      // Extract the chapter content
+      String content = '';
+      final contentElement =
+          document.querySelector('.chapter-content') ??
+          document.querySelector('#chapter-content') ??
+          document.querySelector('.content') ??
+          document.querySelector('article.content');
+
+      if (contentElement != null) {
+        // Remove any script or ad elements
+        contentElement
+            .querySelectorAll('script, .ads, [id*="ads"], [class*="ads"]')
+            .forEach((e) => e.remove());
+
+        // Clean and format the content
+        content = _cleanContent(contentElement.innerHtml);
+      }
+
+      // Extract series information
+      String seriesTitle = '';
+      String seriesUrl = '';
+      final seriesElement = document.querySelector('.series-name a');
+      if (seriesElement != null) {
+        seriesTitle = seriesElement.text.trim();
+        seriesUrl = seriesElement.attributes['href'] ?? '';
+      }
+
+      // Extract navigation links
+      String prevChapterUrl = '';
+      String nextChapterUrl = '';
+      String prevChapterTitle = '';
+      String nextChapterTitle = '';
+
+      // Check for navigation buttons
+      final prevButton =
+          document.querySelector('a.prev-chap') ??
+          document.querySelector('[rel="prev"]') ??
+          document.querySelector('.chap-prev');
+
+      final nextButton =
+          document.querySelector('a.next-chap') ??
+          document.querySelector('[rel="next"]') ??
+          document.querySelector('.chap-next');
+
+      if (prevButton != null) {
+        prevChapterUrl = prevButton.attributes['href'] ?? '';
+        prevChapterTitle = prevButton.text.trim();
+        if (prevChapterTitle.isEmpty) {
+          prevChapterTitle = 'Previous Chapter';
+        }
+      }
+
+      if (nextButton != null) {
+        nextChapterUrl = nextButton.attributes['href'] ?? '';
+        nextChapterTitle = nextButton.text.trim();
+        if (nextChapterTitle.isEmpty) {
+          nextChapterTitle = 'Next Chapter';
+        }
+      }
+
+      return {
+        'title': chapterTitle,
+        'content': content,
+        'seriesTitle': seriesTitle,
+        'seriesUrl': seriesUrl,
+        'prevChapterUrl': prevChapterUrl,
+        'nextChapterUrl': nextChapterUrl,
+        'prevChapterTitle': prevChapterTitle,
+        'nextChapterTitle': nextChapterTitle,
+      };
+    } catch (e) {
+      print('Error fetching chapter content: $e');
+      CustomToast.show(context, 'Error loading chapter: $e');
+      return {
+        'title': 'Error',
+        'content':
+            '<p>Failed to load chapter content. Please try again later.</p><p>Error: $e</p>',
+      };
+    }
+  }
+
+  // Helper method to clean HTML content
+  String _cleanContent(String html) {
+    // Remove excessive whitespace and newlines
+    html = html.replaceAll(RegExp(r'\s{2,}'), ' ');
+
+    // Convert div and span elements to paragraphs for better reading
+    html = html.replaceAll(
+      RegExp(r'<div[^>]*>(.*?)</div>', dotAll: true),
+      '<p>\$1</p>',
+    );
+
+    // Convert line breaks to paragraphs
+    html = html.replaceAll('<br>', '</p><p>');
+    html = html.replaceAll('<br/>', '</p><p>');
+    html = html.replaceAll('<br />', '</p><p>');
+
+    // Fix empty paragraphs
+    html = html.replaceAll(RegExp(r'<p>\s*</p>'), '');
+
+    // Ensure paragraphs for each line
+    final lines =
+        html.split('\n').where((line) => line.trim().isNotEmpty).toList();
+    html = lines
+        .map((line) {
+          if (!line.trim().startsWith('<') && !line.trim().endsWith('>')) {
+            return '<p>$line</p>';
+          }
+          return line;
+        })
+        .join('\n');
+
+    return html;
+  }
 }

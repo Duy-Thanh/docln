@@ -27,7 +27,8 @@ class ReaderScreen extends StatefulWidget {
   State<ReaderScreen> createState() => _ReaderScreenState();
 }
 
-class _ReaderScreenState extends State<ReaderScreen> {
+class _ReaderScreenState extends State<ReaderScreen>
+    with WidgetsBindingObserver {
   bool _isLoading = true;
   String _content = '';
   double _fontSize = 18.0;
@@ -37,10 +38,14 @@ class _ReaderScreenState extends State<ReaderScreen> {
   Color _backgroundColor = Colors.white;
   bool _isDarkMode = false;
   double _paragraphSpacing = 1.5;
+  bool _showControls = true;
 
   // Reading progress
   double _readingProgress = 0.0;
   final ScrollController _scrollController = ScrollController();
+
+  // Text selection
+  bool _enableTextSelection = true;
 
   // Chapter navigation
   bool _hasNextChapter = false;
@@ -50,11 +55,15 @@ class _ReaderScreenState extends State<ReaderScreen> {
   String? _nextChapterTitle;
   String? _prevChapterTitle;
 
+  // Screen brightness
+  double _screenBrightness = 1.0;
+
   final CrawlerService _crawlerService = CrawlerService();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadSettings();
     _fetchContent();
     _fetchAdjacentChapters();
@@ -62,16 +71,29 @@ class _ReaderScreenState extends State<ReaderScreen> {
     // Add scroll listener for reading progress
     _scrollController.addListener(_updateReadingProgress);
 
-    // Save to reading history
-    _addToHistory();
+    // Schedule adding to history after the build is complete
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _addToHistory();
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      // App is in background, save reading progress
+      _saveReadingProgress();
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _scrollController.removeListener(_updateReadingProgress);
     _scrollController.dispose();
     // Save reading progress when leaving
     _saveReadingProgress();
+    // Reset system UI
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
 
@@ -200,6 +222,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
         _lineHeight = prefs.getDouble('reader_line_height') ?? 1.8;
         _paragraphSpacing = prefs.getDouble('reader_paragraph_spacing') ?? 1.5;
         _isDarkMode = prefs.getBool('darkMode') ?? false;
+        _enableTextSelection = prefs.getBool('reader_text_selection') ?? true;
+        _screenBrightness = prefs.getDouble('reader_brightness') ?? 1.0;
 
         // Set colors based on theme
         if (_isDarkMode) {
@@ -252,14 +276,39 @@ class _ReaderScreenState extends State<ReaderScreen> {
     });
 
     try {
-      // For now, we'll use placeholder content
-      // In a real implementation, you would fetch the content from an API
-      await Future.delayed(const Duration(milliseconds: 800));
+      // Fetch real content from the crawler service
+      final chapterData = await _crawlerService.getChapterContent(
+        widget.url,
+        context,
+      );
 
-      setState(() {
-        _content = _getDummyContent();
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          // Update content
+          _content = chapterData['content'] ?? '';
+
+          // Update chapter navigation info if we didn't already get it
+          if (!_hasNextChapter &&
+              chapterData['nextChapterUrl'] != null &&
+              chapterData['nextChapterUrl'].isNotEmpty) {
+            _hasNextChapter = true;
+            _nextChapterUrl = chapterData['nextChapterUrl'];
+            _nextChapterTitle =
+                chapterData['nextChapterTitle'] ?? 'Next Chapter';
+          }
+
+          if (!_hasPreviousChapter &&
+              chapterData['prevChapterUrl'] != null &&
+              chapterData['prevChapterUrl'].isNotEmpty) {
+            _hasPreviousChapter = true;
+            _prevChapterUrl = chapterData['prevChapterUrl'];
+            _prevChapterTitle =
+                chapterData['prevChapterTitle'] ?? 'Previous Chapter';
+          }
+
+          _isLoading = false;
+        });
+      }
 
       // Restore reading position after content is loaded
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -271,10 +320,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
         }
       });
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _content = 'Error loading content: $e';
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _content = '<p>Error loading content: $e</p>';
+        });
+        CustomToast.show(context, 'Error loading chapter: $e');
+      }
     }
   }
 
@@ -305,6 +357,27 @@ class _ReaderScreenState extends State<ReaderScreen> {
         _textColor = Colors.black.withOpacity(0.9);
         _backgroundColor = Colors.white;
       }
+    });
+
+    // Save the theme preference
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setBool('darkMode', _isDarkMode);
+    });
+  }
+
+  void _toggleControls() {
+    setState(() {
+      _showControls = !_showControls;
+    });
+  }
+
+  void _adjustBrightness(double value) {
+    setState(() {
+      _screenBrightness = value;
+    });
+
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setDouble('reader_brightness', value);
     });
   }
 
@@ -420,6 +493,39 @@ class _ReaderScreenState extends State<ReaderScreen> {
                     ],
                   ),
 
+                  // Screen brightness slider
+                  Row(
+                    children: [
+                      Icon(Icons.brightness_medium, size: 20),
+                      const SizedBox(width: 8),
+                      const Text('Brightness'),
+                      Expanded(
+                        child: Slider(
+                          value: _screenBrightness,
+                          min: 0.1,
+                          max: 1.0,
+                          divisions: 9,
+                          label:
+                              (_screenBrightness * 100).round().toString() +
+                              '%',
+                          onChanged: (value) {
+                            setState(() {
+                              _screenBrightness = value;
+                            });
+
+                            this.setState(() {
+                              _screenBrightness = value;
+                            });
+                          },
+                          onChangeEnd: (value) async {
+                            final prefs = await SharedPreferences.getInstance();
+                            prefs.setDouble('reader_brightness', value);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+
                   // Theme toggle
                   SwitchListTile(
                     title: const Text('Dark Mode'),
@@ -436,6 +542,31 @@ class _ReaderScreenState extends State<ReaderScreen> {
                           _textColor = Colors.black.withOpacity(0.9);
                           _backgroundColor = Colors.white;
                         }
+                      });
+
+                      // Save the setting
+                      SharedPreferences.getInstance().then((prefs) {
+                        prefs.setBool('darkMode', value);
+                      });
+                    },
+                  ),
+
+                  // Text selection toggle
+                  SwitchListTile(
+                    title: const Text('Enable Text Selection'),
+                    value: _enableTextSelection,
+                    onChanged: (value) {
+                      setState(() {
+                        _enableTextSelection = value;
+                      });
+
+                      this.setState(() {
+                        _enableTextSelection = value;
+                      });
+
+                      // Save the setting
+                      SharedPreferences.getInstance().then((prefs) {
+                        prefs.setBool('reader_text_selection', value);
                       });
                     },
                   ),
@@ -454,56 +585,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
         );
       },
     );
-  }
-
-  String _getDummyContent() {
-    return """
-# ${widget.chapterTitle ?? 'Chapter Title'}
-
-It was the best of times, it was the worst of times, it was the age of wisdom, it was the age of foolishness, it was the epoch of belief, it was the epoch of incredulity, it was the season of Light, it was the season of Darkness, it was the spring of hope, it was the winter of despair, we had everything before us, we had nothing before us, we were all going direct to Heaven, we were all going direct the other way.
-
-In a certain corner of a certain town, there lived a peculiar young man. He wasn't particularly tall, nor was he notably short. His features weren't strikingly handsome, but neither were they unpleasant to look at. By all accounts, he was thoroughly average—or so it seemed on the surface.
-
-"I can't believe this is happening again," he muttered, glancing at the notification on his phone.
-
-The message read: [System Alert: Dimensional Instability Detected]
-
-He sighed, wondering how many times he would be forced to relive this same scenario. This was his seventh "reset" since the phenomenon had begun.
-
-"You look troubled," came a soft voice from behind him.
-
-He turned to see a young woman with silver hair that seemed to capture and reflect the moonlight. Her eyes, an unusual shade of violet, regarded him with concern.
-
-"Aiko," he acknowledged with a nod. "I thought you weren't supposed to remember me this time."
-
-She smiled mysteriously. "The system has its flaws. Those of us who've been through enough resets develop a certain... resistance."
-
-"So what now?" he asked, feeling the familiar weight of destiny settling on his shoulders once again.
-
-"Now," she replied, her expression growing serious, "we find the anomaly before it destroys this timeline too."
-
-The young man nodded, understanding the gravity of their mission. With each reset, the fabric of reality grew thinner, more fragile. If they failed again, there might not be another chance.
-
-"Lead the way," he said, following her into the night.
-
-As they walked through the eerily quiet streets, he couldn't help but notice how different everything looked in this iteration. The buildings seemed older, more worn. The technology less advanced. It was as if they had gone back in time rather than simply resetting to a parallel dimension.
-
-"Something's different this time," he observed. "We're further back than before."
-
-Aiko nodded. "The system is deteriorating. It can no longer maintain consistency between resets. That's why we need to act quickly."
-
-A distant rumble caught their attention. Looking up, they saw a crack forming in the sky—a literal fracture in the firmament, glowing with an ominous purple light.
-
-"It's starting," Aiko whispered. "The collapse is happening faster than before."
-
-The young man clenched his fists. "Then we'd better hurry."
-
-Together, they raced toward the source of the disturbance, knowing that the fate of not just this world, but all possible worlds, rested on their success.
-
-What they didn't know was that something was watching them—something that had engineered these resets for its own inscrutable purpose. And it had no intention of letting them succeed this time either.
-
-In the distance, a clock struck midnight, and with each resonant toll, the crack in the sky grew larger...
-    """;
   }
 
   @override
@@ -537,42 +618,74 @@ In the distance, a clock struck midnight, and with each resonant toll, the crack
           ),
         ],
       ),
-      body:
-          _isLoading
-              ? Center(child: CircularProgressIndicator())
-              : Stack(
-                children: [
-                  // Main content
-                  SingleChildScrollView(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: _parseContent(),
-                    ),
-                  ),
+      body: GestureDetector(
+        onTap: _toggleControls,
+        child: Stack(
+          children: [
+            // Screen brightness overlay
+            IgnorePointer(
+              child: Container(
+                color: Colors.black.withOpacity(1.0 - _screenBrightness),
+              ),
+            ),
 
-                  // Reading progress indicator
-                  Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      width: double.infinity,
-                      height: 4,
-                      color: Colors.grey.withOpacity(0.3),
-                      child: FractionallySizedBox(
-                        alignment: Alignment.centerLeft,
-                        widthFactor: _readingProgress,
-                        child: Container(
-                          color: Theme.of(context).colorScheme.primary,
+            _isLoading
+                ? Center(child: CircularProgressIndicator())
+                : GestureDetector(
+                  onHorizontalDragEnd: (details) {
+                    // Swipe right to go to previous chapter
+                    if (details.primaryVelocity! > 300 && _hasPreviousChapter) {
+                      _navigateToChapter(_prevChapterUrl, _prevChapterTitle);
+                    }
+                    // Swipe left to go to next chapter
+                    else if (details.primaryVelocity! < -300 &&
+                        _hasNextChapter) {
+                      _navigateToChapter(_nextChapterUrl, _nextChapterTitle);
+                    }
+                  },
+                  child: Stack(
+                    children: [
+                      // Main content
+                      SelectionArea(
+                        selectionControls:
+                            _enableTextSelection
+                                ? MaterialTextSelectionControls()
+                                : null,
+                        child: SingleChildScrollView(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: _parseContent(),
+                          ),
                         ),
                       ),
-                    ),
+
+                      // Reading progress indicator
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: Container(
+                          width: double.infinity,
+                          height: 4,
+                          color: Colors.grey.withOpacity(0.3),
+                          child: FractionallySizedBox(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: _readingProgress,
+                            child: Container(
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-      // Navigation buttons
+                ),
+          ],
+        ),
+      ),
+      // Navigation buttons - always visible now
       bottomNavigationBar:
           _isLoading
               ? null
@@ -652,48 +765,132 @@ In the distance, a clock struck midnight, and with each resonant toll, the crack
   List<Widget> _parseContent() {
     final List<Widget> widgets = [];
 
-    // Split content by paragraphs
-    final paragraphs = _content.split('\n\n');
+    // Check if the content is HTML
+    if (_content.contains('<p>') || _content.contains('<h')) {
+      // Parse HTML content
+      final RegExp headerRegex = RegExp(
+        r'<h[1-6][^>]*>(.*?)<\/h[1-6]>',
+        dotAll: true,
+      );
+      final RegExp paragraphRegex = RegExp(r'<p[^>]*>(.*?)<\/p>', dotAll: true);
 
-    for (final paragraph in paragraphs) {
-      if (paragraph.trim().isEmpty) continue;
-
-      // Check if it's a header
-      if (paragraph.trim().startsWith('#')) {
-        final headerText = paragraph.trim().substring(1).trim();
-        widgets.add(
-          Padding(
-            padding: EdgeInsets.only(bottom: 16 * _paragraphSpacing),
-            child: Text(
-              headerText,
-              style: TextStyle(
-                fontSize: _fontSize + 4,
-                fontWeight: FontWeight.bold,
-                color: _textColor,
-                fontFamily: _fontFamily,
-                height: _lineHeight,
+      // Find all headers
+      headerRegex.allMatches(_content).forEach((match) {
+        final headerText = _stripHtmlTags(match.group(1) ?? '');
+        if (headerText.isNotEmpty) {
+          widgets.add(
+            Padding(
+              padding: EdgeInsets.only(bottom: 16 * _paragraphSpacing),
+              child: Text(
+                headerText,
+                style: TextStyle(
+                  fontSize: _fontSize + 4,
+                  fontWeight: FontWeight.bold,
+                  color: _textColor,
+                  fontFamily: _fontFamily,
+                  height: _lineHeight,
+                ),
               ),
             ),
-          ),
-        );
-      } else {
-        widgets.add(
-          Padding(
-            padding: EdgeInsets.only(bottom: 16 * _paragraphSpacing),
-            child: Text(
-              paragraph.trim(),
-              style: TextStyle(
-                fontSize: _fontSize,
-                color: _textColor,
-                fontFamily: _fontFamily,
-                height: _lineHeight,
+          );
+        }
+      });
+
+      // Find all paragraphs
+      paragraphRegex.allMatches(_content).forEach((match) {
+        final paragraphText = _stripHtmlTags(match.group(1) ?? '');
+        if (paragraphText.isNotEmpty) {
+          widgets.add(
+            Padding(
+              padding: EdgeInsets.only(bottom: 16 * _paragraphSpacing),
+              child: Text(
+                paragraphText,
+                style: TextStyle(
+                  fontSize: _fontSize,
+                  color: _textColor,
+                  fontFamily: _fontFamily,
+                  height: _lineHeight,
+                ),
               ),
+            ),
+          );
+        }
+      });
+
+      // If no widgets were created, just show the raw content with HTML tags stripped
+      if (widgets.isEmpty) {
+        final plainText = _stripHtmlTags(_content);
+        widgets.add(
+          Text(
+            plainText,
+            style: TextStyle(
+              fontSize: _fontSize,
+              color: _textColor,
+              fontFamily: _fontFamily,
+              height: _lineHeight,
             ),
           ),
         );
       }
+    } else {
+      // Use the existing parsing for plain text
+      final paragraphs = _content.split('\n\n');
+
+      for (final paragraph in paragraphs) {
+        if (paragraph.trim().isEmpty) continue;
+
+        // Check if it's a header
+        if (paragraph.trim().startsWith('#')) {
+          final headerText = paragraph.trim().substring(1).trim();
+          widgets.add(
+            Padding(
+              padding: EdgeInsets.only(bottom: 16 * _paragraphSpacing),
+              child: Text(
+                headerText,
+                style: TextStyle(
+                  fontSize: _fontSize + 4,
+                  fontWeight: FontWeight.bold,
+                  color: _textColor,
+                  fontFamily: _fontFamily,
+                  height: _lineHeight,
+                ),
+              ),
+            ),
+          );
+        } else {
+          widgets.add(
+            Padding(
+              padding: EdgeInsets.only(bottom: 16 * _paragraphSpacing),
+              child: Text(
+                paragraph.trim(),
+                style: TextStyle(
+                  fontSize: _fontSize,
+                  color: _textColor,
+                  fontFamily: _fontFamily,
+                  height: _lineHeight,
+                ),
+              ),
+            ),
+          );
+        }
+      }
     }
 
     return widgets;
+  }
+
+  // Helper to strip HTML tags
+  String _stripHtmlTags(String htmlString) {
+    // Remove all html tags
+    final text = htmlString.replaceAll(RegExp(r'<[^>]*>'), '');
+    // Convert HTML entities
+    return text
+        .replaceAll('&nbsp;', ' ')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#39;', "'")
+        .trim();
   }
 }
