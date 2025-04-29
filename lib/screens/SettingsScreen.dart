@@ -16,6 +16,7 @@ import '../services/update_service.dart';
 import '../screens/widgets/update_dialog.dart';
 import 'package:url_launcher/url_launcher.dart'; // Add this import
 import '../services/performance_service.dart';
+import '../screens/WireGuardSettingsScreen.dart';
 
 // GridPainter class at the top level
 class GridPainter extends CustomPainter {
@@ -1672,6 +1673,70 @@ class SettingsScreenState extends State<SettingsScreen>
     ]);
   }
 
+  // Add WireGuard settings section
+  Widget _buildWireGuardSection() {
+    return _buildSection('WireGuard VPN', [
+      ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.purple.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(Icons.vpn_lock, color: Colors.purple),
+        ),
+        title: const Text(
+          'WireGuard Settings',
+          style: TextStyle(fontWeight: FontWeight.w500),
+        ),
+        subtitle: const Text('Configure secure VPN tunnel for app traffic'),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const WireGuardSettingsScreen(),
+            ),
+          );
+        },
+      ),
+      Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.purple.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.purple.withOpacity(0.2)),
+        ),
+        child: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.purple, size: 18),
+                SizedBox(width: 8),
+                Text(
+                  'About WireGuard',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.purple,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 8),
+            Text(
+              'WireGuard creates an encrypted VPN tunnel specifically for app traffic. '
+              'It provides stronger protection than proxies and can bypass most network restrictions.',
+              style: TextStyle(fontSize: 14),
+            ),
+          ],
+        ),
+      ),
+    ]);
+  }
+
   Widget _buildDnsProviderTile() {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -2210,6 +2275,7 @@ class SettingsScreenState extends State<SettingsScreen>
                   ),
                 ]),
                 _buildProxySection(),
+                _buildWireGuardSection(),
                 _buildDnsSection(),
                 _buildSection('Notifications', [
                   _buildModernSwitchTile(
