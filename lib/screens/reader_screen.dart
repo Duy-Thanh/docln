@@ -7,6 +7,7 @@ import '../services/theme_services.dart';
 import '../screens/custom_toast.dart';
 import '../modules/light_novel.dart';
 import '../screens/HistoryScreen.dart';
+import '../services/crawler_service.dart';
 
 class ReaderScreen extends StatefulWidget {
   final String url;
@@ -41,11 +42,22 @@ class _ReaderScreenState extends State<ReaderScreen> {
   double _readingProgress = 0.0;
   final ScrollController _scrollController = ScrollController();
 
+  // Chapter navigation
+  bool _hasNextChapter = false;
+  bool _hasPreviousChapter = false;
+  String? _nextChapterUrl;
+  String? _prevChapterUrl;
+  String? _nextChapterTitle;
+  String? _prevChapterTitle;
+
+  final CrawlerService _crawlerService = CrawlerService();
+
   @override
   void initState() {
     super.initState();
     _loadSettings();
     _fetchContent();
+    _fetchAdjacentChapters();
 
     // Add scroll listener for reading progress
     _scrollController.addListener(_updateReadingProgress);
@@ -63,6 +75,84 @@ class _ReaderScreenState extends State<ReaderScreen> {
     super.dispose();
   }
 
+  Future<void> _fetchAdjacentChapters() async {
+    if (widget.novel == null) return;
+
+    try {
+      final novelDetails = await _crawlerService.getNovelDetails(
+        widget.novel!.url,
+        context,
+      );
+
+      if (mounted) {
+        final List<Map<String, dynamic>> chapters =
+            (novelDetails['chapters'] as List<dynamic>?)
+                ?.cast<Map<String, dynamic>>() ??
+            [];
+
+        if (chapters.isNotEmpty) {
+          // Find current chapter index
+          int currentIndex = -1;
+          for (int i = 0; i < chapters.length; i++) {
+            if (chapters[i]['title'] == widget.chapterTitle) {
+              currentIndex = i;
+              break;
+            }
+          }
+
+          if (currentIndex != -1) {
+            // Check if has next chapter
+            if (currentIndex < chapters.length - 1) {
+              setState(() {
+                _hasNextChapter = true;
+                final nextChapter = chapters[currentIndex + 1];
+                _nextChapterUrl = nextChapter['url'] ?? '';
+                _nextChapterTitle = nextChapter['title'] ?? 'Next Chapter';
+              });
+            }
+
+            // Check if has previous chapter
+            if (currentIndex > 0) {
+              setState(() {
+                _hasPreviousChapter = true;
+                final prevChapter = chapters[currentIndex - 1];
+                _prevChapterUrl = prevChapter['url'] ?? '';
+                _prevChapterTitle = prevChapter['title'] ?? 'Previous Chapter';
+              });
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print('Error fetching adjacent chapters: $e');
+    }
+  }
+
+  void _navigateToChapter(String? url, String? title) {
+    if (url == null || url.isEmpty) return;
+
+    // Make sure url is absolute
+    String fullUrl = url;
+    if (!url.startsWith('http')) {
+      final Uri uri = Uri.parse(widget.url);
+      final String baseUrl = '${uri.scheme}://${uri.host}';
+      fullUrl = url.startsWith('/') ? '$baseUrl$url' : '$baseUrl/$url';
+    }
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder:
+            (context) => ReaderScreen(
+              url: fullUrl,
+              title: widget.title,
+              novel: widget.novel,
+              chapterTitle: title,
+            ),
+      ),
+    );
+  }
+
   void _updateReadingProgress() {
     if (_scrollController.positions.isNotEmpty &&
         _scrollController.position.maxScrollExtent > 0) {
@@ -73,7 +163,18 @@ class _ReaderScreenState extends State<ReaderScreen> {
       setState(() {
         _readingProgress = progress;
       });
+
+      // Auto-load next chapter when near the end
+      if (progress > 0.9 && _hasNextChapter && _nextChapterUrl != null) {
+        // Pre-fetch next chapter for faster loading
+        _prefetchNextChapter();
+      }
     }
+  }
+
+  Future<void> _prefetchNextChapter() async {
+    // This method could be implemented to preload the next chapter
+    // for a smoother transition between chapters
   }
 
   Future<void> _saveReadingProgress() async {
@@ -470,6 +571,80 @@ In the distance, a clock struck midnight, and with each resonant toll, the crack
                     ),
                   ),
                 ],
+              ),
+      // Navigation buttons
+      bottomNavigationBar:
+          _isLoading
+              ? null
+              : BottomAppBar(
+                color: _backgroundColor,
+                elevation: 0,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8.0,
+                    vertical: 8.0,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Previous chapter button
+                      IconButton(
+                        icon: Icon(
+                          Icons.arrow_back_ios,
+                          color:
+                              _hasPreviousChapter
+                                  ? _textColor
+                                  : _textColor.withOpacity(0.3),
+                        ),
+                        onPressed:
+                            _hasPreviousChapter
+                                ? () => _navigateToChapter(
+                                  _prevChapterUrl,
+                                  _prevChapterTitle,
+                                )
+                                : null,
+                        tooltip:
+                            _hasPreviousChapter
+                                ? 'Previous Chapter: $_prevChapterTitle'
+                                : 'No Previous Chapter',
+                      ),
+
+                      // Chapter indicator
+                      if (widget.chapterTitle != null)
+                        Expanded(
+                          child: Text(
+                            widget.chapterTitle!,
+                            style: TextStyle(color: _textColor, fontSize: 12),
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+
+                      // Next chapter button
+                      IconButton(
+                        icon: Icon(
+                          Icons.arrow_forward_ios,
+                          color:
+                              _hasNextChapter
+                                  ? _textColor
+                                  : _textColor.withOpacity(0.3),
+                        ),
+                        onPressed:
+                            _hasNextChapter
+                                ? () => _navigateToChapter(
+                                  _nextChapterUrl,
+                                  _nextChapterTitle,
+                                )
+                                : null,
+                        tooltip:
+                            _hasNextChapter
+                                ? 'Next Chapter: $_nextChapterTitle'
+                                : 'No Next Chapter',
+                      ),
+                    ],
+                  ),
+                ),
               ),
     );
   }
