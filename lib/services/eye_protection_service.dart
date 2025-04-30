@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
 
 /// Eye Protection Service to reduce eye strain while reading
 ///
@@ -20,6 +21,7 @@ class EyeProtectionService {
   static const bool defaultAdaptiveBrightnessEnabled = true;
   static const double defaultWarmthLevel = 0.3;
   static const bool defaultPeriodicalReminderEnabled = true;
+  static const bool defaultPupillaryMonitoringEnabled = true;
 
   // Current settings
   bool _eyeProtectionEnabled = defaultEyeProtectionEnabled;
@@ -29,6 +31,19 @@ class EyeProtectionService {
   bool _adaptiveBrightnessEnabled = defaultAdaptiveBrightnessEnabled;
   double _warmthLevel = defaultWarmthLevel;
   bool _periodicalReminderEnabled = defaultPeriodicalReminderEnabled;
+  bool _pupillaryMonitoringEnabled = defaultPupillaryMonitoringEnabled;
+
+  // Pupillary monitoring variables
+  dynamic _cameraController; // Placeholder for CameraController
+  Timer? _pupillaryMonitoringTimer;
+  double _lastPupilSize = 0.0;
+  double _baselinePupilSize = 0.0;
+  bool _isPupillaryMonitoringActive = false;
+  DateTime _lastPupilSizeUpdate = DateTime.now();
+
+  // Pupillary fatigue threshold - when pupil size changes more than this percentage
+  // from baseline, we consider it as potential eye fatigue
+  static const double pupilFatigueThreshold = 0.15; // 15% change
 
   // Getters
   bool get eyeProtectionEnabled => _eyeProtectionEnabled;
@@ -38,6 +53,9 @@ class EyeProtectionService {
   bool get adaptiveBrightnessEnabled => _adaptiveBrightnessEnabled;
   double get warmthLevel => _warmthLevel;
   bool get periodicalReminderEnabled => _periodicalReminderEnabled;
+  bool get pupillaryMonitoringEnabled => _pupillaryMonitoringEnabled;
+  bool get isPupillaryMonitoringActive => _isPupillaryMonitoringActive;
+  dynamic get cameraController => _cameraController;
 
   /// Initialize settings from shared preferences
   Future<void> initSettings() async {
@@ -57,6 +75,109 @@ class EyeProtectionService {
     _periodicalReminderEnabled =
         prefs.getBool('periodical_reminder_enabled') ??
         defaultPeriodicalReminderEnabled;
+    _pupillaryMonitoringEnabled =
+        prefs.getBool('pupillary_monitoring_enabled') ??
+        defaultPupillaryMonitoringEnabled;
+  }
+
+  // PUPILLARY MONITORING METHODS
+
+  /// Start pupillary response monitoring
+  Future<bool> startPupillaryMonitoring() async {
+    if (!_pupillaryMonitoringEnabled) return false;
+
+    try {
+      // Placeholder: In a real implementation, this would initialize the camera
+      // and set up pupil tracking using computer vision
+
+      // Simulate baseline pupil size
+      _baselinePupilSize = 3.5; // Average pupil size in mm
+
+      // Set up monitoring timer (every 10 seconds)
+      _pupillaryMonitoringTimer = Timer.periodic(
+        const Duration(seconds: 10),
+        (_) => _simulatePupilSizeDetection(),
+      );
+
+      _isPupillaryMonitoringActive = true;
+      return true;
+    } catch (e) {
+      print('Error starting pupillary monitoring: $e');
+      _isPupillaryMonitoringActive = false;
+      return false;
+    }
+  }
+
+  /// Stop pupillary response monitoring
+  Future<void> stopPupillaryMonitoring() async {
+    _pupillaryMonitoringTimer?.cancel();
+
+    // In a real implementation, this would dispose of camera resources
+    _cameraController = null;
+
+    _isPupillaryMonitoringActive = false;
+  }
+
+  /// Simulate pupil size detection (for demonstration)
+  void _simulatePupilSizeDetection() {
+    // In a real implementation, this would be replaced with actual
+    // pupil detection algorithm
+
+    // Simulate baseline if not set
+    if (_baselinePupilSize == 0.0) {
+      _baselinePupilSize = 3.5; // Average pupil size in mm
+    }
+
+    // Simulate pupil size changes based on time (constricting with screen use)
+    final timeElapsed =
+        DateTime.now().difference(_lastPupilSizeUpdate).inMinutes;
+
+    // Simple model: pupil constricts over time with screen use
+    double simulatedSize =
+        _baselinePupilSize * (1.0 - (0.02 * timeElapsed).clamp(0.0, 0.3));
+
+    // Add some random variation
+    simulatedSize += (DateTime.now().millisecond % 10) / 100;
+
+    _lastPupilSize = simulatedSize;
+    _lastPupilSizeUpdate = DateTime.now();
+  }
+
+  /// Check if pupil shows signs of eye fatigue
+  bool _checkPupilFatigue() {
+    if (_baselinePupilSize == 0.0 || _lastPupilSize == 0.0) return false;
+
+    // Calculate change from baseline
+    double change =
+        (_lastPupilSize - _baselinePupilSize).abs() / _baselinePupilSize;
+
+    // Check if change exceeds threshold
+    return change > pupilFatigueThreshold;
+  }
+
+  /// Get pupillary fatigue level (0.0 to 1.0)
+  double getPupillaryFatigueLevel() {
+    if (!_isPupillaryMonitoringActive || _baselinePupilSize == 0.0) return 0.0;
+
+    // Calculate change from baseline
+    double change =
+        (_lastPupilSize - _baselinePupilSize).abs() / _baselinePupilSize;
+
+    // Normalize to a 0.0-1.0 scale where 1.0 means high fatigue
+    return (change / pupilFatigueThreshold).clamp(0.0, 1.0);
+  }
+
+  /// Enable or disable pupillary monitoring
+  Future<void> setPupillaryMonitoringEnabled(bool enabled) async {
+    _pupillaryMonitoringEnabled = enabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('pupillary_monitoring_enabled', enabled);
+
+    if (enabled && !_isPupillaryMonitoringActive) {
+      await startPupillaryMonitoring();
+    } else if (!enabled && _isPupillaryMonitoringActive) {
+      await stopPupillaryMonitoring();
+    }
   }
 
   /// Enable or disable eye protection
