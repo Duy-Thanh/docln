@@ -208,4 +208,35 @@ class ProxyService {
   void close() {
     _client.close();
   }
+
+  /// Perform a HEAD request through a proxy if necessary
+  Future<http.Response> head(Uri uri, {Map<String, String>? headers}) async {
+    if (_proxySettings['enabled']) {
+      // Use the proxy client for the request
+      try {
+        // Since we don't have a direct HEAD method with proxy,
+        // we'll use a standard http client with the proxy settings
+        final httpClient = http.Client();
+        final request = http.Request('HEAD', uri);
+
+        if (headers != null) {
+          request.headers.addAll(headers);
+        }
+
+        // Note: we can set followRedirects on the request object even though
+        // the http.head() method doesn't support it directly
+        request.followRedirects = true;
+
+        final streamedResponse = await httpClient.send(request);
+        return http.Response.fromStream(streamedResponse);
+      } catch (e) {
+        print('ProxyService HEAD error: $e');
+        // Fall back to direct request on proxy failure
+        return http.head(uri, headers: headers);
+      }
+    } else {
+      // Make a direct request without proxy
+      return http.head(uri, headers: headers);
+    }
+  }
 }

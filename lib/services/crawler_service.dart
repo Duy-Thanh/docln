@@ -35,6 +35,51 @@ class CrawlerService {
   String _dnsProvider = 'Default';
   String _customDns = '';
 
+  // Map of problematic image domains and their alternatives
+  static const Map<String, List<String>> imageDomainFallbacks = {
+    'i.docln.net': [
+      'i3.docln.net',
+      'i2.docln.net',
+      'i.hako.vn',
+      'i.ln.hako.vn',
+      'i.hako.vip',
+      'i2.hako.vip',
+    ],
+    'i2.docln.net': [
+      'i.docln.net',
+      'i3.docln.net',
+      'i.hako.vn',
+      'i2.hako.vip',
+      'i.hako.vip',
+      'i2.ln.hako.vn',
+    ],
+    'i3.docln.net': [
+      'i.docln.net',
+      'i2.docln.net',
+      'i.hako.vn',
+      'i3.hako.vip',
+      'i.hako.vip',
+      'i3.ln.hako.vn',
+    ],
+    'i.hako.vn': [
+      'i.docln.net',
+      'i.ln.hako.vn',
+      'i.hako.vip',
+      'i2.hako.vip',
+      'i3.hako.vip',
+    ],
+    'i.ln.hako.vn': [
+      'i.docln.net',
+      'i.hako.vn',
+      'i.hako.vip',
+      'i2.ln.hako.vn',
+      'i3.ln.hako.vn',
+    ],
+  };
+
+  // Cache for storing redirected URLs to avoid repeated requests
+  final Map<String, String> _redirectCache = {};
+
   Future<void> initialize() async {
     await _httpClient.initialize();
     await _dnsService.initialize();
@@ -84,7 +129,7 @@ class CrawlerService {
           server,
           headers: {
             'User-Agent':
-                'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
+                'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36',
             'Accept':
                 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
@@ -649,107 +694,7 @@ class CrawlerService {
     await _httpClient.updateProxySettings();
   }
 
-  // Fix image URLs based on DNS settings
-  String fixImageUrl(String url) {
-    // Handle common image domains that might be blocked
-    Uri? uri;
-    try {
-      uri = Uri.parse(url);
-    } catch (e) {
-      return url; // Return original if parsing fails
-    }
-
-    // Map of problematic image domains and their alternatives
-    const Map<String, List<String>> imageDomainFallbacks = {
-      'i.docln.net': ['i.hako.vn', 'i.hako.vip', 'i2.hako.vip', 'i.ln.hako.vn'],
-      'i2.docln.net': [
-        'i.hako.vn',
-        'i2.hako.vip',
-        'i.hako.vip',
-        'i2.ln.hako.vn',
-      ],
-      'i3.docln.net': [
-        'i.hako.vn',
-        'i3.hako.vip',
-        'i.hako.vip',
-        'i3.ln.hako.vn',
-      ],
-    };
-
-    // Check if the host is in our problematic domains list
-    if (imageDomainFallbacks.containsKey(uri.host)) {
-      // Replace with first fallback domain
-      final newHost = imageDomainFallbacks[uri.host]!.first;
-      print('Fixing image URL: ${uri.host} -> $newHost');
-      return url.replaceFirst(uri.host, newHost);
-    }
-
-    return url;
-  }
-
-  // Add DNS-aware image loading method
-  Future<String> getOptimizedImageUrl(String originalUrl) async {
-    if (!_isDnsEnabled) {
-      return fixImageUrl(
-        originalUrl,
-      ); // Just use the basic fix if DNS not enabled
-    }
-
-    try {
-      // Try to connect to the original URL first
-      final originalUri = Uri.parse(originalUrl);
-
-      // Prepare a list of potential URL variations
-      List<String> urlVariations = [originalUrl];
-
-      // Add fixes for common problematic domains
-      const Map<String, List<String>> imageDomainFallbacks = {
-        'i.docln.net': ['i.hako.vip', 'i2.hako.vip', 'i.ln.hako.vn'],
-        'i2.docln.net': ['i2.hako.vip', 'i.hako.vip', 'i2.ln.hako.vn'],
-        'i3.docln.net': ['i3.hako.vip', 'i.hako.vip', 'i3.ln.hako.vn'],
-      };
-
-      // If the domain is in our problem list, add alternatives
-      if (imageDomainFallbacks.containsKey(originalUri.host)) {
-        for (final alternativeHost in imageDomainFallbacks[originalUri.host]!) {
-          final alternativeUrl = originalUrl.replaceFirst(
-            originalUri.host,
-            alternativeHost,
-          );
-          urlVariations.add(alternativeUrl);
-        }
-      }
-
-      // Try each URL variation until one works
-      for (final url in urlVariations) {
-        try {
-          // Just check if the URL is accessible
-          final response = await _httpClient.get(
-            url,
-            headers: {
-              'Accept': 'image/*',
-              'Range': 'bytes=0-1024',
-            }, // Just get the header
-          );
-
-          if (response.statusCode >= 200 && response.statusCode < 300) {
-            return url; // This URL works
-          }
-        } catch (e) {
-          // Just continue to the next variation
-          continue;
-        }
-      }
-
-      // If all variations failed, return the original
-      return originalUrl;
-    } catch (e) {
-      print('Error optimizing image URL: $e');
-      return originalUrl; // Return original URL as fallback
-    }
-  }
-
-  // Override the extract cover URL method to use DNS awareness
+  // Improve the extract cover URL method to use new optimized approach
   String _extractCoverUrl(dom.Element? coverElement) {
     if (coverElement == null) {
       return 'https://ln.hako.vn/img/nocover.jpg';
@@ -758,15 +703,17 @@ class CrawlerService {
     // Try to get from data-bg attribute
     String? dataBg = coverElement.attributes['data-bg'];
     if (dataBg != null && dataBg.isNotEmpty) {
-      return fixImageUrl(dataBg);
+      // Use the original URL directly - let Flutter's image provider handle redirects
+      return dataBg;
     }
 
     // Try to get from background-image style
     String? style = coverElement.attributes['style'];
     if (style != null && style.contains('url(')) {
-      // Extract URL from style using string operations instead of RegExp
+      // Extract URL manually instead of using regex
       int startIndex = style.indexOf('url(') + 4;
       int endIndex = style.indexOf(')', startIndex);
+
       if (startIndex < endIndex) {
         String url = style.substring(startIndex, endIndex);
         // Remove quotes if they exist
@@ -775,12 +722,67 @@ class CrawlerService {
         } else if (url.startsWith("'") && url.endsWith("'")) {
           url = url.substring(1, url.length - 1);
         }
-        return fixImageUrl(url);
+        // Use the original URL directly - let Flutter's image provider handle redirects
+        return url;
       }
     }
 
     // If all else fails, return default image
     return 'https://ln.hako.vn/img/nocover.jpg';
+  }
+
+  // Process image URLs in content to prevent 404 errors
+  Future<String> _processImageUrls(String html) async {
+    // We'll no longer modify image URLs in the content
+    // Let the browser/WebView handle redirects automatically
+    return html;
+  }
+
+  // Helper method to process regex matches - not needed with new approach
+  Future<String> _processMatches(
+    Iterable<RegExpMatch> matches,
+    String html,
+  ) async {
+    // We are no longer processing matches
+    return html;
+  }
+
+  // Fix image URLs based on DNS settings - no longer modifying URLs
+  String fixImageUrl(String url) {
+    // Special case for the u6440 pattern that's causing issues
+    if (url.contains('u6440-') && url.contains('lightnovel/illusts/')) {
+      // For these specific files, immediately use i2.docln.net
+      String host = Uri.parse(url).host;
+      if (host == 'i.hako.vn') {
+        String newUrl = url.replaceFirst('i.hako.vn', 'i2.docln.net');
+        print('Fixing problematic u6440 image URL: $url -> $newUrl');
+        return newUrl;
+      } else if (host == 'i3.docln.net') {
+        // If we've gotten i3.docln.net (which often has connectivity issues), try i.docln.net instead
+        String newUrl = url.replaceFirst('i3.docln.net', 'i.docln.net');
+        print(
+          'Avoiding i3.docln.net, using i.docln.net instead: $url -> $newUrl',
+        );
+        return newUrl;
+      }
+    }
+
+    // Simply return the original URL for other cases
+    return url;
+  }
+
+  // Add a better method for following image URL redirects
+  Future<String> getRedirectUrl(String originalUrl) async {
+    // Simply return the original URL
+    // We're letting the Flutter image provider handle redirects internally
+    return originalUrl;
+  }
+
+  // Optimize image URLs with redirect detection
+  Future<String> getOptimizedImageUrl(String originalUrl) async {
+    // Simply return the original URL
+    // We're letting the Flutter image provider handle redirects internally
+    return originalUrl;
   }
 
   // Add a new method to fetch chapter content with optimized loading

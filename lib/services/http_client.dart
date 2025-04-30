@@ -63,4 +63,21 @@ class AppHttpClient {
   Future<void> updateProxySettings() async {
     await _proxyService.updateProxySettings();
   }
+
+  /// Make a HEAD request using the proxy settings
+  Future<http.Response> head(String url, {Map<String, String>? headers}) async {
+    if (!_isInitialized) await initialize();
+
+    // Ensure URL has a scheme (http:// or https://)
+    String formattedUrl = url;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      formattedUrl = 'https://${url.replaceAll(RegExp('^//'), '')}';
+      print('Fixed URL format: $url -> $formattedUrl');
+    }
+
+    var uri = Uri.parse(formattedUrl);
+
+    // Use the proxy service if available
+    return _proxyService.head(uri, headers: headers);
+  }
 }

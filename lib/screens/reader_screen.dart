@@ -11,6 +11,7 @@ import '../services/crawler_service.dart';
 import '../services/eye_protection_service.dart';
 import '../widgets/eye_protection_overlay.dart';
 import '../widgets/eye_friendly_text.dart';
+import '../widgets/network_image.dart';
 
 // Define content block types
 enum ContentBlockType { paragraph, header, image }
@@ -1375,28 +1376,10 @@ class _ReaderScreenState extends State<ReaderScreen>
   Widget _buildImageWidget(String imageUrl) {
     final fixedUrl = _fixImageUrl(imageUrl);
 
-    return Image.network(
-      fixedUrl,
+    return OptimizedNetworkImage(
+      imageUrl: fixedUrl,
       fit: BoxFit.contain,
-      headers: {
-        'User-Agent':
-            'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
-        'Referer': 'https://ln.hako.vn/',
-        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
-      },
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) return child;
-        return Center(
-          child: CircularProgressIndicator(
-            value:
-                loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded /
-                        loadingProgress.expectedTotalBytes!
-                    : null,
-          ),
-        );
-      },
-      errorBuilder: (context, error, stackTrace) {
+      errorWidget: (context, url, error) {
         print('Error loading image: $error for URL $fixedUrl');
 
         // If the fixed URL failed, try a direct alternative domain
@@ -1407,16 +1390,10 @@ class _ReaderScreenState extends State<ReaderScreen>
             'i.hako.vn',
           );
 
-          return Image.network(
-            altUrl,
+          return OptimizedNetworkImage(
+            imageUrl: altUrl,
             fit: BoxFit.contain,
-            headers: {
-              'User-Agent':
-                  'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
-              'Referer': 'https://ln.hako.vn/',
-              'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
-            },
-            errorBuilder: (context, error, stackTrace) {
+            errorWidget: (context, url, error) {
               print('Error loading alternative image: $error');
               return Column(
                 children: [
@@ -1442,6 +1419,7 @@ class _ReaderScreenState extends State<ReaderScreen>
           ],
         );
       },
+      placeholder: Center(child: CircularProgressIndicator()),
     );
   }
 

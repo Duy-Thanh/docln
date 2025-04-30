@@ -7,6 +7,7 @@ import './widgets/light_novel_card.dart';
 import './LightNovelDetailsScreen.dart';
 import './custom_toast.dart';
 import '../screens/HomeScreen.dart';
+import '../widgets/network_image.dart';
 
 // Create a History service
 class HistoryService extends ChangeNotifier {
@@ -328,13 +329,13 @@ class _HistoryScreenState extends State<HistoryScreen>
               // Novel cover
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  item.novel.coverUrl,
+                child: OptimizedNetworkImage(
+                  imageUrl: item.novel.coverUrl,
                   width: 80,
                   height: 120,
                   fit: BoxFit.cover,
-                  errorBuilder:
-                      (context, error, stackTrace) => Container(
+                  errorWidget:
+                      (context, url, error) => Container(
                         width: 80,
                         height: 120,
                         color: isDarkMode ? Colors.grey[800] : Colors.grey[300],

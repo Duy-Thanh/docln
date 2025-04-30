@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
 import '../../modules/chapter.dart';
 import 'package:shimmer/shimmer.dart';
+import '../../widgets/network_image.dart';
 
 class ChapterCard extends StatefulWidget {
   final Chapter chapter;
   final VoidCallback? onTap;
 
-  const ChapterCard({
-    Key? key,
-    required this.chapter,
-    this.onTap,
-  }) : super(key: key);
+  const ChapterCard({Key? key, required this.chapter, this.onTap})
+    : super(key: key);
 
   @override
   State<ChapterCard> createState() => _ChapterCardState();
@@ -20,17 +18,19 @@ class _ChapterCardState extends State<ChapterCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     // Validate if chapter has required data
-    if (widget.chapter.title.isEmpty || 
-        widget.chapter.seriesTitle.isEmpty) {
+    if (widget.chapter.title.isEmpty || widget.chapter.seriesTitle.isEmpty) {
       return const SizedBox.shrink(); // Don't show empty cards
     }
-    
+
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: widget.chapter.url.isNotEmpty ? widget.onTap : null, // Disable tap if no URL
+        onTap:
+            widget.chapter.url.isNotEmpty
+                ? widget.onTap
+                : null, // Disable tap if no URL
         child: SizedBox(
           height: 400,
           child: Column(
@@ -42,17 +42,17 @@ class _ChapterCardState extends State<ChapterCard> {
                   fit: StackFit.expand,
                   children: [
                     // Image with fallback
-                    Image.network(
-                      widget.chapter.coverUrl.isNotEmpty 
-                          ? widget.chapter.coverUrl 
-                          : 'https://ln.hako.vn/img/nocover.jpg', // Fallback image
+                    OptimizedNetworkImage(
+                      imageUrl:
+                          widget.chapter.coverUrl.isNotEmpty
+                              ? widget.chapter.coverUrl
+                              : 'https://ln.hako.vn/img/nocover.jpg', // Fallback image
                       fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: Colors.grey[300],
-                          child: const Icon(Icons.broken_image),
-                        );
-                      },
+                      errorWidget:
+                          (context, url, error) => Container(
+                            color: Colors.grey[300],
+                            child: const Icon(Icons.broken_image),
+                          ),
                     ),
                     // Volume badge (if exists and not empty)
                     if (widget.chapter.volumeTitle?.isNotEmpty == true)

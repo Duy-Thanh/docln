@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/bookmark_service.dart';
 import '../screens/HistoryScreen.dart';
 import 'package:provider/provider.dart';
+import '../widgets/network_image.dart';
 
 class LightNovelDetailsScreen extends StatefulWidget {
   final LightNovel novel;
@@ -338,12 +339,12 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
                         ),
                         child: Hero(
                           tag: 'novel_${widget.novel.id}',
-                          child: Image.network(
-                            widget.novel.coverUrl,
+                          child: OptimizedNetworkImage(
+                            imageUrl: widget.novel.coverUrl,
                             width: 120,
                             height: 170,
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
+                            errorWidget: (context, url, error) {
                               return Container(
                                 width: 120,
                                 height: 170,
