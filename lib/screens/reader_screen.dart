@@ -8,6 +8,9 @@ import '../screens/custom_toast.dart';
 import '../modules/light_novel.dart';
 import '../screens/HistoryScreen.dart';
 import '../services/crawler_service.dart';
+import '../services/eye_protection_service.dart';
+import '../widgets/eye_protection_overlay.dart';
+import '../widgets/eye_friendly_text.dart';
 
 // Define content block types
 enum ContentBlockType { paragraph, header, image }
@@ -76,12 +79,18 @@ class _ReaderScreenState extends State<ReaderScreen>
   // Screen brightness
   double _screenBrightness = 1.0;
 
+  // Eye protection
+  late EyeProtectionService _eyeProtectionService;
+  DateTime _readingStartTime = DateTime.now();
+
   final CrawlerService _crawlerService = CrawlerService();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _eyeProtectionService = EyeProtectionService();
+    _eyeProtectionService.initSettings();
     _loadSettings();
     _fetchContent();
     _fetchAdjacentChapters();
@@ -253,6 +262,14 @@ class _ReaderScreenState extends State<ReaderScreen>
         _enableTextSelection = prefs.getBool('reader_text_selection') ?? true;
         _screenBrightness = prefs.getDouble('reader_brightness') ?? 1.0;
 
+        // Apply adaptive brightness from eye protection service if enabled
+        if (_eyeProtectionService.adaptiveBrightnessEnabled) {
+          _screenBrightness = _eyeProtectionService.getAdaptiveBrightness(
+            _screenBrightness,
+            DateTime.now(),
+          );
+        }
+
         // Set colors based on theme
         if (_isDarkMode) {
           _textColor =
@@ -280,6 +297,12 @@ class _ReaderScreenState extends State<ReaderScreen>
                     ),
                   )
                   : Colors.white;
+        }
+
+        // Apply eye protection to colors if enabled
+        if (_eyeProtectionService.eyeProtectionEnabled) {
+          _textColor = _eyeProtectionService.applyEyeProtection(_textColor);
+          // Don't apply to background as we use overlay instead
         }
       });
 
@@ -418,192 +441,444 @@ class _ReaderScreenState extends State<ReaderScreen>
           builder: (context, setState) {
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(2),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Reading Settings',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 24),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Reading Settings',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
 
-                  // Font size slider
-                  Row(
-                    children: [
-                      const Text('A', style: TextStyle(fontSize: 14)),
-                      Expanded(
-                        child: Slider(
-                          value: _fontSize,
-                          min: 12.0,
-                          max: 24.0,
-                          divisions: 12,
-                          label: _fontSize.round().toString(),
-                          onChanged: (value) {
-                            setState(() {
-                              _fontSize = value;
-                            });
-                          },
-                          onChangeEnd: (value) async {
-                            final prefs = await SharedPreferences.getInstance();
-                            prefs.setDouble('reader_font_size', value);
-                          },
+                    // Font size slider
+                    Row(
+                      children: [
+                        const Text('A', style: TextStyle(fontSize: 14)),
+                        Expanded(
+                          child: Slider(
+                            value: _fontSize,
+                            min: 12.0,
+                            max: 24.0,
+                            divisions: 12,
+                            label: _fontSize.round().toString(),
+                            onChanged: (value) {
+                              setState(() {
+                                _fontSize = value;
+                              });
+                            },
+                            onChangeEnd: (value) async {
+                              final prefs =
+                                  await SharedPreferences.getInstance();
+                              prefs.setDouble('reader_font_size', value);
+                            },
+                          ),
+                        ),
+                        const Text('A', style: TextStyle(fontSize: 22)),
+                      ],
+                    ),
+
+                    // Line height slider
+                    Row(
+                      children: [
+                        Icon(Icons.format_line_spacing, size: 20),
+                        const SizedBox(width: 8),
+                        const Text('Line Height'),
+                        Expanded(
+                          child: Slider(
+                            value: _lineHeight,
+                            min: 1.2,
+                            max: 2.4,
+                            divisions: 12,
+                            label: _lineHeight.toStringAsFixed(1),
+                            onChanged: (value) {
+                              setState(() {
+                                _lineHeight = value;
+                              });
+                            },
+                            onChangeEnd: (value) async {
+                              final prefs =
+                                  await SharedPreferences.getInstance();
+                              prefs.setDouble('reader_line_height', value);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // Paragraph spacing slider
+                    Row(
+                      children: [
+                        Icon(Icons.space_bar, size: 20),
+                        const SizedBox(width: 8),
+                        const Text('Paragraph Spacing'),
+                        Expanded(
+                          child: Slider(
+                            value: _paragraphSpacing,
+                            min: 1.0,
+                            max: 3.0,
+                            divisions: 10,
+                            label: _paragraphSpacing.toStringAsFixed(1),
+                            onChanged: (value) {
+                              setState(() {
+                                _paragraphSpacing = value;
+                              });
+                            },
+                            onChangeEnd: (value) async {
+                              final prefs =
+                                  await SharedPreferences.getInstance();
+                              prefs.setDouble(
+                                'reader_paragraph_spacing',
+                                value,
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // Blue light filter slider
+                    Row(
+                      children: [
+                        Icon(Icons.nights_stay, size: 20),
+                        const SizedBox(width: 8),
+                        const Text('Blue Light Filter'),
+                        Expanded(
+                          child: Slider(
+                            value: _eyeProtectionService.blueFilterLevel,
+                            min: 0.0,
+                            max: 1.0,
+                            divisions: 10,
+                            label:
+                                (_eyeProtectionService.blueFilterLevel * 100)
+                                    .round()
+                                    .toString() +
+                                '%',
+                            onChanged: (value) async {
+                              // Update immediately for preview
+                              await _eyeProtectionService.setBlueFilterLevel(
+                                value,
+                              );
+                              // Refresh state to show changes
+                              setState(() {});
+                              this.setState(() {});
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // Color temperature (warmth) slider
+                    Row(
+                      children: [
+                        Icon(Icons.wb_sunny, size: 20),
+                        const SizedBox(width: 8),
+                        const Text('Warmth'),
+                        Expanded(
+                          child: Slider(
+                            value: _eyeProtectionService.warmthLevel,
+                            min: 0.0,
+                            max: 1.0,
+                            divisions: 10,
+                            label:
+                                (_eyeProtectionService.warmthLevel * 100)
+                                    .round()
+                                    .toString() +
+                                '%',
+                            onChanged: (value) async {
+                              // Update immediately for preview
+                              await _eyeProtectionService.setWarmthLevel(value);
+                              // Refresh state to show changes
+                              setState(() {});
+                              this.setState(() {});
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // Screen brightness slider
+                    Row(
+                      children: [
+                        Icon(Icons.brightness_medium, size: 20),
+                        const SizedBox(width: 8),
+                        const Text('Brightness'),
+                        Expanded(
+                          child: Slider(
+                            value: _screenBrightness,
+                            min: 0.1,
+                            max: 1.0,
+                            divisions: 9,
+                            label:
+                                (_screenBrightness * 100).round().toString() +
+                                '%',
+                            onChanged: (value) {
+                              setState(() {
+                                _screenBrightness = value;
+                              });
+
+                              this.setState(() {
+                                _screenBrightness = value;
+                              });
+                            },
+                            onChangeEnd: (value) async {
+                              final prefs =
+                                  await SharedPreferences.getInstance();
+                              prefs.setDouble('reader_brightness', value);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // Theme toggle
+                    SwitchListTile(
+                      title: const Text('Dark Mode'),
+                      value: _isDarkMode,
+                      onChanged: (value) {
+                        setState(() {
+                          _isDarkMode = value;
+                        });
+                        this.setState(() {
+                          if (_isDarkMode) {
+                            _textColor = Colors.white.withOpacity(0.9);
+                            _backgroundColor = const Color(0xFF121212);
+                          } else {
+                            _textColor = Colors.black.withOpacity(0.9);
+                            _backgroundColor = Colors.white;
+                          }
+
+                          // Apply eye protection if enabled
+                          if (_eyeProtectionService.eyeProtectionEnabled) {
+                            _textColor = _eyeProtectionService
+                                .applyEyeProtection(_textColor);
+                          }
+                        });
+
+                        // Save the setting
+                        SharedPreferences.getInstance().then((prefs) {
+                          prefs.setBool('darkMode', value);
+                        });
+                      },
+                    ),
+
+                    // Eye protection toggle
+                    SwitchListTile(
+                      title: const Text('Eye Protection'),
+                      subtitle: const Text('Reduces blue light and eye strain'),
+                      value: _eyeProtectionService.eyeProtectionEnabled,
+                      onChanged: (value) async {
+                        // Update service
+                        await _eyeProtectionService.setEyeProtectionEnabled(
+                          value,
+                        );
+                        // Refresh both state builders
+                        setState(() {});
+                        this.setState(() {
+                          // Re-apply protection to text color
+                          if (_eyeProtectionService.eyeProtectionEnabled) {
+                            _textColor = _eyeProtectionService
+                                .applyEyeProtection(_textColor);
+                          } else {
+                            // Reset to original colors based on theme
+                            if (_isDarkMode) {
+                              _textColor = Colors.white.withOpacity(0.9);
+                            } else {
+                              _textColor = Colors.black.withOpacity(0.9);
+                            }
+                          }
+                        });
+                      },
+                    ),
+
+                    // Adaptive brightness toggle
+                    SwitchListTile(
+                      title: const Text('Adaptive Brightness'),
+                      subtitle: const Text(
+                        'Adjust brightness based on time of day',
+                      ),
+                      value: _eyeProtectionService.adaptiveBrightnessEnabled,
+                      onChanged: (value) async {
+                        // Update service
+                        await _eyeProtectionService
+                            .setAdaptiveBrightnessEnabled(value);
+                        // Refresh state
+                        setState(() {});
+                        this.setState(() {
+                          // Apply adaptive brightness if enabled
+                          if (_eyeProtectionService.adaptiveBrightnessEnabled) {
+                            _screenBrightness = _eyeProtectionService
+                                .getAdaptiveBrightness(
+                                  _screenBrightness,
+                                  DateTime.now(),
+                                );
+                          }
+                        });
+                      },
+                    ),
+
+                    // Reading timer toggle and settings
+                    SwitchListTile(
+                      title: const Text('Break Reminders'),
+                      subtitle: const Text(
+                        'Reminds you to rest your eyes periodically',
+                      ),
+                      value: _eyeProtectionService.periodicalReminderEnabled,
+                      onChanged: (value) async {
+                        await _eyeProtectionService
+                            .setPeriodicalReminderEnabled(value);
+                        setState(() {});
+                      },
+                    ),
+
+                    // Only show interval setting if reminders are enabled
+                    if (_eyeProtectionService.periodicalReminderEnabled)
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          left: 16,
+                          right: 16,
+                          top: 8,
+                        ),
+                        child: Row(
+                          children: [
+                            const Text('Reminder interval: '),
+                            const SizedBox(width: 8),
+                            DropdownButton<int>(
+                              value: _eyeProtectionService.readingTimerInterval,
+                              items:
+                                  [5, 10, 15, 20, 25, 30, 45, 60].map((
+                                    int value,
+                                  ) {
+                                    return DropdownMenuItem<int>(
+                                      value: value,
+                                      child: Text('$value minutes'),
+                                    );
+                                  }).toList(),
+                              onChanged: (int? newValue) async {
+                                if (newValue != null) {
+                                  await _eyeProtectionService
+                                      .setReadingTimerInterval(newValue);
+                                  setState(() {});
+                                }
+                              },
+                            ),
+                          ],
                         ),
                       ),
-                      const Text('A', style: TextStyle(fontSize: 22)),
-                    ],
-                  ),
 
-                  // Line height slider
-                  Row(
-                    children: [
-                      Icon(Icons.format_line_spacing, size: 20),
-                      const SizedBox(width: 8),
-                      const Text('Line Height'),
-                      Expanded(
-                        child: Slider(
-                          value: _lineHeight,
-                          min: 1.2,
-                          max: 2.4,
-                          divisions: 12,
-                          label: _lineHeight.toStringAsFixed(1),
-                          onChanged: (value) {
-                            setState(() {
-                              _lineHeight = value;
-                            });
-                          },
-                          onChangeEnd: (value) async {
-                            final prefs = await SharedPreferences.getInstance();
-                            prefs.setDouble('reader_line_height', value);
-                          },
+                    // Text selection toggle
+                    SwitchListTile(
+                      title: const Text('Enable Text Selection'),
+                      value: _enableTextSelection,
+                      onChanged: (value) {
+                        setState(() {
+                          _enableTextSelection = value;
+                        });
+
+                        this.setState(() {
+                          _enableTextSelection = value;
+                        });
+
+                        // Save the setting
+                        SharedPreferences.getInstance().then((prefs) {
+                          prefs.setBool('reader_text_selection', value);
+                        });
+                      },
+                    ),
+
+                    // Show information about eye protection features
+                    if (_eyeProtectionService.eyeProtectionEnabled)
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primary.withOpacity(0.3),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.info_outline,
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Eye Protection Information',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Our eye protection technology includes:',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                              const SizedBox(height: 4),
+                              _buildEyeProtectionInfoItem(
+                                '• Blue light filtering to reduce eye strain',
+                                'Reduces harmful blue light wavelengths',
+                              ),
+                              _buildEyeProtectionInfoItem(
+                                '• Optimal contrast adjustment',
+                                'Prevents excessive contrast that causes eye fatigue',
+                              ),
+                              _buildEyeProtectionInfoItem(
+                                '• Color temperature warming',
+                                'Creates a paper-like reading experience',
+                              ),
+                              _buildEyeProtectionInfoItem(
+                                '• 20-20-20 break reminders',
+                                'Look away every 20 minutes at something 20 feet away for 20 seconds',
+                              ),
+                              _buildEyeProtectionInfoItem(
+                                '• Time-based brightness adjustment',
+                                'Automatically reduces screen brightness at night',
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ],
-                  ),
 
-                  // Paragraph spacing slider
-                  Row(
-                    children: [
-                      Icon(Icons.space_bar, size: 20),
-                      const SizedBox(width: 8),
-                      const Text('Paragraph Spacing'),
-                      Expanded(
-                        child: Slider(
-                          value: _paragraphSpacing,
-                          min: 1.0,
-                          max: 3.0,
-                          divisions: 10,
-                          label: _paragraphSpacing.toStringAsFixed(1),
-                          onChanged: (value) {
-                            setState(() {
-                              _paragraphSpacing = value;
-                            });
-                          },
-                          onChangeEnd: (value) async {
-                            final prefs = await SharedPreferences.getInstance();
-                            prefs.setDouble('reader_paragraph_spacing', value);
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  // Screen brightness slider
-                  Row(
-                    children: [
-                      Icon(Icons.brightness_medium, size: 20),
-                      const SizedBox(width: 8),
-                      const Text('Brightness'),
-                      Expanded(
-                        child: Slider(
-                          value: _screenBrightness,
-                          min: 0.1,
-                          max: 1.0,
-                          divisions: 9,
-                          label:
-                              (_screenBrightness * 100).round().toString() +
-                              '%',
-                          onChanged: (value) {
-                            setState(() {
-                              _screenBrightness = value;
-                            });
-
-                            this.setState(() {
-                              _screenBrightness = value;
-                            });
-                          },
-                          onChangeEnd: (value) async {
-                            final prefs = await SharedPreferences.getInstance();
-                            prefs.setDouble('reader_brightness', value);
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  // Theme toggle
-                  SwitchListTile(
-                    title: const Text('Dark Mode'),
-                    value: _isDarkMode,
-                    onChanged: (value) {
-                      setState(() {
-                        _isDarkMode = value;
-                      });
-                      this.setState(() {
-                        if (_isDarkMode) {
-                          _textColor = Colors.white.withOpacity(0.9);
-                          _backgroundColor = const Color(0xFF121212);
-                        } else {
-                          _textColor = Colors.black.withOpacity(0.9);
-                          _backgroundColor = Colors.white;
-                        }
-                      });
-
-                      // Save the setting
-                      SharedPreferences.getInstance().then((prefs) {
-                        prefs.setBool('darkMode', value);
-                      });
-                    },
-                  ),
-
-                  // Text selection toggle
-                  SwitchListTile(
-                    title: const Text('Enable Text Selection'),
-                    value: _enableTextSelection,
-                    onChanged: (value) {
-                      setState(() {
-                        _enableTextSelection = value;
-                      });
-
-                      this.setState(() {
-                        _enableTextSelection = value;
-                      });
-
-                      // Save the setting
-                      SharedPreferences.getInstance().then((prefs) {
-                        prefs.setBool('reader_text_selection', value);
-                      });
-                    },
-                  ),
-
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    child: const Text('Done'),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                      },
+                      child: const Text('Done'),
+                    ),
+                  ],
+                ),
               ),
             );
           },
@@ -637,6 +912,11 @@ class _ReaderScreenState extends State<ReaderScreen>
             tooltip: 'Toggle theme',
           ),
           IconButton(
+            icon: const Icon(Icons.remove_red_eye),
+            onPressed: () => _showSettingsPanel(),
+            tooltip: 'Eye protection settings',
+          ),
+          IconButton(
             icon: const Icon(Icons.settings),
             onPressed: _showSettingsPanel,
             tooltip: 'Reader settings',
@@ -645,69 +925,74 @@ class _ReaderScreenState extends State<ReaderScreen>
       ),
       body: GestureDetector(
         onTap: _toggleControls,
-        child: Stack(
-          children: [
-            // Screen brightness overlay
-            IgnorePointer(
-              child: Container(
-                color: Colors.black.withOpacity(1.0 - _screenBrightness),
+        child: EyeProtectionOverlay(
+          readingStartTime: _readingStartTime,
+          showControls: _showControls,
+          child: Stack(
+            children: [
+              // Screen brightness overlay
+              IgnorePointer(
+                child: Container(
+                  color: Colors.black.withOpacity(1.0 - _screenBrightness),
+                ),
               ),
-            ),
 
-            _isLoading
-                ? Center(child: CircularProgressIndicator())
-                : GestureDetector(
-                  onHorizontalDragEnd: (details) {
-                    // Swipe right to go to previous chapter
-                    if (details.primaryVelocity! > 300 && _hasPreviousChapter) {
-                      _navigateToChapter(_prevChapterUrl, _prevChapterTitle);
-                    }
-                    // Swipe left to go to next chapter
-                    else if (details.primaryVelocity! < -300 &&
-                        _hasNextChapter) {
-                      _navigateToChapter(_nextChapterUrl, _nextChapterTitle);
-                    }
-                  },
-                  child: Stack(
-                    children: [
-                      // Main content
-                      SelectionArea(
-                        selectionControls:
-                            _enableTextSelection
-                                ? MaterialTextSelectionControls()
-                                : null,
-                        child: SingleChildScrollView(
-                          controller: _scrollController,
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: _parseContent(),
-                          ),
-                        ),
-                      ),
-
-                      // Reading progress indicator
-                      Positioned(
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        child: Container(
-                          width: double.infinity,
-                          height: 4,
-                          color: Colors.grey.withOpacity(0.3),
-                          child: FractionallySizedBox(
-                            alignment: Alignment.centerLeft,
-                            widthFactor: _readingProgress,
-                            child: Container(
-                              color: Theme.of(context).colorScheme.primary,
+              _isLoading
+                  ? Center(child: CircularProgressIndicator())
+                  : GestureDetector(
+                    onHorizontalDragEnd: (details) {
+                      // Swipe right to go to previous chapter
+                      if (details.primaryVelocity! > 300 &&
+                          _hasPreviousChapter) {
+                        _navigateToChapter(_prevChapterUrl, _prevChapterTitle);
+                      }
+                      // Swipe left to go to next chapter
+                      else if (details.primaryVelocity! < -300 &&
+                          _hasNextChapter) {
+                        _navigateToChapter(_nextChapterUrl, _nextChapterTitle);
+                      }
+                    },
+                    child: Stack(
+                      children: [
+                        // Main content
+                        SelectionArea(
+                          selectionControls:
+                              _enableTextSelection
+                                  ? MaterialTextSelectionControls()
+                                  : null,
+                          child: SingleChildScrollView(
+                            controller: _scrollController,
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: _parseContent(),
                             ),
                           ),
                         ),
-                      ),
-                    ],
+
+                        // Reading progress indicator
+                        Positioned(
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          child: Container(
+                            width: double.infinity,
+                            height: 4,
+                            color: Colors.grey.withOpacity(0.3),
+                            child: FractionallySizedBox(
+                              alignment: Alignment.centerLeft,
+                              widthFactor: _readingProgress,
+                              child: Container(
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-          ],
+            ],
+          ),
         ),
       ),
       // Navigation buttons - always visible now
@@ -892,8 +1177,8 @@ class _ReaderScreenState extends State<ReaderScreen>
             widgets.add(
               Padding(
                 padding: EdgeInsets.only(bottom: 16 * _paragraphSpacing),
-                child: Text(
-                  paragraphText,
+                child: EyeFriendlyText(
+                  text: paragraphText,
                   style: TextStyle(
                     fontSize: _fontSize,
                     color: _textColor,
@@ -911,8 +1196,8 @@ class _ReaderScreenState extends State<ReaderScreen>
               widgets.add(
                 Padding(
                   padding: EdgeInsets.only(bottom: 16 * _paragraphSpacing),
-                  child: Text(
-                    headerText,
+                  child: EyeFriendlyText(
+                    text: headerText,
                     style: TextStyle(
                       fontSize: _fontSize + 4,
                       fontWeight: FontWeight.bold,
@@ -937,8 +1222,8 @@ class _ReaderScreenState extends State<ReaderScreen>
                       if (block.altText != null && block.altText!.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 8.0),
-                          child: Text(
-                            block.altText!,
+                          child: EyeFriendlyText(
+                            text: block.altText!,
                             style: TextStyle(
                               fontStyle: FontStyle.italic,
                               fontSize: _fontSize - 2,
@@ -960,8 +1245,8 @@ class _ReaderScreenState extends State<ReaderScreen>
       if (widgets.isEmpty) {
         final plainText = _stripHtmlTags(processedContent);
         widgets.add(
-          Text(
-            plainText,
+          EyeFriendlyText(
+            text: plainText,
             style: TextStyle(
               fontSize: _fontSize,
               color: _textColor,
@@ -984,8 +1269,8 @@ class _ReaderScreenState extends State<ReaderScreen>
           widgets.add(
             Padding(
               padding: EdgeInsets.only(bottom: 16 * _paragraphSpacing),
-              child: Text(
-                headerText,
+              child: EyeFriendlyText(
+                text: headerText,
                 style: TextStyle(
                   fontSize: _fontSize + 4,
                   fontWeight: FontWeight.bold,
@@ -1000,8 +1285,8 @@ class _ReaderScreenState extends State<ReaderScreen>
           widgets.add(
             Padding(
               padding: EdgeInsets.only(bottom: 16 * _paragraphSpacing),
-              child: Text(
-                paragraph.trim(),
+              child: EyeFriendlyText(
+                text: paragraph.trim(),
                 style: TextStyle(
                   fontSize: _fontSize,
                   color: _textColor,
@@ -1157,6 +1442,37 @@ class _ReaderScreenState extends State<ReaderScreen>
           ],
         );
       },
+    );
+  }
+
+  Widget _buildEyeProtectionInfoItem(String title, String description) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        children: [
+          Icon(
+            Icons.check_circle,
+            color: Theme.of(context).colorScheme.primary,
+            size: 20,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                Text(description, style: TextStyle(fontSize: 12)),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
