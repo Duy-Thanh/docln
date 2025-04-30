@@ -780,22 +780,6 @@ class _ReaderScreenState extends State<ReaderScreen>
                         ),
                       ),
 
-                    // Pupillary monitoring toggle
-                    SwitchListTile(
-                      title: const Text('Pupillary Monitoring'),
-                      subtitle: const Text(
-                        'Detects eye fatigue using camera (front camera access required)',
-                      ),
-                      value: _eyeProtectionService.pupillaryMonitoringEnabled,
-                      onChanged: (value) async {
-                        // Update service
-                        await _eyeProtectionService
-                            .setPupillaryMonitoringEnabled(value);
-                        // Refresh state
-                        setState(() {});
-                      },
-                    ),
-
                     // Text selection toggle
                     SwitchListTile(
                       title: const Text('Enable Text Selection'),
@@ -880,14 +864,6 @@ class _ReaderScreenState extends State<ReaderScreen>
                               _buildEyeProtectionInfoItem(
                                 '• Time-based brightness adjustment',
                                 'Automatically reduces screen brightness at night',
-                              ),
-                              _buildEyeProtectionInfoItem(
-                                '• Pupillary response monitoring',
-                                'Monitors eye fatigue through pupil dilation changes',
-                              ),
-                              _buildEyeProtectionInfoItem(
-                                '• Advanced typographic optimization',
-                                'Optimizes font rendering and spacing for reduced eye strain',
                               ),
                             ],
                           ),

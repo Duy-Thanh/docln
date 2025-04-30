@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../services/eye_protection_service.dart';
-import '../widgets/pupillary_monitoring_widget.dart';
 import 'dart:async';
 
 /// A widget that provides eye protection overlays and controls
@@ -25,10 +24,8 @@ class _EyeProtectionOverlayState extends State<EyeProtectionOverlay> {
   late Timer _reminderTimer;
   DateTime _currentTime = DateTime.now();
   bool _showBreakReminder = false;
-  bool _showFatigueReminder = false;
   int _secondsLeft = 0;
   bool _isTimerActive = false;
-  double _lastDetectedFatigueLevel = 0.0;
 
   @override
   void initState() {
@@ -95,30 +92,9 @@ class _EyeProtectionOverlayState extends State<EyeProtectionOverlay> {
     });
   }
 
-  void _onFatigueDetected(double fatigueLevel) {
-    _lastDetectedFatigueLevel = fatigueLevel;
-
-    // Only show if we're not already showing a break reminder
-    if (!_showBreakReminder && !_showFatigueReminder) {
-      setState(() {
-        _showFatigueReminder = true;
-      });
-
-      // Auto-dismiss after 10 seconds if user doesn't interact
-      Timer(const Duration(seconds: 10), () {
-        if (mounted && _showFatigueReminder) {
-          setState(() {
-            _showFatigueReminder = false;
-          });
-        }
-      });
-    }
-  }
-
   void _dismissReminder() {
     setState(() {
       _showBreakReminder = false;
-      _showFatigueReminder = false;
     });
     // Restart the reminder timer
     _startReminderTimer();
@@ -137,20 +113,10 @@ class _EyeProtectionOverlayState extends State<EyeProtectionOverlay> {
     // Get the overlay color based on the protection settings
     final Color overlayColor = _eyeProtectionService.getOverlayColor();
 
-    // Use pupillary monitoring if enabled
-    Widget content = widget.child;
-
-    if (_eyeProtectionService.pupillaryMonitoringEnabled) {
-      content = PupillaryMonitoringWidget(
-        child: content,
-        onFatigueDetected: _onFatigueDetected,
-      );
-    }
-
     return Stack(
       children: [
-        // The main content with pupillary monitoring
-        content,
+        // The main content
+        widget.child,
 
         // Eye protection color overlay
         if (_eyeProtectionService.eyeProtectionEnabled)
@@ -220,66 +186,6 @@ class _EyeProtectionOverlayState extends State<EyeProtectionOverlay> {
                     ),
                   ),
                 ),
-              ),
-            ),
-          ),
-
-        // Fatigue detection warning
-        if (_showFatigueReminder)
-          Positioned(
-            bottom: 20,
-            left: 20,
-            right: 20,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.red.shade800,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.warning_amber_rounded,
-                    color: Colors.white,
-                    size: 28,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text(
-                          'Eye Fatigue Detected',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Your eyes are showing signs of strain. Consider taking a break.',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white),
-                    onPressed: _dismissReminder,
-                  ),
-                ],
               ),
             ),
           ),
