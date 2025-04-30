@@ -10,6 +10,7 @@ import '../modules/chapter.dart';
 import '../services/http_client.dart';
 import '../services/dns_service.dart';
 import '../services/settings_services.dart';
+import 'dart:async';
 
 class CrawlerService {
   // Primary server domains
@@ -782,7 +783,7 @@ class CrawlerService {
     return 'https://ln.hako.vn/img/nocover.jpg';
   }
 
-  // Add a new method to fetch chapter content
+  // Add a new method to fetch chapter content with optimized loading
   Future<Map<String, dynamic>> getChapterContent(
     String url,
     BuildContext context,
@@ -798,173 +799,486 @@ class CrawlerService {
       }
 
       print('Fetching chapter content from URL: $url');
-      final response = await _httpClient.get(
-        url,
-        headers: {
-          'User-Agent':
-              'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
-          'Accept':
-              'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        },
-      );
 
-      if (response.statusCode != 200) {
-        throw Exception(
-          'Failed to load chapter content: HTTP ${response.statusCode}',
-        );
-      }
+      // Use a completer to handle the async operation properly
+      final completer = Completer<Map<String, dynamic>>();
 
-      // PREPROCESSING: Aggressively remove ALL HTML comments before any parsing
-      String rawHtml = response.body;
-      print('Original HTML size: ${rawHtml.length}');
-
-      // SUPER SPECIFIC PATTERN REMOVAL: Handle the exact pattern from the screenshot
-      rawHtml = rawHtml.replaceAll('FacebookDiscordFacebookDiscord', '');
-      rawHtml = rawHtml.replaceAll(
-        'body { background: inherit; } #footer { display: none; }',
-        '',
-      );
-
-      // Check for patterns of concatenated social media names
-      if (rawHtml.contains('Facebook') && rawHtml.contains('Discord')) {
-        print('Detected social media pattern, applying specific removal');
-
-        // Remove any lines containing both Facebook and Discord without proper spacing
-        rawHtml = rawHtml.replaceAll(
-          RegExp(r'.*(?:Facebook\s*Discord|Discord\s*Facebook).*\n?'),
-          '',
-        );
-
-        // Also remove any CSS that might hide the footer
-        rawHtml = rawHtml.replaceAll(
-          RegExp(r'#footer\s*{\s*display:\s*none;\s*}'),
-          '',
-        );
-        rawHtml = rawHtml.replaceAll(
-          RegExp(r'body\s*{\s*background:\s*inherit;\s*}'),
-          '',
-        );
-      }
-
-      // First pass: Remove standard HTML comments
-      rawHtml = _removeAllComments(rawHtml);
-      print('HTML size after comment removal: ${rawHtml.length}');
-
-      // Parse the HTML after comment removal
-      final document = parser.parse(rawHtml);
-
-      // Extract the chapter title
-      String chapterTitle = '';
-      final titleElement = document.querySelector('.chapter-title');
-      if (titleElement != null) {
-        chapterTitle = titleElement.text.trim();
-      } else {
-        // Alternative selectors for title
-        final altTitleElement =
-            document.querySelector('h1.title') ??
-            document.querySelector('.rd_sd-name') ??
-            document.querySelector('.title-top');
-        if (altTitleElement != null) {
-          chapterTitle = altTitleElement.text.trim();
-        }
-      }
-
-      // Extract the chapter content
-      String content = '';
-      final contentElement =
-          document.querySelector('.chapter-content') ??
-          document.querySelector('#chapter-content') ??
-          document.querySelector('.content') ??
-          document.querySelector('article.content');
-
-      if (contentElement != null) {
-        // Remove any script, ad elements, and social media elements
-        contentElement
-            .querySelectorAll(
-              'script, .ads, [id*="ads"], [class*="ads"], a[href*="discord"], a[href*="facebook"], a[href*="fb.com"], .social-links, [class*="social"]',
-            )
-            .forEach((e) => e.remove());
-
-        // Extract the raw HTML content
-        String contentHtml = contentElement.innerHtml;
-
-        // Clean and format the content
-        content = _cleanContent(contentHtml);
-
-        // Final check for social media content
-        if (content.toLowerCase().contains('discord') ||
-            content.toLowerCase().contains('facebook') ||
-            content.toLowerCase().contains('fb.com')) {
-          print(
-            'Social media content detected after cleaning, applying extra cleaning step',
+      // Process the content in a separate isolate or at least in a microtask to prevent UI freezing
+      Future.microtask(() async {
+        try {
+          final response = await _httpClient.get(
+            url,
+            headers: {
+              'User-Agent':
+                  'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
+              'Accept':
+                  'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            },
           );
 
-          // Apply more aggressive cleaning for social media mentions
-          content = _removeSocialMediaContent(content);
+          if (response.statusCode != 200) {
+            completer.completeError(
+              Exception(
+                'Failed to load chapter content: HTTP ${response.statusCode}',
+              ),
+            );
+            return;
+          }
+
+          // PREPROCESSING: First do a quick check if content is too large
+          String rawHtml = response.body;
+          final contentSize = rawHtml.length;
+          print('Original HTML size: $contentSize');
+
+          // For very large content, use a more optimized approach
+          Map<String, dynamic> result;
+          if (contentSize > 500000) {
+            // 500KB threshold
+            // Use optimized processing for large content
+            result = await _processLargeChapterContent(rawHtml, url);
+          } else {
+            // Use regular processing for normal-sized content
+            result = _processChapterContent(rawHtml, url);
+          }
+
+          completer.complete(result);
+        } catch (e) {
+          print('Error in microtask content processing: $e');
+          completer.completeError(e);
         }
-      }
+      });
 
-      // Extract series information
-      String seriesTitle = '';
-      String seriesUrl = '';
-      final seriesElement = document.querySelector('.series-name a');
-      if (seriesElement != null) {
-        seriesTitle = seriesElement.text.trim();
-        seriesUrl = seriesElement.attributes['href'] ?? '';
-      }
-
-      // Extract navigation links
-      String prevChapterUrl = '';
-      String nextChapterUrl = '';
-      String prevChapterTitle = '';
-      String nextChapterTitle = '';
-
-      // Check for navigation buttons
-      final prevButton =
-          document.querySelector('a.prev-chap') ??
-          document.querySelector('[rel="prev"]') ??
-          document.querySelector('.chap-prev');
-
-      final nextButton =
-          document.querySelector('a.next-chap') ??
-          document.querySelector('[rel="next"]') ??
-          document.querySelector('.chap-next');
-
-      if (prevButton != null) {
-        prevChapterUrl = prevButton.attributes['href'] ?? '';
-        prevChapterTitle = prevButton.text.trim();
-        if (prevChapterTitle.isEmpty) {
-          prevChapterTitle = 'Previous Chapter';
-        }
-      }
-
-      if (nextButton != null) {
-        nextChapterUrl = nextButton.attributes['href'] ?? '';
-        nextChapterTitle = nextButton.text.trim();
-        if (nextChapterTitle.isEmpty) {
-          nextChapterTitle = 'Next Chapter';
-        }
-      }
-
-      return {
-        'title': chapterTitle,
-        'content': content,
-        'seriesTitle': seriesTitle,
-        'seriesUrl': seriesUrl,
-        'prevChapterUrl': prevChapterUrl,
-        'nextChapterUrl': nextChapterUrl,
-        'prevChapterTitle': prevChapterTitle,
-        'nextChapterTitle': nextChapterTitle,
-      };
+      // Handle timeout to prevent indefinite waiting
+      return completer.future
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              print('Chapter content loading timed out');
+              CustomToast.show(
+                context,
+                'Loading timed out. Content may be too large.',
+              );
+              return {
+                'title': 'Loading Error',
+                'content':
+                    '<p>The chapter content is taking too long to load. It might be too large or the connection is slow.</p><p>Try again or choose a different chapter.</p>',
+                'isError': true,
+              };
+            },
+          )
+          .catchError((error) {
+            print('Error in chapter content loading: $error');
+            CustomToast.show(context, 'Error loading chapter: $error');
+            return {
+              'title': 'Error',
+              'content':
+                  '<p>Failed to load chapter content. Please try again later.</p><p>Error: $error</p>',
+              'isError': true,
+            };
+          });
     } catch (e) {
-      print('Error fetching chapter content: $e');
+      print('Error in outer getChapterContent: $e');
       CustomToast.show(context, 'Error loading chapter: $e');
       return {
         'title': 'Error',
         'content':
             '<p>Failed to load chapter content. Please try again later.</p><p>Error: $e</p>',
+        'isError': true,
       };
     }
+  }
+
+  // Process regular-sized chapter content
+  Map<String, dynamic> _processChapterContent(String rawHtml, String url) {
+    // PREPROCESSING: Aggressively remove ALL HTML comments before any parsing
+    print('Processing normal-sized content');
+
+    // SUPER SPECIFIC PATTERN REMOVAL: Handle the exact pattern from the screenshot
+    rawHtml = rawHtml.replaceAll('FacebookDiscordFacebookDiscord', '');
+    rawHtml = rawHtml.replaceAll(
+      'body { background: inherit; } #footer { display: none; }',
+      '',
+    );
+
+    // Check for patterns of concatenated social media names
+    if (rawHtml.contains('Facebook') && rawHtml.contains('Discord')) {
+      print('Detected social media pattern, applying specific removal');
+
+      // Remove any lines containing both Facebook and Discord without proper spacing
+      rawHtml = rawHtml.replaceAll(
+        RegExp(r'.*(?:Facebook\s*Discord|Discord\s*Facebook).*\n?'),
+        '',
+      );
+
+      // Also remove any CSS that might hide the footer
+      rawHtml = rawHtml.replaceAll(
+        RegExp(r'#footer\s*{\s*display:\s*none;\s*}'),
+        '',
+      );
+      rawHtml = rawHtml.replaceAll(
+        RegExp(r'body\s*{\s*background:\s*inherit;\s*}'),
+        '',
+      );
+    }
+
+    // Remove standard HTML comments
+    rawHtml = _removeAllComments(rawHtml);
+    print('HTML size after comment removal: ${rawHtml.length}');
+
+    // Parse the HTML after comment removal
+    final document = parser.parse(rawHtml);
+
+    // Extract the chapter title
+    String chapterTitle = '';
+    final titleElement = document.querySelector('.chapter-title');
+    if (titleElement != null) {
+      chapterTitle = titleElement.text.trim();
+    } else {
+      // Alternative selectors for title
+      final altTitleElement =
+          document.querySelector('h1.title') ??
+          document.querySelector('.rd_sd-name') ??
+          document.querySelector('.title-top');
+      if (altTitleElement != null) {
+        chapterTitle = altTitleElement.text.trim();
+      }
+    }
+
+    // Extract the chapter content
+    String content = '';
+    final contentElement =
+        document.querySelector('.chapter-content') ??
+        document.querySelector('#chapter-content') ??
+        document.querySelector('.content') ??
+        document.querySelector('article.content');
+
+    if (contentElement != null) {
+      // Remove any script, ad elements, and social media elements
+      contentElement
+          .querySelectorAll(
+            'script, .ads, [id*="ads"], [class*="ads"], a[href*="discord"], a[href*="facebook"], a[href*="fb.com"], .social-links, [class*="social"]',
+          )
+          .forEach((e) => e.remove());
+
+      // Extract the raw HTML content
+      String contentHtml = contentElement.innerHtml;
+
+      // Clean and format the content
+      content = _cleanContent(contentHtml);
+
+      // Final check for social media content
+      if (content.toLowerCase().contains('discord') ||
+          content.toLowerCase().contains('facebook') ||
+          content.toLowerCase().contains('fb.com')) {
+        print(
+          'Social media content detected after cleaning, applying extra cleaning step',
+        );
+
+        // Apply more aggressive cleaning for social media mentions
+        content = _removeSocialMediaContent(content);
+      }
+    }
+
+    // Extract series information
+    String seriesTitle = '';
+    String seriesUrl = '';
+    final seriesElement = document.querySelector('.series-name a');
+    if (seriesElement != null) {
+      seriesTitle = seriesElement.text.trim();
+      seriesUrl = seriesElement.attributes['href'] ?? '';
+    }
+
+    // Extract navigation links
+    String prevChapterUrl = '';
+    String nextChapterUrl = '';
+    String prevChapterTitle = '';
+    String nextChapterTitle = '';
+
+    // Check for navigation buttons
+    final prevButton =
+        document.querySelector('a.prev-chap') ??
+        document.querySelector('[rel="prev"]') ??
+        document.querySelector('.chap-prev');
+
+    final nextButton =
+        document.querySelector('a.next-chap') ??
+        document.querySelector('[rel="next"]') ??
+        document.querySelector('.chap-next');
+
+    if (prevButton != null) {
+      prevChapterUrl = prevButton.attributes['href'] ?? '';
+      prevChapterTitle = prevButton.text.trim();
+      if (prevChapterTitle.isEmpty) {
+        prevChapterTitle = 'Previous Chapter';
+      }
+    }
+
+    if (nextButton != null) {
+      nextChapterUrl = nextButton.attributes['href'] ?? '';
+      nextChapterTitle = nextButton.text.trim();
+      if (nextChapterTitle.isEmpty) {
+        nextChapterTitle = 'Next Chapter';
+      }
+    }
+
+    return {
+      'title': chapterTitle,
+      'content': content,
+      'seriesTitle': seriesTitle,
+      'seriesUrl': seriesUrl,
+      'prevChapterUrl': prevChapterUrl,
+      'nextChapterUrl': nextChapterUrl,
+      'prevChapterTitle': prevChapterTitle,
+      'nextChapterTitle': nextChapterTitle,
+    };
+  }
+
+  // Process large chapter content more efficiently
+  Future<Map<String, dynamic>> _processLargeChapterContent(
+    String rawHtml,
+    String url,
+  ) async {
+    print('Processing large content with optimized approach');
+
+    // For large content, we'll use a more direct approach to extract key elements
+    // Extract just what we need before full parsing
+
+    // Extract title using regex for better performance on large content
+    String chapterTitle = '';
+    final titleRegex = RegExp(
+      r'<h1[^>]*class="chapter-title"[^>]*>(.*?)</h1>',
+      dotAll: true,
+    );
+    final titleMatch = titleRegex.firstMatch(rawHtml);
+    if (titleMatch != null && titleMatch.group(1) != null) {
+      chapterTitle = _cleanTextContent(titleMatch.group(1)!);
+    } else {
+      // Try alternative title patterns
+      final altTitleRegex = RegExp(
+        r'<h1[^>]*class="title"[^>]*>(.*?)</h1>',
+        dotAll: true,
+      );
+      final altTitleMatch = altTitleRegex.firstMatch(rawHtml);
+      if (altTitleMatch != null && altTitleMatch.group(1) != null) {
+        chapterTitle = _cleanTextContent(altTitleMatch.group(1)!);
+      }
+    }
+
+    // Extract main content div using regex
+    String content = '';
+    String contentHtml = '';
+    final contentRegex = RegExp(
+      r'<div[^>]*class="chapter-content"[^>]*>(.*?)</div>',
+      dotAll: true,
+    );
+    final contentMatch = contentRegex.firstMatch(rawHtml);
+
+    if (contentMatch != null && contentMatch.group(1) != null) {
+      contentHtml = contentMatch.group(1)!;
+    } else {
+      // Try alternative content patterns
+      final altContentRegex = RegExp(
+        r'<div[^>]*id="chapter-content"[^>]*>(.*?)</div>',
+        dotAll: true,
+      );
+      final altContentMatch = altContentRegex.firstMatch(rawHtml);
+      if (altContentMatch != null && altContentMatch.group(1) != null) {
+        contentHtml = altContentMatch.group(1)!;
+      } else {
+        // One more try with generic content class
+        final genericContentRegex = RegExp(
+          r'<div[^>]*class="content"[^>]*>(.*?)</div>',
+          dotAll: true,
+        );
+        final genericContentMatch = genericContentRegex.firstMatch(rawHtml);
+        if (genericContentMatch != null &&
+            genericContentMatch.group(1) != null) {
+          contentHtml = genericContentMatch.group(1)!;
+        }
+      }
+    }
+
+    // Clean content more efficiently
+    if (contentHtml.isNotEmpty) {
+      // Remove social media and ads sections first
+      contentHtml = _quickRemoveSocialMedia(contentHtml);
+
+      // Now process in chunks to avoid UI freezes
+      content = await _processContentChunks(contentHtml);
+    }
+
+    // Extract navigation links with regex
+    String prevChapterUrl = '';
+    String nextChapterUrl = '';
+    String prevChapterTitle = 'Previous Chapter';
+    String nextChapterTitle = 'Next Chapter';
+
+    // Find prev link
+    final prevRegex = RegExp(
+      r'<a[^>]*class="prev-chap"[^>]*href="([^"]*)"[^>]*>(.*?)</a>',
+      dotAll: true,
+    );
+    final prevMatch = prevRegex.firstMatch(rawHtml);
+    if (prevMatch != null) {
+      prevChapterUrl = prevMatch.group(1) ?? '';
+      final prevTitleRaw = prevMatch.group(2) ?? '';
+      if (prevTitleRaw.isNotEmpty) {
+        prevChapterTitle = _cleanTextContent(prevTitleRaw);
+      }
+    }
+
+    // Find next link
+    final nextRegex = RegExp(
+      r'<a[^>]*class="next-chap"[^>]*href="([^"]*)"[^>]*>(.*?)</a>',
+      dotAll: true,
+    );
+    final nextMatch = nextRegex.firstMatch(rawHtml);
+    if (nextMatch != null) {
+      nextChapterUrl = nextMatch.group(1) ?? '';
+      final nextTitleRaw = nextMatch.group(2) ?? '';
+      if (nextTitleRaw.isNotEmpty) {
+        nextChapterTitle = _cleanTextContent(nextTitleRaw);
+      }
+    }
+
+    // Extract series info
+    String seriesTitle = '';
+    String seriesUrl = '';
+    final seriesRegex = RegExp(
+      r'<span[^>]*class="series-name"[^>]*>.*?<a[^>]*href="([^"]*)"[^>]*>(.*?)</a>',
+      dotAll: true,
+    );
+    final seriesMatch = seriesRegex.firstMatch(rawHtml);
+    if (seriesMatch != null) {
+      seriesUrl = seriesMatch.group(1) ?? '';
+      seriesTitle =
+          seriesMatch.group(2) != null
+              ? _cleanTextContent(seriesMatch.group(2)!)
+              : '';
+    }
+
+    return {
+      'title': chapterTitle,
+      'content': content,
+      'seriesTitle': seriesTitle,
+      'seriesUrl': seriesUrl,
+      'prevChapterUrl': prevChapterUrl,
+      'nextChapterUrl': nextChapterUrl,
+      'prevChapterTitle': prevChapterTitle,
+      'nextChapterTitle': nextChapterTitle,
+      'isLargeContent': true,
+    };
+  }
+
+  // Process content in chunks to prevent UI blocking
+  Future<String> _processContentChunks(String contentHtml) async {
+    // Break content into manageable chunks
+    const int chunkSize = 50000; // 50KB chunks
+    List<String> results = [];
+
+    if (contentHtml.length <= chunkSize) {
+      return _cleanContent(contentHtml);
+    }
+
+    // Split content into paragraphs first for cleaner chunking
+    final paragraphs =
+        RegExp(r'<p[^>]*>.*?</p>', dotAll: true)
+            .allMatches(contentHtml)
+            .map((m) => m.group(0) ?? '')
+            .where((p) => p.isNotEmpty)
+            .toList();
+
+    // If no paragraphs found, fall back to simple chunking
+    if (paragraphs.isEmpty) {
+      int chunks = (contentHtml.length / chunkSize).ceil();
+      for (int i = 0; i < chunks; i++) {
+        int start = i * chunkSize;
+        int end = (i + 1) * chunkSize;
+        if (end > contentHtml.length) end = contentHtml.length;
+
+        String chunk = contentHtml.substring(start, end);
+        // Process each chunk with a delay to prevent UI freezing
+        final processed = await Future.microtask(() => _cleanContent(chunk));
+        results.add(processed);
+
+        // Small delay to let UI breathe
+        await Future.delayed(Duration(milliseconds: 1));
+      }
+    } else {
+      // Process by paragraph groups
+      List<String> currentChunk = [];
+      int currentSize = 0;
+
+      for (final paragraph in paragraphs) {
+        currentChunk.add(paragraph);
+        currentSize += paragraph.length;
+
+        if (currentSize >= chunkSize) {
+          // Process this chunk
+          String chunkContent = currentChunk.join('\n');
+          final processed = await Future.microtask(
+            () => _cleanContent(chunkContent),
+          );
+          results.add(processed);
+
+          // Reset for next chunk
+          currentChunk = [];
+          currentSize = 0;
+
+          // Small delay to let UI breathe
+          await Future.delayed(Duration(milliseconds: 1));
+        }
+      }
+
+      // Process any remaining paragraphs
+      if (currentChunk.isNotEmpty) {
+        String chunkContent = currentChunk.join('\n');
+        final processed = await Future.microtask(
+          () => _cleanContent(chunkContent),
+        );
+        results.add(processed);
+      }
+    }
+
+    return results.join('\n');
+  }
+
+  // Quick clean of text content (removes HTML tags)
+  String _cleanTextContent(String html) {
+    // Remove HTML tags
+    String text = html.replaceAll(RegExp(r'<[^>]*>'), '');
+    // Decode HTML entities
+    text = text
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#39;', "'");
+    // Trim whitespace
+    return text.trim();
+  }
+
+  // Quick social media removal without full parsing
+  String _quickRemoveSocialMedia(String html) {
+    // Remove common social media patterns
+    final patterns = [
+      r'<div[^>]*>.*?(?:Facebook|Discord).*?</div>',
+      r'<p[^>]*>.*?(?:Facebook|Discord).*?</p>',
+      r'<div[^>]*class="[^"]*social[^"]*"[^>]*>.*?</div>',
+      r'<div[^>]*class="[^"]*footer[^"]*"[^>]*>.*?</div>',
+      r'<div[^>]*class="[^"]*connect[^"]*"[^>]*>.*?</div>',
+      r'<div[^>]*class="[^"]*follow[^"]*"[^>]*>.*?</div>',
+    ];
+
+    String result = html;
+    for (final pattern in patterns) {
+      result = result.replaceAll(
+        RegExp(pattern, dotAll: true, caseSensitive: false),
+        '',
+      );
+    }
+
+    return result;
   }
 
   // Helper method to clean HTML content

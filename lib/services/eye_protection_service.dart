@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
+import 'dart:math' as math;
 
 /// Eye Protection Service to reduce eye strain while reading
 ///
 /// Based on scientific research on blue light filtering, contrast reduction,
-/// and reading ergonomics to minimize eye strain during extended reading sessions.
+/// melanopsin signaling, pupillary responses, and reading ergonomics to minimize eye strain during extended reading sessions.
 class EyeProtectionService {
   // Singleton instance
   static final EyeProtectionService _instance =
@@ -13,252 +15,405 @@ class EyeProtectionService {
   EyeProtectionService._internal();
 
   // Default values
-  static const double defaultBlueFilter = 0.2;
-  static const double defaultContrast = 0.8;
+  static const double defaultBlueFilter =
+      0.3; // Increased from 0.2 based on melanopsin research
+  static const double defaultContrastReduction =
+      0.15; // New parameter for optimal contrast
+  static const double defaultBrightnessAdjustment =
+      0.1; // New parameter for brightness adaptation
   static const int defaultReadingTimer = 20; // minutes
   static const bool defaultEyeProtectionEnabled = true;
   static const bool defaultAdaptiveBrightnessEnabled = true;
-  static const double defaultWarmthLevel = 0.3;
-  static const bool defaultPeriodicalReminderEnabled = true;
+  static const double defaultWarmColorTemperature = 3200; // Kelvin
+  static const bool defaultDynamicFilteringEnabled =
+      true; // New parameter for time-based filtering
+  static const double defaultPupilResponseCompensation =
+      0.2; // New parameter based on pupil research
 
-  // Current settings
+  // Values that will be loaded from preferences
   bool _eyeProtectionEnabled = defaultEyeProtectionEnabled;
   double _blueFilterLevel = defaultBlueFilter;
-  double _contrastLevel = defaultContrast;
-  int _readingTimerInterval = defaultReadingTimer;
+  double _contrastReduction = defaultContrastReduction;
+  double _brightnessAdjustment = defaultBrightnessAdjustment;
+  int _readingTimerDuration = defaultReadingTimer;
   bool _adaptiveBrightnessEnabled = defaultAdaptiveBrightnessEnabled;
-  double _warmthLevel = defaultWarmthLevel;
-  bool _periodicalReminderEnabled = defaultPeriodicalReminderEnabled;
+  double _warmColorTemperature = defaultWarmColorTemperature;
+  bool _dynamicFilteringEnabled = defaultDynamicFilteringEnabled;
+  double _pupilResponseCompensation = defaultPupilResponseCompensation;
+
+  // Internal state
+  DateTime? _readingStartTime;
+  StreamController<bool> _reminderController =
+      StreamController<bool>.broadcast();
+  bool _isNightTime = false;
+  Timer? _circadianTimer;
+  int _readingTimerInterval = 20; // Default 20 minutes for timer interval
+  bool _periodicalReminderEnabled =
+      true; // Default enabled for periodic reminders
+  double _warmthLevel = 0.5; // Default warmth level (0.0-1.0)
 
   // Getters
   bool get eyeProtectionEnabled => _eyeProtectionEnabled;
   double get blueFilterLevel => _blueFilterLevel;
-  double get contrastLevel => _contrastLevel;
-  int get readingTimerInterval => _readingTimerInterval;
+  double get contrastReduction => _contrastReduction;
+  double get brightnessAdjustment => _brightnessAdjustment;
+  int get readingTimerDuration => _readingTimerDuration;
   bool get adaptiveBrightnessEnabled => _adaptiveBrightnessEnabled;
-  double get warmthLevel => _warmthLevel;
+  double get warmColorTemperature => _warmColorTemperature;
+  bool get dynamicFilteringEnabled => _dynamicFilteringEnabled;
+  double get pupilResponseCompensation => _pupilResponseCompensation;
+  int get readingTimerInterval => _readingTimerInterval;
   bool get periodicalReminderEnabled => _periodicalReminderEnabled;
+  double get warmthLevel => _warmthLevel;
 
-  /// Initialize settings from shared preferences
-  Future<void> initSettings() async {
+  Stream<bool> get reminderStream => _reminderController.stream;
+  DateTime? get readingStartTime => _readingStartTime;
+  bool get isNightTime => _isNightTime;
+
+  // Calculate effective blue filter level based on time of day and user settings
+  double get effectiveBlueFilterLevel {
+    if (!_dynamicFilteringEnabled) return _blueFilterLevel;
+
+    final now = DateTime.now();
+    final hour = now.hour;
+
+    // Increase blue filtering in evening hours (after 6 PM)
+    // Based on melanopsin sensitivity research
+    if (hour >= 18 || hour < 6) {
+      _isNightTime = true;
+      // Progressively increase blue filtering from 6 PM to 11 PM
+      double timeBasedIncrease = 0.0;
+      if (hour >= 18 && hour <= 23) {
+        timeBasedIncrease =
+            (hour - 18) * 0.05; // Gradually increase by 5% each hour
+      } else {
+        timeBasedIncrease = 0.25; // Maximum increase during night (30%)
+      }
+      return math.min(0.7, _blueFilterLevel + timeBasedIncrease); // Cap at 70%
+    } else {
+      _isNightTime = false;
+      return _blueFilterLevel;
+    }
+  }
+
+  // Calculate effective brightness based on pupillary response compensation
+  double get effectiveBrightnessAdjustment {
+    if (!_adaptiveBrightnessEnabled) return _brightnessAdjustment;
+
+    final now = DateTime.now();
+    final hour = now.hour;
+
+    // Implement pupil-based adjustment - based on research showing different pupil responses
+    // at different times of day and with different light exposure
+    double timeBasedAdjustment = 0.0;
+
+    // Pupils more dilated in morning, less sensitive to light
+    if (hour >= 5 && hour < 9) {
+      timeBasedAdjustment = -0.05; // Lower brightness in morning
+    }
+    // Pupils more constricted mid-day, more sensitive to light
+    else if (hour >= 10 && hour < 16) {
+      timeBasedAdjustment = 0.05; // Increase brightness mid-day
+    }
+    // Pupils more dilated in evening, melanopsin more sensitive
+    else if (hour >= 19) {
+      timeBasedAdjustment =
+          -0.1 - ((hour - 19) * 0.02); // Progressively lower brightness
+    }
+
+    return _brightnessAdjustment +
+        timeBasedAdjustment +
+        _pupilResponseCompensation;
+  }
+
+  // Initialize and load saved preferences
+  Future<void> initialize() async {
+    await loadPreferences();
+    _startCircadianTimer();
+    return;
+  }
+
+  // Start the reading timer
+  void startReadingTimer() {
+    _readingStartTime = DateTime.now();
+  }
+
+  // Check if it's time for a break
+  bool checkBreakNeeded() {
+    if (_readingStartTime == null) return false;
+
+    final now = DateTime.now();
+    final difference = now.difference(_readingStartTime!);
+    return difference.inMinutes >= _readingTimerDuration;
+  }
+
+  // Reset the reading timer
+  void resetReadingTimer() {
+    _readingStartTime = DateTime.now();
+  }
+
+  // Load preferences from SharedPreferences
+  Future<void> loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
 
     _eyeProtectionEnabled =
         prefs.getBool('eye_protection_enabled') ?? defaultEyeProtectionEnabled;
     _blueFilterLevel =
         prefs.getDouble('blue_filter_level') ?? defaultBlueFilter;
-    _contrastLevel = prefs.getDouble('contrast_level') ?? defaultContrast;
-    _readingTimerInterval =
-        prefs.getInt('reading_timer_interval') ?? defaultReadingTimer;
+    _contrastReduction =
+        prefs.getDouble('contrast_reduction') ?? defaultContrastReduction;
+    _brightnessAdjustment =
+        prefs.getDouble('brightness_adjustment') ?? defaultBrightnessAdjustment;
+    _readingTimerDuration =
+        prefs.getInt('reading_timer_duration') ?? defaultReadingTimer;
     _adaptiveBrightnessEnabled =
         prefs.getBool('adaptive_brightness_enabled') ??
         defaultAdaptiveBrightnessEnabled;
-    _warmthLevel = prefs.getDouble('warmth_level') ?? defaultWarmthLevel;
+    _warmColorTemperature =
+        prefs.getDouble('warm_color_temperature') ??
+        defaultWarmColorTemperature;
+    _dynamicFilteringEnabled =
+        prefs.getBool('dynamic_filtering_enabled') ??
+        defaultDynamicFilteringEnabled;
+    _pupilResponseCompensation =
+        prefs.getDouble('pupil_response_compensation') ??
+        defaultPupilResponseCompensation;
+    _readingTimerInterval = prefs.getInt('reading_timer_interval') ?? 20;
     _periodicalReminderEnabled =
-        prefs.getBool('periodical_reminder_enabled') ??
-        defaultPeriodicalReminderEnabled;
+        prefs.getBool('periodical_reminder_enabled') ?? true;
+    _warmthLevel = prefs.getDouble('warmth_level') ?? 0.5;
   }
 
-  /// Enable or disable eye protection
-  Future<void> setEyeProtectionEnabled(bool enabled) async {
-    _eyeProtectionEnabled = enabled;
+  // Save a preference
+  Future<void> savePreference(String key, dynamic value) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('eye_protection_enabled', enabled);
+
+    switch (key) {
+      case 'eye_protection_enabled':
+        _eyeProtectionEnabled = value;
+        await prefs.setBool(key, value);
+        break;
+      case 'blue_filter_level':
+        _blueFilterLevel = value;
+        await prefs.setDouble(key, value);
+        break;
+      case 'contrast_reduction':
+        _contrastReduction = value;
+        await prefs.setDouble(key, value);
+        break;
+      case 'brightness_adjustment':
+        _brightnessAdjustment = value;
+        await prefs.setDouble(key, value);
+        break;
+      case 'reading_timer_duration':
+        _readingTimerDuration = value;
+        await prefs.setInt(key, value);
+        break;
+      case 'adaptive_brightness_enabled':
+        _adaptiveBrightnessEnabled = value;
+        await prefs.setBool(key, value);
+        break;
+      case 'warm_color_temperature':
+        _warmColorTemperature = value;
+        await prefs.setDouble(key, value);
+        break;
+      case 'dynamic_filtering_enabled':
+        _dynamicFilteringEnabled = value;
+        await prefs.setBool(key, value);
+        break;
+      case 'pupil_response_compensation':
+        _pupilResponseCompensation = value;
+        await prefs.setDouble(key, value);
+        break;
+      case 'reading_timer_interval':
+        _readingTimerInterval = value;
+        await prefs.setInt(key, value);
+        break;
+      case 'periodical_reminder_enabled':
+        _periodicalReminderEnabled = value;
+        await prefs.setBool(key, value);
+        break;
+      case 'warmth_level':
+        _warmthLevel = value;
+        await prefs.setDouble(key, value);
+        break;
+    }
   }
 
-  /// Set blue light filter level (0.0 - 1.0)
-  Future<void> setBlueFilterLevel(double level) async {
-    _blueFilterLevel = level.clamp(0.0, 1.0);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('blue_filter_level', _blueFilterLevel);
-  }
+  // Generate a filter color based on current settings and time of day
+  Color getFilterColor() {
+    // Calculate blue reduction based on effective filter level
+    final blueReduction = effectiveBlueFilterLevel;
 
-  /// Set contrast level (0.0 - 1.0)
-  Future<void> setContrastLevel(double level) async {
-    _contrastLevel = level.clamp(0.0, 1.0);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('contrast_level', _contrastLevel);
-  }
+    // Calculate red and green channels based on warm color temperature
+    // Higher color temperature = more blue, cooler
+    // Lower color temperature = more red/yellow, warmer
+    double normalizedTemp =
+        (_warmColorTemperature - 1800) / 3500; // Normalize from 1800K to 5300K
+    normalizedTemp = normalizedTemp.clamp(0.0, 1.0);
 
-  /// Set reading timer interval in minutes
-  Future<void> setReadingTimerInterval(int minutes) async {
-    _readingTimerInterval = minutes.clamp(1, 60);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('reading_timer_interval', _readingTimerInterval);
-  }
-
-  /// Enable or disable adaptive brightness
-  Future<void> setAdaptiveBrightnessEnabled(bool enabled) async {
-    _adaptiveBrightnessEnabled = enabled;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('adaptive_brightness_enabled', enabled);
-  }
-
-  /// Set color temperature warmth level (0.0 - 1.0)
-  Future<void> setWarmthLevel(double level) async {
-    _warmthLevel = level.clamp(0.0, 1.0);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('warmth_level', _warmthLevel);
-  }
-
-  /// Enable or disable periodical reminders
-  Future<void> setPeriodicalReminderEnabled(bool enabled) async {
-    _periodicalReminderEnabled = enabled;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('periodical_reminder_enabled', enabled);
-  }
-
-  /// Get overlay color for the eye protection layer
-  Color getOverlayColor() {
-    if (!_eyeProtectionEnabled) {
-      return Colors.transparent;
+    // More warm at night (reduce blue, increase red slightly)
+    if (_isNightTime) {
+      normalizedTemp *= 0.7; // Make it warmer at night
     }
 
-    // Amber tint reduces blue light
-    // The higher the blue filter level, the more amber the tint
-    final double blueReduction = _blueFilterLevel * 0.1; // Subtle effect
+    // Calculate RGB values for overlay filter
+    double redChannel = 1.0 - (_contrastReduction * 0.5);
+    double greenChannel =
+        1.0 - (_contrastReduction * 0.7) - (normalizedTemp * 0.1);
+    double blueChannel = 1.0 - blueReduction - (_contrastReduction * 0.8);
 
-    // Warm color overlay reduces blue light and creates a more pleasant reading experience
-    // Combine sepia tone with amber for a warm, paper-like effect
-    Color overlayColor = Color.fromRGBO(
-      255, // Red
-      (255 * (1 - _warmthLevel * 0.3)).toInt(), // Green
-      (255 * (1 - _blueFilterLevel * 0.5)).toInt(), // Blue
-      _blueFilterLevel * 0.25, // Alpha - subtle overlay
+    // Ensure values are in valid range
+    redChannel = redChannel.clamp(0.0, 1.0);
+    greenChannel = greenChannel.clamp(0.0, 1.0);
+    blueChannel = blueChannel.clamp(0.0, 1.0);
+
+    return Color.fromRGBO(
+      (redChannel * 255).round(),
+      (greenChannel * 255).round(),
+      (blueChannel * 255).round(),
+      blueReduction * 0.8, // Use blue reduction to determine alpha
     );
-
-    return overlayColor;
   }
 
-  /// Apply eye protection to a color
-  /// This adjusts the color's blue component and contrast to reduce eye strain
+  // Get text color adjustment based on current settings
+  TextStyle getTextStyleAdjustment(TextStyle baseStyle) {
+    // Determine brightness adjustment
+    double brightness = 1.0 - effectiveBrightnessAdjustment;
+
+    // Calculate color
+    Color originalColor = baseStyle.color ?? Colors.black;
+    Color adjustedColor;
+
+    // For dark mode (white/light text)
+    if (_getLuminance(originalColor) > 0.5) {
+      // For light text (dark background), we slightly reduce the brightness
+      // This helps reduce the harsh contrast between text and background
+      adjustedColor = Color.fromRGBO(
+        (originalColor.red * brightness).round(),
+        (originalColor.green * brightness).round(),
+        ((originalColor.blue * brightness) *
+                (1.0 - (effectiveBlueFilterLevel * 0.3)))
+            .round(),
+        1.0,
+      );
+    }
+    // For light mode (dark/black text)
+    else {
+      // For dark text, we might want to slightly increase brightness to compensate
+      // for the overlay filter's darkening effect
+      double textBrightnessCompensation = 1.0 + (_contrastReduction * 0.5);
+
+      adjustedColor = Color.fromRGBO(
+        math.min(255, (originalColor.red * textBrightnessCompensation).round()),
+        math.min(
+          255,
+          (originalColor.green * textBrightnessCompensation).round(),
+        ),
+        math.min(
+          255,
+          (originalColor.blue *
+                  textBrightnessCompensation *
+                  (1.0 - (effectiveBlueFilterLevel * 0.2)))
+              .round(),
+        ),
+        1.0,
+      );
+    }
+
+    // Return adjusted style
+    return baseStyle.copyWith(
+      color: adjustedColor,
+      // Slightly increase letter spacing for better readability
+      letterSpacing: (baseStyle.letterSpacing ?? 0.0) + 0.1,
+    );
+  }
+
+  // Helper to get luminance of a color
+  double _getLuminance(Color color) {
+    return (0.299 * color.red + 0.587 * color.green + 0.114 * color.blue) / 255;
+  }
+
+  // Start circadian timer to adjust filter values throughout the day
+  void _startCircadianTimer() {
+    // Check every 10 minutes if filter values need to be adjusted
+    _circadianTimer = Timer.periodic(Duration(minutes: 10), (timer) {
+      // The getters already calculate based on time of day
+      // This timer just ensures the UI refreshes periodically
+      if (_reminderController.hasListener) {
+        _reminderController.add(false);
+      }
+    });
+  }
+
+  // Dispose resources
+  void dispose() {
+    _circadianTimer?.cancel();
+    _reminderController.close();
+  }
+
+  // Convenience setter methods
+  Future<void> setEyeProtectionEnabled(bool enabled) async {
+    await savePreference('eye_protection_enabled', enabled);
+  }
+
+  Future<void> setBlueFilterLevel(double level) async {
+    await savePreference('blue_filter_level', level);
+  }
+
+  Future<void> setWarmthLevel(double level) async {
+    await savePreference('warmth_level', level);
+  }
+
+  Future<void> setAdaptiveBrightnessEnabled(bool enabled) async {
+    await savePreference('adaptive_brightness_enabled', enabled);
+  }
+
+  Future<void> setPeriodicalReminderEnabled(bool enabled) async {
+    await savePreference('periodical_reminder_enabled', enabled);
+  }
+
+  Future<void> setReadingTimerInterval(int minutes) async {
+    await savePreference('reading_timer_interval', minutes);
+  }
+
+  // Initialize service
+  Future<void> initSettings() async {
+    await initialize();
+  }
+
+  // Apply eye protection to text color
   Color applyEyeProtection(Color color) {
-    if (!_eyeProtectionEnabled) {
-      return color;
-    }
-
-    // Extract color components
-    int red = color.red;
-    int green = color.green;
-    int blue = color.blue;
-
-    // Reduce blue component based on blue filter level
-    blue = (blue * (1.0 - _blueFilterLevel * 0.3)).round().clamp(0, 255);
-
-    // Apply warmth (increase red, slightly decrease blue)
-    red = (red * (1.0 + _warmthLevel * 0.1)).round().clamp(0, 255);
-    blue = (blue * (1.0 - _warmthLevel * 0.1)).round().clamp(0, 255);
-
-    // Adjust contrast to reduce eye strain from too much contrast
-    // Move colors slightly closer to middle gray for less harshness
-    final int midGray = 128;
-    if (_contrastLevel < 1.0) {
-      final double contrastFactor = 1.0 - ((1.0 - _contrastLevel) * 0.3);
-      red = ((red - midGray) * contrastFactor + midGray).round().clamp(0, 255);
-      green = ((green - midGray) * contrastFactor + midGray).round().clamp(
-        0,
-        255,
-      );
-      blue = ((blue - midGray) * contrastFactor + midGray).round().clamp(
-        0,
-        255,
-      );
-    }
-
-    return Color.fromARGB(color.alpha, red, green, blue);
+    return getTextStyleAdjustment(TextStyle(color: color)).color ?? color;
   }
 
-  /// Get adaptive brightness based on time of day
-  /// Returns adjusted brightness level
-  double getAdaptiveBrightness(double currentBrightness, DateTime dateTime) {
-    if (!_adaptiveBrightnessEnabled) {
-      return currentBrightness;
-    }
-
-    // Get the hour (0-23)
-    final int hour = dateTime.hour;
-
-    // Define brightness adjustments by time of day
-    // Late evening and night: reduce brightness
-    if (hour >= 21 || hour < 5) {
-      // After 9 PM or before 5 AM
-      return (currentBrightness * 0.7).clamp(0.1, 1.0);
-    }
-    // Evening: slightly reduce brightness
-    else if (hour >= 18) {
-      // Between 6 PM and 9 PM
-      return (currentBrightness * 0.85).clamp(0.1, 1.0);
-    }
-    // Early morning: moderate brightness
-    else if (hour < 8) {
-      // Between 5 AM and 8 AM
-      return (currentBrightness * 0.9).clamp(0.1, 1.0);
-    }
-
-    // Daytime: use normal brightness
-    return currentBrightness;
+  // Get color for overlay
+  Color getOverlayColor() {
+    return getFilterColor();
   }
 
-  /// Calculate ideal font size based on readability research
-  /// Returns a recommended font size in logical pixels
-  double getIdealFontSize(double currentFontSize) {
-    // Research suggests 16-18pt is optimal for reading on screens
-    // We'll adjust the user's preference slightly in that direction
-    if (currentFontSize < 14.0) {
-      return (currentFontSize * 1.1).clamp(currentFontSize, 14.0);
+  // Get adaptive brightness based on time of day
+  double getAdaptiveBrightness(double currentBrightness, DateTime time) {
+    if (!adaptiveBrightnessEnabled) return currentBrightness;
+
+    final hour = time.hour;
+    double adjustment = 0.0;
+
+    // Reduce brightness in evening/night
+    if (hour >= 19 || hour < 6) {
+      // Progressive reduction after 7 PM
+      if (hour >= 19 && hour <= 23) {
+        adjustment = -0.05 * (hour - 18); // -5% per hour after 6 PM
+      } else {
+        adjustment = -0.25; // Maximum reduction at night
+      }
     }
 
-    return currentFontSize;
-  }
+    // Factor in pupil response compensation
+    adjustment +=
+        _pupilResponseCompensation * (hour >= 19 || hour < 6 ? -0.1 : 0.05);
 
-  /// Calculate ideal line height (line spacing) for optimal readability
-  /// Returns a recommended line height multiplier
-  double getIdealLineHeight(double currentLineHeight) {
-    // Research suggests 1.5 to 2.0 is optimal for reading
-    if (currentLineHeight < 1.5) {
-      return (currentLineHeight * 1.1).clamp(currentLineHeight, 1.5);
-    }
-
-    return currentLineHeight;
-  }
-
-  /// Apply eye strain reduction techniques to a widget's background
-  Color getEyeFriendlyBackgroundColor(Color baseColor, bool isDarkMode) {
-    if (!_eyeProtectionEnabled) {
-      return baseColor;
-    }
-
-    // For dark mode, use slightly lighter than pure black (reduces eye strain)
-    if (isDarkMode && baseColor.computeLuminance() < 0.1) {
-      return Color.fromRGBO(
-        30,
-        30,
-        35,
-        1.0,
-      ); // Very dark gray with slight blue tint
-    }
-
-    // For light mode, add a slight cream/sepia tone for less harshness than pure white
-    if (!isDarkMode && baseColor.computeLuminance() > 0.9) {
-      return Color.fromRGBO(
-        252,
-        250,
-        245,
-        1.0,
-      ); // Off-white with slight warm tint
-    }
-
-    return baseColor;
-  }
-
-  // Check if the user has been reading for too long
-  bool shouldShowBreakReminder(DateTime startTime, DateTime currentTime) {
-    if (!_periodicalReminderEnabled) return false;
-
-    // Calculate reading duration in minutes
-    int readingDuration = currentTime.difference(startTime).inMinutes;
-
-    // Show reminder if reading time exceeds the interval
-    return readingDuration >= _readingTimerInterval;
+    // Apply adjustment but keep within bounds (0.1 to 1.0)
+    return (currentBrightness + adjustment).clamp(0.1, 1.0);
   }
 }

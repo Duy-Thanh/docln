@@ -22,7 +22,6 @@ class EyeProtectionOverlay extends StatefulWidget {
 class _EyeProtectionOverlayState extends State<EyeProtectionOverlay> {
   late EyeProtectionService _eyeProtectionService;
   late Timer _reminderTimer;
-  DateTime _currentTime = DateTime.now();
   bool _showBreakReminder = false;
   int _secondsLeft = 0;
   bool _isTimerActive = false;
@@ -43,12 +42,12 @@ class _EyeProtectionOverlayState extends State<EyeProtectionOverlay> {
     }
 
     // Only set up timer if reminders are enabled
-    if (_eyeProtectionService.periodicalReminderEnabled) {
+    if (_eyeProtectionService.readingTimerDuration > 0) {
       _isTimerActive = true;
 
       // Calculate time until next reminder
       final int reminderIntervalMillis =
-          _eyeProtectionService.readingTimerInterval * 60 * 1000;
+          _eyeProtectionService.readingTimerDuration * 60 * 1000;
       final int elapsedMillis =
           DateTime.now().difference(widget.readingStartTime).inMilliseconds;
 
@@ -66,7 +65,7 @@ class _EyeProtectionOverlayState extends State<EyeProtectionOverlay> {
 
   void _showReminderDialog() {
     // Only show reminder if feature is enabled
-    if (!_eyeProtectionService.periodicalReminderEnabled) {
+    if (_eyeProtectionService.readingTimerDuration <= 0) {
       return;
     }
 
