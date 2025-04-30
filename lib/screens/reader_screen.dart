@@ -9,6 +9,24 @@ import '../modules/light_novel.dart';
 import '../screens/HistoryScreen.dart';
 import '../services/crawler_service.dart';
 
+// Define content block types
+enum ContentBlockType { paragraph, header, image }
+
+// Define content block class
+class ContentBlock {
+  final ContentBlockType type;
+  final String content;
+  final int startPosition;
+  final String? altText;
+
+  ContentBlock({
+    required this.type,
+    required this.content,
+    required this.startPosition,
+    this.altText,
+  });
+}
+
 class ReaderScreen extends StatefulWidget {
   final String url;
   final String title;
@@ -766,60 +784,174 @@ class _ReaderScreenState extends State<ReaderScreen>
     final List<Widget> widgets = [];
 
     // Check if the content is HTML
-    if (_content.contains('<p>') || _content.contains('<h')) {
-      // Parse HTML content
-      final RegExp headerRegex = RegExp(
+    if (_content.contains('<p>') ||
+        _content.contains('<h') ||
+        _content.contains('<img')) {
+      // Use a simpler regex but preprocess the content first
+      final processedContent = _content.replaceAll(
+        RegExp(r'<p\s+id\s*=\s*"[^"]*"'),
+        '<p',
+      );
+
+      // First, let's extract all content blocks in the order they appear
+      final List<ContentBlock> contentBlocks = [];
+
+      // Extract paragraphs with positions
+      final paragraphMatches = RegExp(
+        r'<p[^>]*>(.*?)<\/p>',
+        dotAll: true,
+      ).allMatches(processedContent);
+      for (var match in paragraphMatches) {
+        contentBlocks.add(
+          ContentBlock(
+            type: ContentBlockType.paragraph,
+            content: match.group(1) ?? '',
+            startPosition: match.start,
+          ),
+        );
+      }
+
+      // Extract headers with positions
+      final headerMatches = RegExp(
         r'<h[1-6][^>]*>(.*?)<\/h[1-6]>',
         dotAll: true,
-      );
-      final RegExp paragraphRegex = RegExp(r'<p[^>]*>(.*?)<\/p>', dotAll: true);
+      ).allMatches(processedContent);
+      for (var match in headerMatches) {
+        contentBlocks.add(
+          ContentBlock(
+            type: ContentBlockType.header,
+            content: match.group(1) ?? '',
+            startPosition: match.start,
+          ),
+        );
+      }
 
-      // Find all headers
-      headerRegex.allMatches(_content).forEach((match) {
-        final headerText = _stripHtmlTags(match.group(1) ?? '');
-        if (headerText.isNotEmpty) {
-          widgets.add(
-            Padding(
-              padding: EdgeInsets.only(bottom: 16 * _paragraphSpacing),
-              child: Text(
-                headerText,
-                style: TextStyle(
-                  fontSize: _fontSize + 4,
-                  fontWeight: FontWeight.bold,
-                  color: _textColor,
-                  fontFamily: _fontFamily,
-                  height: _lineHeight,
-                ),
-              ),
+      // Extract images with positions (double quotes)
+      final doubleQuoteImageMatches = RegExp(
+        r'<img\s+[^>]*src\s*=\s*"([^"]*)"[^>]*>',
+        dotAll: true,
+      ).allMatches(processedContent);
+      for (var match in doubleQuoteImageMatches) {
+        final imageUrl = match.group(1);
+        if (imageUrl != null &&
+            imageUrl.isNotEmpty &&
+            (imageUrl.startsWith('http') || imageUrl.startsWith('https'))) {
+          contentBlocks.add(
+            ContentBlock(
+              type: ContentBlockType.image,
+              content: imageUrl,
+              startPosition: match.start,
+              altText: _extractAltText(match.group(0) ?? ''),
             ),
           );
         }
-      });
+      }
 
-      // Find all paragraphs
-      paragraphRegex.allMatches(_content).forEach((match) {
-        final paragraphText = _stripHtmlTags(match.group(1) ?? '');
-        if (paragraphText.isNotEmpty) {
-          widgets.add(
-            Padding(
-              padding: EdgeInsets.only(bottom: 16 * _paragraphSpacing),
-              child: Text(
-                paragraphText,
-                style: TextStyle(
-                  fontSize: _fontSize,
-                  color: _textColor,
-                  fontFamily: _fontFamily,
-                  height: _lineHeight,
-                ),
-              ),
+      // Extract images with positions (single quotes)
+      final singleQuoteImageMatches = RegExp(
+        r"<img\s+[^>]*src\s*=\s*'([^']*)'[^>]*>",
+        dotAll: true,
+      ).allMatches(processedContent);
+      for (var match in singleQuoteImageMatches) {
+        final imageUrl = match.group(1);
+        if (imageUrl != null &&
+            imageUrl.isNotEmpty &&
+            (imageUrl.startsWith('http') || imageUrl.startsWith('https'))) {
+          contentBlocks.add(
+            ContentBlock(
+              type: ContentBlockType.image,
+              content: imageUrl,
+              startPosition: match.start,
+              altText: _extractAltText(match.group(0) ?? ''),
             ),
           );
         }
-      });
+      }
+
+      // Sort blocks by their position in the original content
+      contentBlocks.sort((a, b) => a.startPosition.compareTo(b.startPosition));
+
+      // Process the blocks in order
+      for (var block in contentBlocks) {
+        switch (block.type) {
+          case ContentBlockType.paragraph:
+            final paragraphText = _stripHtmlTags(block.content);
+            // Skip paragraphs that are only regex artifacts
+            if (paragraphText.isEmpty ||
+                RegExp(r'^\s*\$\d+\s*$').hasMatch(paragraphText)) {
+              continue;
+            }
+
+            widgets.add(
+              Padding(
+                padding: EdgeInsets.only(bottom: 16 * _paragraphSpacing),
+                child: Text(
+                  paragraphText,
+                  style: TextStyle(
+                    fontSize: _fontSize,
+                    color: _textColor,
+                    fontFamily: _fontFamily,
+                    height: _lineHeight,
+                  ),
+                ),
+              ),
+            );
+            break;
+
+          case ContentBlockType.header:
+            final headerText = _stripHtmlTags(block.content);
+            if (headerText.isNotEmpty) {
+              widgets.add(
+                Padding(
+                  padding: EdgeInsets.only(bottom: 16 * _paragraphSpacing),
+                  child: Text(
+                    headerText,
+                    style: TextStyle(
+                      fontSize: _fontSize + 4,
+                      fontWeight: FontWeight.bold,
+                      color: _textColor,
+                      fontFamily: _fontFamily,
+                      height: _lineHeight,
+                    ),
+                  ),
+                ),
+              );
+            }
+            break;
+
+          case ContentBlockType.image:
+            widgets.add(
+              Padding(
+                padding: EdgeInsets.symmetric(vertical: 16.0),
+                child: Center(
+                  child: Column(
+                    children: [
+                      _buildImageWidget(block.content),
+                      if (block.altText != null && block.altText!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: Text(
+                            block.altText!,
+                            style: TextStyle(
+                              fontStyle: FontStyle.italic,
+                              fontSize: _fontSize - 2,
+                              color: _textColor.withOpacity(0.7),
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+            break;
+        }
+      }
 
       // If no widgets were created, just show the raw content with HTML tags stripped
       if (widgets.isEmpty) {
-        final plainText = _stripHtmlTags(_content);
+        final plainText = _stripHtmlTags(processedContent);
         widgets.add(
           Text(
             plainText,
@@ -879,18 +1011,133 @@ class _ReaderScreenState extends State<ReaderScreen>
     return widgets;
   }
 
+  // Extract alt text from an image tag
+  String? _extractAltText(String imgTag) {
+    final altTextMatch =
+        RegExp(r'alt\s*=\s*"([^"]*)"').firstMatch(imgTag) ??
+        RegExp(r"alt\s*=\s*'([^']*)'").firstMatch(imgTag);
+    return altTextMatch?.group(1);
+  }
+
   // Helper to strip HTML tags
   String _stripHtmlTags(String htmlString) {
+    // Pre-process any visible HTML tags by replacing "<" with "&lt;" if they appear to be raw tags
+    String processed = htmlString;
+
+    // Replace raw tags that might be showing in the text
+    if (processed.contains('<p id=') || processed.contains('</p><p id=')) {
+      processed = processed.replaceAll('<p id=', '').replaceAll('</p>', '');
+    }
+
     // Remove all html tags
-    final text = htmlString.replaceAll(RegExp(r'<[^>]*>'), '');
+    final text = processed.replaceAll(RegExp(r'<[^>]*>'), '');
+
     // Convert HTML entities
-    return text
-        .replaceAll('&nbsp;', ' ')
-        .replaceAll('&amp;', '&')
-        .replaceAll('&lt;', '<')
-        .replaceAll('&gt;', '>')
-        .replaceAll('&quot;', '"')
-        .replaceAll('&#39;', "'")
-        .trim();
+    String result =
+        text
+            .replaceAll('&nbsp;', ' ')
+            .replaceAll('&amp;', '&')
+            .replaceAll('&lt;', '<')
+            .replaceAll('&gt;', '>')
+            .replaceAll('&quot;', '"')
+            .replaceAll('&#39;', "'")
+            .trim();
+
+    // Remove regex artifacts that might have leaked through
+    result = result.replaceAll(RegExp(r'^\s*\$\d+\s*$'), '');
+    result = result.replaceAll(RegExp(r'\s+\$\d+\s+'), ' ');
+
+    // Remove any remaining id markers
+    result = result.replaceAll(RegExp(r'id="\d+"'), '');
+    result = result.replaceAll(RegExp(r"id='\d+'"), '');
+
+    return result;
+  }
+
+  // Method to fix image URLs before loading
+  String _fixImageUrl(String url) {
+    // First check if the URL is from a known problematic domain
+    final domainPatterns = {
+      'i.docln.net': 'i.hako.vn',
+      'i2.docln.net': 'i.hako.vn',
+      'i3.docln.net': 'i.hako.vn',
+    };
+
+    // Check for each problematic domain
+    for (final entry in domainPatterns.entries) {
+      if (url.contains(entry.key)) {
+        return url.replaceFirst(entry.key, entry.value);
+      }
+    }
+
+    // Use the crawler service's fixImageUrl if available
+    try {
+      return _crawlerService.fixImageUrl(url);
+    } catch (e) {
+      print('Error fixing image URL: $e');
+      return url;
+    }
+  }
+
+  // Custom image widget that handles redirects and fallbacks
+  Widget _buildImageWidget(String imageUrl) {
+    final fixedUrl = _fixImageUrl(imageUrl);
+
+    return Image.network(
+      fixedUrl,
+      fit: BoxFit.contain,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Center(
+          child: CircularProgressIndicator(
+            value:
+                loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
+                    : null,
+          ),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) {
+        print('Error loading image: $error for URL $fixedUrl');
+
+        // If the fixed URL failed, try a direct alternative domain
+        if (fixedUrl != imageUrl && !fixedUrl.contains('i.hako.vn')) {
+          print('Trying alternative domain for image');
+          final altUrl = imageUrl.replaceAll(
+            RegExp(r'i[0-9]?\.docln\.net'),
+            'i.hako.vn',
+          );
+
+          return Image.network(
+            altUrl,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              print('Error loading alternative image: $error');
+              return Column(
+                children: [
+                  Icon(Icons.broken_image, color: Colors.red),
+                  Text(
+                    'Failed to load image',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                  Text(
+                    '(Tap to retry)',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              );
+            },
+          );
+        }
+
+        return Column(
+          children: [
+            Icon(Icons.broken_image, color: Colors.red),
+            Text('Failed to load image', style: TextStyle(color: Colors.red)),
+          ],
+        );
+      },
+    );
   }
 }

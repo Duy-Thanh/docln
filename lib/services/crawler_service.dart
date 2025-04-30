@@ -660,9 +660,19 @@ class CrawlerService {
 
     // Map of problematic image domains and their alternatives
     const Map<String, List<String>> imageDomainFallbacks = {
-      'i.docln.net': ['i.hako.vip', 'i2.hako.vip', 'i.ln.hako.vn'],
-      'i2.docln.net': ['i2.hako.vip', 'i.hako.vip', 'i2.ln.hako.vn'],
-      'i3.docln.net': ['i3.hako.vip', 'i.hako.vip', 'i3.ln.hako.vn'],
+      'i.docln.net': ['i.hako.vn', 'i.hako.vip', 'i2.hako.vip', 'i.ln.hako.vn'],
+      'i2.docln.net': [
+        'i.hako.vn',
+        'i2.hako.vip',
+        'i.hako.vip',
+        'i2.ln.hako.vn',
+      ],
+      'i3.docln.net': [
+        'i.hako.vn',
+        'i3.hako.vip',
+        'i.hako.vip',
+        'i3.ln.hako.vn',
+      ],
     };
 
     // Check if the host is in our problematic domains list
@@ -787,6 +797,7 @@ class CrawlerService {
         url = url.startsWith('/') ? '$baseServer$url' : '$baseServer/$url';
       }
 
+      print('Fetching chapter content from URL: $url');
       final response = await _httpClient.get(
         url,
         headers: {
@@ -803,7 +814,44 @@ class CrawlerService {
         );
       }
 
-      final document = parser.parse(response.body);
+      // PREPROCESSING: Aggressively remove ALL HTML comments before any parsing
+      String rawHtml = response.body;
+      print('Original HTML size: ${rawHtml.length}');
+
+      // SUPER SPECIFIC PATTERN REMOVAL: Handle the exact pattern from the screenshot
+      rawHtml = rawHtml.replaceAll('FacebookDiscordFacebookDiscord', '');
+      rawHtml = rawHtml.replaceAll(
+        'body { background: inherit; } #footer { display: none; }',
+        '',
+      );
+
+      // Check for patterns of concatenated social media names
+      if (rawHtml.contains('Facebook') && rawHtml.contains('Discord')) {
+        print('Detected social media pattern, applying specific removal');
+
+        // Remove any lines containing both Facebook and Discord without proper spacing
+        rawHtml = rawHtml.replaceAll(
+          RegExp(r'.*(?:Facebook\s*Discord|Discord\s*Facebook).*\n?'),
+          '',
+        );
+
+        // Also remove any CSS that might hide the footer
+        rawHtml = rawHtml.replaceAll(
+          RegExp(r'#footer\s*{\s*display:\s*none;\s*}'),
+          '',
+        );
+        rawHtml = rawHtml.replaceAll(
+          RegExp(r'body\s*{\s*background:\s*inherit;\s*}'),
+          '',
+        );
+      }
+
+      // First pass: Remove standard HTML comments
+      rawHtml = _removeAllComments(rawHtml);
+      print('HTML size after comment removal: ${rawHtml.length}');
+
+      // Parse the HTML after comment removal
+      final document = parser.parse(rawHtml);
 
       // Extract the chapter title
       String chapterTitle = '';
@@ -830,13 +878,30 @@ class CrawlerService {
           document.querySelector('article.content');
 
       if (contentElement != null) {
-        // Remove any script or ad elements
+        // Remove any script, ad elements, and social media elements
         contentElement
-            .querySelectorAll('script, .ads, [id*="ads"], [class*="ads"]')
+            .querySelectorAll(
+              'script, .ads, [id*="ads"], [class*="ads"], a[href*="discord"], a[href*="facebook"], a[href*="fb.com"], .social-links, [class*="social"]',
+            )
             .forEach((e) => e.remove());
 
+        // Extract the raw HTML content
+        String contentHtml = contentElement.innerHtml;
+
         // Clean and format the content
-        content = _cleanContent(contentElement.innerHtml);
+        content = _cleanContent(contentHtml);
+
+        // Final check for social media content
+        if (content.toLowerCase().contains('discord') ||
+            content.toLowerCase().contains('facebook') ||
+            content.toLowerCase().contains('fb.com')) {
+          print(
+            'Social media content detected after cleaning, applying extra cleaning step',
+          );
+
+          // Apply more aggressive cleaning for social media mentions
+          content = _removeSocialMediaContent(content);
+        }
       }
 
       // Extract series information
@@ -904,13 +969,84 @@ class CrawlerService {
 
   // Helper method to clean HTML content
   String _cleanContent(String html) {
+    // Remove social media links first
+    html = html.replaceAll(
+      RegExp(
+        r'<div[^>]*>.*?(?:Facebook|Discord|fb\.com).*?</div>',
+        dotAll: true,
+      ),
+      '',
+    );
+    html = html.replaceAll(
+      RegExp(r'<a[^>]*(?:discord|facebook|fb\.com)[^>]*>.*?</a>', dotAll: true),
+      '',
+    );
+
+    // Save image tags to restore later
+    final Map<String, String> imageReplacements = {};
+    final imageMatches = RegExp(
+      r'<img\s+[^>]*src\s*=\s*"([^"]*)"[^>]*>',
+      dotAll: true,
+    ).allMatches(html);
+    int imageCounter = 0;
+
+    for (final match in imageMatches) {
+      final fullTag = match.group(0);
+      final srcUrl = match.group(1);
+      if (fullTag != null && srcUrl != null) {
+        // Fix the image URL in place
+        String fixedUrl = fixImageUrl(srcUrl);
+        String updatedTag = fullTag.replaceFirst(srcUrl, fixedUrl);
+
+        final placeholder = '___IMAGE_PLACEHOLDER_${imageCounter++}___';
+        imageReplacements[placeholder] = updatedTag;
+        html = html.replaceFirst(fullTag, placeholder);
+      }
+    }
+
+    // Also handle single quote image tags
+    final singleQuoteImageMatches = RegExp(
+      r"<img\s+[^>]*src\s*=\s*'([^']*)'[^>]*>",
+      dotAll: true,
+    ).allMatches(html);
+    for (final match in singleQuoteImageMatches) {
+      final fullTag = match.group(0);
+      final srcUrl = match.group(1);
+      if (fullTag != null && srcUrl != null) {
+        // Fix the image URL in place
+        String fixedUrl = fixImageUrl(srcUrl);
+        String updatedTag = fullTag.replaceFirst(srcUrl, fixedUrl);
+
+        final placeholder = '___IMAGE_PLACEHOLDER_${imageCounter++}___';
+        imageReplacements[placeholder] = updatedTag;
+        html = html.replaceFirst(fullTag, placeholder);
+      }
+    }
+
+    // Fix raw HTML tags appearing in the content
+    // Replace <p id="X"> tags with regular <p> tags - handle double quotes
+    html = html.replaceAll(RegExp(r'<p\s+id\s*=\s*"[^"]*"[^>]*>'), '<p>');
+    // Also handle single quotes
+    html = html.replaceAll(RegExp(r"<p\s+id\s*=\s*'[^']*'[^>]*>"), '<p>');
+
     // Remove excessive whitespace and newlines
     html = html.replaceAll(RegExp(r'\s{2,}'), ' ');
 
+    // Handle special case where the HTML might be double-encoded
+    if (html.contains('&lt;p') || html.contains('&lt;div')) {
+      html = html.replaceAll('&lt;', '<').replaceAll('&gt;', '>');
+    }
+
     // Convert div and span elements to paragraphs for better reading
-    html = html.replaceAll(
+    html = html.replaceAllMapped(
       RegExp(r'<div[^>]*>(.*?)</div>', dotAll: true),
-      '<p>\$1</p>',
+      (match) => '<p>${match.group(1)}</p>',
+    );
+
+    // Also handle span elements
+    html = html.replaceAllMapped(
+      RegExp(r'<span[^>]*>(.*?)</span>', dotAll: true),
+      (match) => match.group(1) ?? '',
     );
 
     // Convert line breaks to paragraphs
@@ -933,6 +1069,186 @@ class CrawlerService {
         })
         .join('\n');
 
+    // Remove any standalone '$1' artifacts from regex replacements
+    html = html.replaceAll(RegExp(r'<p>\s*\$\d+\s*</p>'), '');
+    html = html.replaceAll(RegExp(r'\s\$\d+\s'), ' ');
+
+    // Remove any remaining text containing Discord or Facebook
+    html = html.replaceAll(
+      RegExp(
+        r'<p>[^<]*(?:Discord|Facebook|fb\.com)[^<]*</p>',
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    // Restore image tags
+    imageReplacements.forEach((placeholder, imageTag) {
+      html = html.replaceAll(placeholder, imageTag);
+    });
+
     return html;
+  }
+
+  // Helper method for aggressive removal of social media content
+  String _removeSocialMediaContent(String html) {
+    // Remove any paragraph containing social media keywords
+    final List<String> socialKeywords = [
+      'discord',
+      'facebook',
+      'fb.com',
+      'social',
+      'follow us',
+      'join us',
+    ];
+
+    for (final keyword in socialKeywords) {
+      final pattern = '<p>[^<]*' + keyword + '[^<]*</p>';
+      html = html.replaceAll(RegExp(pattern, caseSensitive: false), '');
+    }
+
+    // Remove blocks of text with multiple mentions of social media
+    html = html.replaceAll(
+      RegExp(
+        r'<div[^>]*>(?:(?!<div).)*?(discord|facebook|fb\.com)(?:(?!<div).)*?</div>',
+        caseSensitive: false,
+        dotAll: true,
+      ),
+      '',
+    );
+
+    // Remove rows or flex containers that might contain social media links
+    html = html.replaceAll(
+      RegExp(
+        r'<div[^>]*(?:flex|row|space-x)[^>]*>.*?(?:discord|facebook|fb\.com).*?</div>',
+        caseSensitive: false,
+        dotAll: true,
+      ),
+      '',
+    );
+
+    // Remove the footer section which might contain social links
+    html = html.replaceAll(
+      RegExp(
+        r'<div[^>]*(?:footer|bottom)[^>]*>.*?</div>',
+        caseSensitive: false,
+        dotAll: true,
+      ),
+      '',
+    );
+
+    // Remove any classes commonly containing social elements
+    html = html.replaceAll(
+      RegExp(
+        r'<div[^>]*class\s*=\s*"[^"]*(?:social|connect|follow)[^"]*"[^>]*>.*?</div>',
+        caseSensitive: false,
+        dotAll: true,
+      ),
+      '',
+    );
+
+    return html;
+  }
+
+  // New helper method to aggressively remove ALL HTML comments
+  String _removeAllComments(String html) {
+    // First pass: Basic HTML comment removal
+    String cleanedHtml = html;
+
+    // Handle different forms of comments
+    cleanedHtml = cleanedHtml.replaceAll(
+      RegExp(r'<!--[\s\S]*?-->', dotAll: true),
+      '',
+    );
+
+    // Handle unclosed comments (which might continue until end of file)
+    cleanedHtml = cleanedHtml.replaceAll(
+      RegExp(r'<!--[\s\S]*?($|-->)', dotAll: true),
+      '',
+    );
+
+    // Remove any CSS/JS style comments
+    cleanedHtml = cleanedHtml.replaceAll(
+      RegExp(r'/\*[\s\S]*?\*/', dotAll: true),
+      '',
+    );
+
+    // Remove single line comments
+    cleanedHtml = cleanedHtml.replaceAll(RegExp(r'//.*?(\n|$)'), '');
+
+    // Remove any script tags that might contain comments or scripts
+    cleanedHtml = cleanedHtml.replaceAll(
+      RegExp(r'<script[\s\S]*?</script>', dotAll: true),
+      '',
+    );
+
+    // Remove any style tags that might contain comments
+    cleanedHtml = cleanedHtml.replaceAll(
+      RegExp(r'<style[\s\S]*?</style>', dotAll: true),
+      '',
+    );
+
+    // Handle the specific pattern shown in the example
+    cleanedHtml = cleanedHtml.replaceAll(
+      RegExp(r'Facebook\s*Discord\s*Facebook\s*Discord'),
+      '',
+    );
+
+    // Additional stage: Remove any partial comments that might remain
+    cleanedHtml = cleanedHtml.replaceAll('<!--', '');
+    cleanedHtml = cleanedHtml.replaceAll('-->', '');
+
+    // Pre-emptively remove social media elements before parsing
+    // Discord related
+    cleanedHtml = cleanedHtml.replaceAll(
+      RegExp(
+        r'<[^>]*discord[^>]*>[\s\S]*?</[^>]*>',
+        dotAll: true,
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    // Facebook related
+    cleanedHtml = cleanedHtml.replaceAll(
+      RegExp(
+        r'<[^>]*(?:facebook|fb\.com)[^>]*>[\s\S]*?</[^>]*>',
+        dotAll: true,
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    // Handle divs with social media related classes or IDs
+    cleanedHtml = cleanedHtml.replaceAll(
+      RegExp(
+        r'<div[^>]*(?:class|id)\s*=\s*"[^"]*(?:social|follow|connect|share)[^"]*"[^>]*>[\s\S]*?</div>',
+        dotAll: true,
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    // Remove divs containing "Discord" or "Facebook" text
+    cleanedHtml = cleanedHtml.replaceAll(
+      RegExp(
+        r'<div[^>]*>[\s\S]*?(?:Discord|Facebook|fb\.com)[\s\S]*?</div>',
+        dotAll: true,
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    // Remove any flex or row containers that often contain social links
+    cleanedHtml = cleanedHtml.replaceAll(
+      RegExp(
+        r'<div[^>]*(?:flex|row|space-x-3|mt-10|justify-center)[^>]*>[\s\S]*?</div>',
+        dotAll: true,
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    return cleanedHtml;
   }
 }

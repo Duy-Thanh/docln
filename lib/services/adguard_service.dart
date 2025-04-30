@@ -239,7 +239,7 @@ class AdBlockService {
         
         function blockAdsWithRules() {
           const selectors = ${limitedRules.map((r) => r.contains("'") ? "\"$r\"" : "'$r'").toList()};
-          
+        
           // Apply AdGuard rules in batches to improve performance
           function applySelectors(selectors, startIndex, batchSize) {
             const endIndex = Math.min(startIndex + batchSize, selectors.length);
@@ -248,13 +248,13 @@ class AdBlockService {
             if (batch.length === 0) return;
             
             // Join selectors for more efficient DOM operations
-            try {
+          try {
               const elements = document.querySelectorAll(batch.join(', '));
               elements.forEach(function(element) {
-                element.style.display = 'none';
-                element.remove();
-              });
-            } catch (e) {
+              element.style.display = 'none';
+              element.remove();
+            });
+          } catch (e) {
               // If batch fails, try individual selectors
               batch.forEach(function(selector) {
                 try {
@@ -320,9 +320,9 @@ class AdBlockService {
           applySelectors(selectors, 0, 100);
           
           // Apply basic ad blocking for common patterns
-          ${_getBasicAdBlockScript()}
-        }
-        
+        ${_getBasicAdBlockScript()}
+      }
+
         // Define global blockAds function
         window.blockAds = function() {
           blockAdsWithRules();
@@ -333,12 +333,12 @@ class AdBlockService {
         };
         
         // Run immediately
-        if (document.readyState === 'loading') {
+      if (document.readyState === 'loading') {
           document.addEventListener('DOMContentLoaded', window.blockAds);
-        } else {
+      } else {
           window.blockAds();
-        }
-        
+      }
+
         // Set up observer for dynamic content with throttling
         let timeout = null;
         const observer = new MutationObserver(function() {
@@ -351,10 +351,10 @@ class AdBlockService {
         
         // Observe document
         if (document.body || document.documentElement) {
-          observer.observe(document.body || document.documentElement, {
-            childList: true,
-            subtree: true
-          });
+      observer.observe(document.body || document.documentElement, {
+        childList: true,
+        subtree: true
+      });
         } else {
           // If body not available yet, wait and try again
           window.addEventListener('DOMContentLoaded', function() {
@@ -488,39 +488,39 @@ class AdBlockService {
   static String _getBasicAdBlockScript() {
     return '''
       function applyBasicAdBlock() {
-        const commonAdSelectors = [
-          // Common ad classes and IDs
-          '.ads', '#ads', '.advertisement', '.advert',
-          '[class*="ads-"]', '[id*="ads-"]',
-          '[class*="advertisement"]', '[id*="advertisement"]',
-          '[class*="advert"]', '[id*="advert"]',
-          
-          // Ad networks
-          'ins.adsbygoogle', '.adsbygoogle',
-          'div[data-ad]', 'div[class*="ad-"]',
-          'iframe[src*="doubleclick.net"]',
-          'iframe[src*="googleadservices"]',
+          const commonAdSelectors = [
+            // Common ad classes and IDs
+            '.ads', '#ads', '.advertisement', '.advert',
+            '[class*="ads-"]', '[id*="ads-"]',
+            '[class*="advertisement"]', '[id*="advertisement"]',
+            '[class*="advert"]', '[id*="advert"]',
+            
+            // Ad networks
+            'ins.adsbygoogle', '.adsbygoogle',
+            'div[data-ad]', 'div[class*="ad-"]',
+            'iframe[src*="doubleclick.net"]',
+            'iframe[src*="googleadservices"]',
           'iframe[src*="googlesyndication"]',
-          'iframe[src*="ad."]',
-          
-          // Banners and popups
-          '.banner-ads', '#banner-ads',
-          '.google-ads', '#google-ads',
-          'div[class*="banner"]', 'div[id*="banner"]',
-          'div[class*="popup"]', 'div[id*="popup"]',
-          
-          // Social widgets and tracking
-          '.social-share', '.share-buttons',
-          '[class*="tracking"]', '[id*="tracking"]',
-          
+            'iframe[src*="ad."]',
+            
+            // Banners and popups
+            '.banner-ads', '#banner-ads',
+            '.google-ads', '#google-ads',
+            'div[class*="banner"]', 'div[id*="banner"]',
+            'div[class*="popup"]', 'div[id*="popup"]',
+            
+            // Social widgets and tracking
+            '.social-share', '.share-buttons',
+            '[class*="tracking"]', '[id*="tracking"]',
+            
           // Additional specific selectors for Hako and docln
-          '.quangcao', '#quangcao',
-          '.ads-container', '.ads-wrapper',
+            '.quangcao', '#quangcao',
+            '.ads-container', '.ads-wrapper',
           '[class*="sponsor"]', '[id*="sponsor"]',
           '#divAds', '.divAds',
           '#adsbox', '.adsbox',
           '#ads-holder', '.ads-holder'
-        ];
+          ];
 
         // Apply common selectors in a single operation if possible
         try {
@@ -531,8 +531,8 @@ class AdBlockService {
           commonAdSelectors.forEach(function(selector) {
             try {
               document.querySelectorAll(selector).forEach(function(element) {
-                element.remove();
-              });
+              element.remove();
+            });
             } catch (err) {
               // Silently fail for invalid selectors
             }
@@ -540,22 +540,22 @@ class AdBlockService {
         }
 
         // Remove scripts with ad-related keywords
-        const scripts = document.getElementsByTagName('script');
+          const scripts = document.getElementsByTagName('script');
         const adKeywords = /(adsbygoogle|googleads|pagead2|advertisement|analytics|tracking|gtag|adsense)/i;
         for (let i = scripts.length-1; i >= 0; i--) {
           const script = scripts[i];
           if (script.src && script.src.match(adKeywords) || 
               script.innerHTML && script.innerHTML.match(adKeywords)) {
-            script.remove();
+              script.remove();
+            }
           }
-        }
 
-        // Clean iframes
+          // Clean iframes
         document.querySelectorAll('iframe').forEach(function(iframe) {
           if (iframe.src && iframe.src.match(/(ads|analytics|tracking|doubleclick)/i)) {
-            iframe.remove();
-          }
-        });
+              iframe.remove();
+            }
+          });
         
         // Block popups
         window.open = function(url, name, params) {
@@ -564,7 +564,7 @@ class AdBlockService {
           console.log('Popup blocked');
           return null;
         };
-        
+
         // Clean up ad-related inline styles
         document.querySelectorAll('[style*="z-index: 9999"], [style*="position: fixed"]').forEach(function(el) {
           if (el.clientHeight < 50 || el.clientWidth < 50 || 
