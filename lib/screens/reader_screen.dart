@@ -115,6 +115,16 @@ class _ReaderScreenState extends State<ReaderScreen>
     super.dispose();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // Reset scroll position when the screen is first loaded
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(0);
+    }
+  }
+
   Future<void> _fetchAdjacentChapters() async {
     if (widget.novel == null) return;
 
@@ -328,13 +338,10 @@ class _ReaderScreenState extends State<ReaderScreen>
         });
       }
 
-      // Restore reading position after content is loaded
+      // Reset scroll position after content is loaded
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_readingProgress > 0 &&
-            _scrollController.position.maxScrollExtent > 0) {
-          final targetPosition =
-              _scrollController.position.maxScrollExtent * _readingProgress;
-          _scrollController.jumpTo(targetPosition);
+        if (_scrollController.hasClients) {
+          _scrollController.jumpTo(0);
         }
       });
     } catch (e) {
@@ -1086,6 +1093,12 @@ class _ReaderScreenState extends State<ReaderScreen>
     return Image.network(
       fixedUrl,
       fit: BoxFit.contain,
+      headers: {
+        'User-Agent':
+            'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
+        'Referer': 'https://ln.hako.vn/',
+        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+      },
       loadingBuilder: (context, child, loadingProgress) {
         if (loadingProgress == null) return child;
         return Center(
@@ -1112,6 +1125,12 @@ class _ReaderScreenState extends State<ReaderScreen>
           return Image.network(
             altUrl,
             fit: BoxFit.contain,
+            headers: {
+              'User-Agent':
+                  'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
+              'Referer': 'https://ln.hako.vn/',
+              'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+            },
             errorBuilder: (context, error, stackTrace) {
               print('Error loading alternative image: $error');
               return Column(
