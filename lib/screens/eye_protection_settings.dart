@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../services/eye_protection_service.dart';
 import '../services/pupil_adaptation_service.dart';
 import 'dart:async';
+import 'dart:ui';
+import 'EyeCareScreen.dart';
 
 class EyeProtectionSettingsScreen extends StatefulWidget {
   const EyeProtectionSettingsScreen({Key? key}) : super(key: key);
@@ -49,6 +51,9 @@ class _EyeProtectionSettingsScreenState
         children: [
           // Eye Protection Master Switch
           _buildMasterSwitch(),
+
+          // eyeCARE™ Help Button
+          _buildEyeCareHelpButton(),
 
           const Divider(),
 
@@ -108,6 +113,82 @@ class _EyeProtectionSettingsScreenState
                 ? Theme.of(context).primaryColor
                 : Colors.grey,
         size: 28,
+      ),
+    );
+  }
+
+  Widget _buildEyeCareHelpButton() {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 12.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const EyeCareScreen()),
+              );
+            },
+            icon: const Icon(Icons.help_outline),
+            label: RichText(
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'eye',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onPrimary,
+                      fontWeight: FontWeight.w400,
+                      fontSize: 16,
+                    ),
+                  ),
+                  TextSpan(
+                    text: 'CARE',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onPrimary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const TextSpan(
+                    text: '™ ',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w300,
+                      fontFeatures: [FontFeature.superscripts()],
+                    ),
+                  ),
+                  const TextSpan(
+                    text: 'Help & Information',
+                    style: TextStyle(
+                      fontWeight: FontWeight.normal,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(
+                vertical: 12.0,
+                horizontal: 16.0,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8.0),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0, left: 4.0, right: 4.0),
+            child: Text(
+              'Learn more about our scientifically-backed eye protection technology and how it helps reduce eye strain during extended reading sessions.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade600,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

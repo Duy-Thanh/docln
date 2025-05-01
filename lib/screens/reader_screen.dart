@@ -12,6 +12,7 @@ import '../services/eye_protection_service.dart';
 import '../widgets/eye_protection_overlay.dart';
 import '../widgets/eye_friendly_text.dart';
 import '../widgets/network_image.dart';
+import '../screens/EyeCareScreen.dart';
 
 // Define content block types
 enum ContentBlockType { paragraph, header, image }
@@ -678,34 +679,115 @@ class _ReaderScreenState extends State<ReaderScreen>
                     ),
 
                     // Eye protection toggle
-                    SwitchListTile(
-                      title: const Text('eyeCARE™'),
-                      subtitle: const Text(
-                        'Commercial and monopoly eye-protection method developed by us to protect your eyes',
+                    Container(
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
                       ),
-                      value: _eyeProtectionService.eyeProtectionEnabled,
-                      onChanged: (value) async {
-                        // Update service
-                        await _eyeProtectionService.setEyeProtectionEnabled(
-                          value,
-                        );
-                        // Refresh both state builders
-                        setState(() {});
-                        this.setState(() {
-                          // Re-apply protection to text color
-                          if (_eyeProtectionService.eyeProtectionEnabled) {
-                            _textColor = _eyeProtectionService
-                                .applyEyeProtection(_textColor);
-                          } else {
-                            // Reset to original colors based on theme
-                            if (_isDarkMode) {
-                              _textColor = Colors.white.withOpacity(0.9);
-                            } else {
-                              _textColor = Colors.black.withOpacity(0.9);
-                            }
-                          }
-                        });
-                      },
+                      decoration: BoxDecoration(
+                        color:
+                            _isDarkMode
+                                ? Colors.grey.shade800.withOpacity(0.3)
+                                : Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color:
+                              _isDarkMode
+                                  ? Colors.grey.shade700
+                                  : Colors.grey.shade300,
+                          width: 1,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'eyeCARE™',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    const Text(
+                                      'Commercial and monopoly eye-protection method developed by us to protect your eyes',
+                                      style: TextStyle(fontSize: 12),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Switch(
+                                value:
+                                    _eyeProtectionService.eyeProtectionEnabled,
+                                onChanged: (value) async {
+                                  // Update service
+                                  await _eyeProtectionService
+                                      .setEyeProtectionEnabled(value);
+                                  // Refresh both state builders
+                                  setState(() {});
+                                  this.setState(() {
+                                    // Re-apply protection to text color
+                                    if (_eyeProtectionService
+                                        .eyeProtectionEnabled) {
+                                      _textColor = _eyeProtectionService
+                                          .applyEyeProtection(_textColor);
+                                    } else {
+                                      // Reset to original colors based on theme
+                                      if (_isDarkMode) {
+                                        _textColor = Colors.white.withOpacity(
+                                          0.9,
+                                        );
+                                      } else {
+                                        _textColor = Colors.black.withOpacity(
+                                          0.9,
+                                        );
+                                      }
+                                    }
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => const EyeCareScreen(),
+                                ),
+                              );
+                            },
+                            icon: Icon(
+                              Icons.help_outline,
+                              size: 16,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                            label: Text(
+                              'Learn more about eyeCARE™',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: Size.zero,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
 
                     // Adaptive brightness toggle
