@@ -679,8 +679,10 @@ class _ReaderScreenState extends State<ReaderScreen>
 
                     // Eye protection toggle
                     SwitchListTile(
-                      title: const Text('Eye Protection'),
-                      subtitle: const Text('Reduces blue light and eye strain'),
+                      title: const Text('eyeCARE™'),
+                      subtitle: const Text(
+                        'Commercial and monopoly eye-protection method developed by us to protect your eyes',
+                      ),
                       value: _eyeProtectionService.eyeProtectionEnabled,
                       onChanged: (value) async {
                         // Update service
