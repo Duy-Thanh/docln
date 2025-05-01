@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../services/eye_protection_service.dart';
 
 class EyeCareScreen extends StatefulWidget {
   const EyeCareScreen({Key? key}) : super(key: key);
@@ -11,12 +12,60 @@ class EyeCareScreen extends StatefulWidget {
 class _EyeCareScreenState extends State<EyeCareScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  late EyeProtectionService _eyeProtectionService;
   bool _isFeatureEnabled = true;
+  double _blueFilterLevel = 0.3;
+  bool _adaptiveBrightnessEnabled = true;
+  bool _readingModeEnabled = true;
+  bool _breakReminderEnabled = true;
+  int _breakInterval = 20;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _eyeProtectionService = EyeProtectionService();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    await _eyeProtectionService.initialize();
+    setState(() {
+      _isFeatureEnabled = _eyeProtectionService.eyeProtectionEnabled;
+      _blueFilterLevel = _eyeProtectionService.blueFilterLevel;
+      _adaptiveBrightnessEnabled =
+          _eyeProtectionService.adaptiveBrightnessEnabled;
+      _readingModeEnabled = true; // This could be stored in service too
+      _breakReminderEnabled = _eyeProtectionService.periodicalReminderEnabled;
+      _breakInterval = _eyeProtectionService.readingTimerInterval;
+    });
+  }
+
+  Future<void> _updateSettings(String key, dynamic value) async {
+    await _eyeProtectionService.savePreference(key, value);
+    setState(() {
+      // Update local state to match service
+      switch (key) {
+        case 'eye_protection_enabled':
+          _isFeatureEnabled = value;
+          break;
+        case 'blue_filter_level':
+          _blueFilterLevel = value;
+          break;
+        case 'adaptive_brightness_enabled':
+          _adaptiveBrightnessEnabled = value;
+          break;
+        case 'reading_mode_enabled':
+          _readingModeEnabled = value;
+          break;
+        case 'periodical_reminder_enabled':
+          _breakReminderEnabled = value;
+          break;
+        case 'reading_timer_interval':
+          _breakInterval = value;
+          break;
+      }
+    });
   }
 
   @override
@@ -44,20 +93,11 @@ class _EyeCareScreenState extends State<EyeCareScreen>
                 ),
               ),
               TextSpan(
-                text: 'CARE',
+                text: 'CARE™',
                 style: TextStyle(
                   color: primaryColor,
                   fontWeight: FontWeight.bold,
                   fontSize: 20,
-                ),
-              ),
-              TextSpan(
-                text: '™',
-                style: TextStyle(
-                  color: primaryColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w300,
-                  fontFeatures: [FontFeature.superscripts()],
                 ),
               ),
             ],
@@ -194,74 +234,247 @@ class _EyeCareScreenState extends State<EyeCareScreen>
             ),
             value: _isFeatureEnabled,
             onChanged: (value) {
-              setState(() {
-                _isFeatureEnabled = value;
-              });
+              _updateSettings('eye_protection_enabled', value);
             },
           ),
           const Divider(),
-          ListTile(
-            enabled: _isFeatureEnabled,
-            title: const Text('Blue Light Filter Intensity'),
-            subtitle: const Text('Adjust the strength of blue light reduction'),
-            trailing: Slider(
-              value: 0.7,
-              onChanged: _isFeatureEnabled ? (value) {} : null,
+          // Blue Light Filter
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 8.0,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Blue Light Filter Intensity',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: _isFeatureEnabled ? null : Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Adjust the strength of blue light reduction',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color:
+                        _isFeatureEnabled ? Colors.grey.shade600 : Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Slider(
+                  value: _blueFilterLevel,
+                  onChanged:
+                      _isFeatureEnabled
+                          ? (value) {
+                            _updateSettings('blue_filter_level', value);
+                          }
+                          : null,
+                ),
+              ],
             ),
           ),
-          ListTile(
-            enabled: _isFeatureEnabled,
-            title: const Text('Adaptive Brightness'),
-            subtitle: const Text('Automatically adjust screen brightness'),
-            trailing: Switch(
-              value: _isFeatureEnabled,
-              onChanged: _isFeatureEnabled ? (value) {} : null,
+          // Adaptive Brightness
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 8.0,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Adaptive Brightness',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: _isFeatureEnabled ? null : Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Automatically adjust screen brightness',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color:
+                              _isFeatureEnabled
+                                  ? Colors.grey.shade600
+                                  : Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: _adaptiveBrightnessEnabled,
+                  onChanged:
+                      _isFeatureEnabled
+                          ? (value) {
+                            _updateSettings(
+                              'adaptive_brightness_enabled',
+                              value,
+                            );
+                          }
+                          : null,
+                ),
+              ],
             ),
           ),
-          ListTile(
-            enabled: _isFeatureEnabled,
-            title: const Text('Reading Mode'),
-            subtitle: const Text('Optimize display for extended reading'),
-            trailing: Switch(
-              value: _isFeatureEnabled,
-              onChanged: _isFeatureEnabled ? (value) {} : null,
+          // Reading Mode
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 8.0,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Reading Mode',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: _isFeatureEnabled ? null : Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Optimize display for extended reading',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color:
+                              _isFeatureEnabled
+                                  ? Colors.grey.shade600
+                                  : Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: _readingModeEnabled,
+                  onChanged:
+                      _isFeatureEnabled
+                          ? (value) {
+                            _updateSettings('reading_mode_enabled', value);
+                          }
+                          : null,
+                ),
+              ],
             ),
           ),
           const Divider(),
-          ListTile(
-            enabled: _isFeatureEnabled,
-            title: const Text('Reading Break Timer'),
-            subtitle: const Text('Remind to take breaks while reading'),
-            trailing: Switch(
-              value: _isFeatureEnabled,
-              onChanged: _isFeatureEnabled ? (value) {} : null,
+          // Reading Break Timer
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 8.0,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Reading Break Timer',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: _isFeatureEnabled ? null : Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Remind to take breaks while reading',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color:
+                              _isFeatureEnabled
+                                  ? Colors.grey.shade600
+                                  : Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: _breakReminderEnabled,
+                  onChanged:
+                      _isFeatureEnabled
+                          ? (value) {
+                            _updateSettings(
+                              'periodical_reminder_enabled',
+                              value,
+                            );
+                          }
+                          : null,
+                ),
+              ],
             ),
           ),
-          ListTile(
-            enabled: _isFeatureEnabled,
-            title: const Text('Break Interval'),
-            subtitle: const Text('Time between reading breaks'),
-            trailing: DropdownButton<String>(
-              disabledHint: const Text('20 min'),
-              items:
-                  _isFeatureEnabled
-                      ? [
-                        const DropdownMenuItem(
-                          value: '10',
-                          child: Text('10 min'),
+          // Break Interval
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 8.0,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Break Interval',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: _isFeatureEnabled ? null : Colors.grey,
                         ),
-                        const DropdownMenuItem(
-                          value: '20',
-                          child: Text('20 min'),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Time between reading breaks',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color:
+                              _isFeatureEnabled
+                                  ? Colors.grey.shade600
+                                  : Colors.grey,
                         ),
-                        const DropdownMenuItem(
-                          value: '30',
-                          child: Text('30 min'),
-                        ),
-                      ]
-                      : null,
-              onChanged: (value) {},
-              value: '20',
+                      ),
+                    ],
+                  ),
+                ),
+                _isFeatureEnabled
+                    ? DropdownButton<int>(
+                      value: _breakInterval,
+                      items: const [
+                        DropdownMenuItem<int>(value: 10, child: Text('10 min')),
+                        DropdownMenuItem<int>(value: 15, child: Text('15 min')),
+                        DropdownMenuItem<int>(value: 20, child: Text('20 min')),
+                        DropdownMenuItem<int>(value: 30, child: Text('30 min')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          _updateSettings('reading_timer_interval', value);
+                        }
+                      },
+                    )
+                    : Text(
+                      '${_breakInterval} min',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+              ],
             ),
           ),
           const SizedBox(height: 24),
@@ -271,19 +484,21 @@ class _EyeCareScreenState extends State<EyeCareScreen>
             spacing: 8,
             children: [
               ElevatedButton(
-                onPressed: _isFeatureEnabled ? () {} : null,
+                onPressed: _isFeatureEnabled ? () => _applyPreset('day') : null,
                 child: const Text('Day Reading'),
               ),
               ElevatedButton(
-                onPressed: _isFeatureEnabled ? () {} : null,
+                onPressed:
+                    _isFeatureEnabled ? () => _applyPreset('night') : null,
                 child: const Text('Night Reading'),
               ),
               ElevatedButton(
-                onPressed: _isFeatureEnabled ? () {} : null,
+                onPressed:
+                    _isFeatureEnabled ? () => _applyPreset('low_light') : null,
                 child: const Text('Low Light'),
               ),
               ElevatedButton(
-                onPressed: _isFeatureEnabled ? () {} : null,
+                onPressed: _isFeatureEnabled ? () => _applyPreset('max') : null,
                 child: const Text('Maximum Protection'),
               ),
             ],
@@ -416,6 +631,64 @@ class _EyeCareScreenState extends State<EyeCareScreen>
           const SizedBox(width: 12),
           Text(name, style: Theme.of(context).textTheme.bodyLarge),
         ],
+      ),
+    );
+  }
+
+  void _applyPreset(String preset) async {
+    switch (preset) {
+      case 'day':
+        // Moderate settings for daytime reading
+        await _updateSettings('blue_filter_level', 0.3);
+        await _updateSettings('adaptive_brightness_enabled', true);
+        await _updateSettings('reading_mode_enabled', true);
+        await _updateSettings('periodical_reminder_enabled', true);
+        await _updateSettings('reading_timer_interval', 20);
+        break;
+      case 'night':
+        // Higher blue filter for evening use
+        await _updateSettings('blue_filter_level', 0.6);
+        await _updateSettings('adaptive_brightness_enabled', true);
+        await _updateSettings('reading_mode_enabled', true);
+        await _updateSettings('periodical_reminder_enabled', true);
+        await _updateSettings('reading_timer_interval', 20);
+        await _eyeProtectionService.setWarmthLevel(
+          0.7,
+        ); // Increased warmth for night
+        break;
+      case 'low_light':
+        // Settings optimized for reading in dim environments
+        await _updateSettings('blue_filter_level', 0.5);
+        await _updateSettings('adaptive_brightness_enabled', true);
+        await _updateSettings('reading_mode_enabled', true);
+        await _updateSettings('periodical_reminder_enabled', true);
+        await _updateSettings(
+          'reading_timer_interval',
+          15,
+        ); // More frequent breaks in low light
+        await _eyeProtectionService.setWarmthLevel(0.6);
+        break;
+      case 'max':
+        // Maximum eye protection settings
+        await _updateSettings('blue_filter_level', 0.7);
+        await _updateSettings('adaptive_brightness_enabled', true);
+        await _updateSettings('reading_mode_enabled', true);
+        await _updateSettings('periodical_reminder_enabled', true);
+        await _updateSettings('reading_timer_interval', 15);
+        await _eyeProtectionService.setWarmthLevel(0.8);
+        break;
+    }
+
+    // Reload settings to update UI
+    await _loadSettings();
+
+    // Show confirmation
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${preset.replaceAll('_', ' ').split(' ').map((word) => word[0].toUpperCase() + word.substring(1)).join(' ')} preset applied',
+        ),
+        duration: const Duration(seconds: 2),
       ),
     );
   }

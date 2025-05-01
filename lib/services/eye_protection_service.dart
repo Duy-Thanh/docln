@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:convert';
 
 /// Eye Protection Service to reduce eye strain while reading
 ///
@@ -52,6 +53,9 @@ class EyeProtectionService {
       true; // Default enabled for periodic reminders
   double _warmthLevel = 0.5; // Default warmth level (0.0-1.0)
 
+  // Ambient light sensitivity (0.0-1.0)
+  double _ambientLightSensitivity = 0.5;
+
   // Getters
   bool get eyeProtectionEnabled => _eyeProtectionEnabled;
   double get blueFilterLevel => _blueFilterLevel;
@@ -65,6 +69,7 @@ class EyeProtectionService {
   int get readingTimerInterval => _readingTimerInterval;
   bool get periodicalReminderEnabled => _periodicalReminderEnabled;
   double get warmthLevel => _warmthLevel;
+  double get ambientLightSensitivity => _ambientLightSensitivity;
 
   Stream<bool> get reminderStream => _reminderController.stream;
   DateTime? get readingStartTime => _readingStartTime;
@@ -182,6 +187,8 @@ class EyeProtectionService {
     _periodicalReminderEnabled =
         prefs.getBool('periodical_reminder_enabled') ?? true;
     _warmthLevel = prefs.getDouble('warmth_level') ?? 0.5;
+    _ambientLightSensitivity =
+        prefs.getDouble('ambient_light_sensitivity') ?? 0.5;
   }
 
   // Save a preference
@@ -235,6 +242,10 @@ class EyeProtectionService {
         break;
       case 'warmth_level':
         _warmthLevel = value;
+        await prefs.setDouble(key, value);
+        break;
+      case 'ambient_light_sensitivity':
+        _ambientLightSensitivity = value;
         await prefs.setDouble(key, value);
         break;
     }
@@ -377,6 +388,10 @@ class EyeProtectionService {
     await savePreference('reading_timer_interval', minutes);
   }
 
+  Future<void> setAmbientLightSensitivity(double sensitivity) async {
+    await savePreference('ambient_light_sensitivity', sensitivity);
+  }
+
   // Initialize service
   Future<void> initSettings() async {
     await initialize();
@@ -392,8 +407,12 @@ class EyeProtectionService {
     return getFilterColor();
   }
 
-  // Get adaptive brightness based on time of day
-  double getAdaptiveBrightness(double currentBrightness, DateTime time) {
+  // Get adaptive brightness based on time of day and ambient light
+  double getAdaptiveBrightness(
+    double currentBrightness,
+    DateTime time, [
+    double? ambientLightLevel,
+  ]) {
     if (!adaptiveBrightnessEnabled) return currentBrightness;
 
     final hour = time.hour;
@@ -413,7 +432,112 @@ class EyeProtectionService {
     adjustment +=
         _pupilResponseCompensation * (hour >= 19 || hour < 6 ? -0.1 : 0.05);
 
+    // Factor in ambient light if provided
+    if (ambientLightLevel != null && _ambientLightSensitivity > 0) {
+      // Scale from 0-1 where 0 is dark and 1 is bright
+      double ambientAdjustment =
+          (0.5 - ambientLightLevel) * _ambientLightSensitivity;
+      adjustment += ambientAdjustment;
+    }
+
     // Apply adjustment but keep within bounds (0.1 to 1.0)
     return (currentBrightness + adjustment).clamp(0.1, 1.0);
+  }
+
+  // Export settings to a JSON string
+  Future<String> exportSettings() async {
+    Map<String, dynamic> settings = {
+      'eye_protection_enabled': _eyeProtectionEnabled,
+      'blue_filter_level': _blueFilterLevel,
+      'contrast_reduction': _contrastReduction,
+      'brightness_adjustment': _brightnessAdjustment,
+      'reading_timer_duration': _readingTimerDuration,
+      'adaptive_brightness_enabled': _adaptiveBrightnessEnabled,
+      'warm_color_temperature': _warmColorTemperature,
+      'dynamic_filtering_enabled': _dynamicFilteringEnabled,
+      'pupil_response_compensation': _pupilResponseCompensation,
+      'reading_timer_interval': _readingTimerInterval,
+      'periodical_reminder_enabled': _periodicalReminderEnabled,
+      'warmth_level': _warmthLevel,
+      'ambient_light_sensitivity': _ambientLightSensitivity,
+      'export_date': DateTime.now().toIso8601String(),
+      'version': '1.0',
+      'profile_name': 'eyeCARE™ Configuration',
+    };
+
+    return jsonEncode(settings);
+  }
+
+  // Import settings from a JSON string
+  Future<bool> importSettings(String jsonSettings) async {
+    try {
+      final Map<String, dynamic> settings = jsonDecode(jsonSettings);
+
+      // Validate settings version
+      if (settings['version'] != '1.0') {
+        return false;
+      }
+
+      // Import all settings
+      await setEyeProtectionEnabled(
+        settings['eye_protection_enabled'] ?? defaultEyeProtectionEnabled,
+      );
+      await setBlueFilterLevel(
+        settings['blue_filter_level'] ?? defaultBlueFilter,
+      );
+      await savePreference(
+        'contrast_reduction',
+        settings['contrast_reduction'] ?? defaultContrastReduction,
+      );
+      await savePreference(
+        'brightness_adjustment',
+        settings['brightness_adjustment'] ?? defaultBrightnessAdjustment,
+      );
+      await savePreference(
+        'reading_timer_duration',
+        settings['reading_timer_duration'] ?? defaultReadingTimer,
+      );
+      await setAdaptiveBrightnessEnabled(
+        settings['adaptive_brightness_enabled'] ??
+            defaultAdaptiveBrightnessEnabled,
+      );
+      await savePreference(
+        'warm_color_temperature',
+        settings['warm_color_temperature'] ?? defaultWarmColorTemperature,
+      );
+      await savePreference(
+        'dynamic_filtering_enabled',
+        settings['dynamic_filtering_enabled'] ?? defaultDynamicFilteringEnabled,
+      );
+      await savePreference(
+        'pupil_response_compensation',
+        settings['pupil_response_compensation'] ??
+            defaultPupilResponseCompensation,
+      );
+      await setReadingTimerInterval(settings['reading_timer_interval'] ?? 20);
+      await setPeriodicalReminderEnabled(
+        settings['periodical_reminder_enabled'] ?? true,
+      );
+      await setWarmthLevel(settings['warmth_level'] ?? 0.5);
+      await setAmbientLightSensitivity(
+        settings['ambient_light_sensitivity'] ?? 0.5,
+      );
+
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Get settings summary for display purposes
+  Map<String, dynamic> getSettingsSummary() {
+    return {
+      'blue_filter': (_blueFilterLevel * 100).round(),
+      'is_night_mode': _isNightTime,
+      'eye_protection': _eyeProtectionEnabled,
+      'break_interval': _readingTimerInterval,
+      'adaptive_brightness': _adaptiveBrightnessEnabled,
+      'warmth_level': (_warmthLevel * 100).round(),
+    };
   }
 }
