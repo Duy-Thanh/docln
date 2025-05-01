@@ -18,6 +18,8 @@ class Particle {
   late Color color;
   late double lifespan;
   late double maxLifespan;
+  late List<Offset> trail;
+  late double trailLength;
 
   Particle() {
     reset();
@@ -45,11 +47,23 @@ class Particle {
 
     // Initialize with a default color (will be updated in update method)
     color = Colors.blue.withOpacity(opacity);
+
+    // Initialize trail
+    trailLength = random.nextInt(6) + 3; // 3-8 segments in trail
+    trail = List.generate(trailLength.toInt(), (_) => position);
   }
 
   void update(double delta, Color primaryColor) {
+    final oldPosition = position;
+
     position += Offset(cos(angle) * speed * delta, sin(angle) * speed * delta);
     angle2 += rotationSpeed * delta;
+
+    // Update trail - add new position at the start and remove last position
+    trail.insert(0, position);
+    if (trail.length > trailLength) {
+      trail.removeLast();
+    }
 
     // Decrease lifespan
     lifespan -= delta;
@@ -373,6 +387,22 @@ class _SplashScreenState extends State<SplashScreen>
       backgroundColor: Theme.of(context).colorScheme.background,
       body: Stack(
         children: [
+          // Light rays animation
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: Listenable.merge([_glowAnimation, _pulseAnimation]),
+              builder: (context, child) {
+                return CustomPaint(
+                  painter: LightRaysPainter(
+                    glowStrength: _glowAnimation.value,
+                    pulseValue: _pulseAnimation.value,
+                    baseColor: primaryColor,
+                  ),
+                );
+              },
+            ),
+          ),
+
           // Animated gradient background
           AnimatedBuilder(
             animation: Listenable.merge([_waveAnimation, _glowAnimation]),
@@ -398,71 +428,84 @@ class _SplashScreenState extends State<SplashScreen>
             },
           ),
 
-          // Animated particles
+          // Animated particles with trails
           ...List.generate(_particles.length, (index) {
             final particle = _particles[index];
-            return Positioned(
-              left: particle.position.dx,
-              top: particle.position.dy,
-              child: AnimatedBuilder(
-                animation: Listenable.merge([
-                  _particleAnimation,
-                  _pulseAnimation,
-                ]),
-                builder: (context, child) {
-                  return Transform.rotate(
-                    angle: particle.angle2,
-                    child: Transform.scale(
-                      scale: particle.scale * _particleAnimation.value,
-                      child: Opacity(
-                        opacity: particle.opacity * _particleAnimation.value,
-                        child: Container(
-                          width: particle.size,
-                          height: particle.size,
-                          decoration: BoxDecoration(
-                            gradient: RadialGradient(
-                              colors: [
-                                particle.color.withOpacity(0.8),
-                                particle.color.withOpacity(0.4),
-                                particle.color.withOpacity(0.1),
-                              ],
-                            ),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: particle.color.withOpacity(0.5),
-                                blurRadius: particle.size * 2,
-                                spreadRadius: particle.size / 2,
+            return Stack(
+              children: [
+                // Particle trail
+                CustomPaint(
+                  size: Size(
+                    MediaQueryData.fromView(
+                      WidgetsBinding.instance.window,
+                    ).size.width,
+                    MediaQueryData.fromView(
+                      WidgetsBinding.instance.window,
+                    ).size.height,
+                  ),
+                  painter: ParticleTrailPainter(
+                    particle: particle,
+                    animation: _particleAnimation,
+                  ),
+                ),
+                // Particle itself
+                Positioned(
+                  left: particle.position.dx,
+                  top: particle.position.dy,
+                  child: AnimatedBuilder(
+                    animation: Listenable.merge([
+                      _particleAnimation,
+                      _pulseAnimation,
+                    ]),
+                    builder: (context, child) {
+                      return Transform.rotate(
+                        angle: particle.angle2,
+                        child: Transform.scale(
+                          scale: particle.scale * _particleAnimation.value,
+                          child: Opacity(
+                            opacity:
+                                particle.opacity * _particleAnimation.value,
+                            child: Container(
+                              width: particle.size,
+                              height: particle.size,
+                              decoration: BoxDecoration(
+                                gradient: RadialGradient(
+                                  colors: [
+                                    particle.color.withOpacity(0.9),
+                                    particle.color.withOpacity(0.5),
+                                    particle.color.withOpacity(0.1),
+                                  ],
+                                ),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: particle.color.withOpacity(0.5),
+                                    blurRadius: particle.size * 2,
+                                    spreadRadius: particle.size / 2,
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                  );
-                },
-              ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             );
           }),
 
-          // Radial glow behind icon
+          // Radial glow behind icon with ripple effect
           Center(
             child: AnimatedBuilder(
               animation: _glowAnimation,
               builder: (context, child) {
-                return Container(
-                  width: 200,
-                  height: 200,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        primaryColor.withOpacity(0.2 * _glowAnimation.value),
-                        primaryColor.withOpacity(0.1 * _glowAnimation.value),
-                        Colors.transparent,
-                      ],
-                      stops: [0.0, 0.5, 1.0],
-                    ),
+                return CustomPaint(
+                  size: const Size(240, 240),
+                  painter: RipplePainter(
+                    color: primaryColor,
+                    glowStrength: _glowAnimation.value,
                   ),
                 );
               },
@@ -503,20 +546,20 @@ class _SplashScreenState extends State<SplashScreen>
                         child: Container(
                           padding: const EdgeInsets.all(26),
                           decoration: BoxDecoration(
-                            color: primaryColor.withOpacity(0.12),
+                            color: primaryColor.withOpacity(0.15),
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
                                 color: iconColor.withOpacity(
-                                  0.3 * _glowAnimation.value,
+                                  0.4 * _glowAnimation.value,
                                 ),
-                                blurRadius: 30 * _containerScale.value,
-                                spreadRadius: 8 * _containerScale.value,
+                                blurRadius: 35 * _containerScale.value,
+                                spreadRadius: 10 * _containerScale.value,
                               ),
                             ],
                             border: Border.all(
                               color: primaryColor.withOpacity(
-                                0.3 * _glowAnimation.value,
+                                0.4 * _glowAnimation.value,
                               ),
                               width: 2,
                             ),
@@ -528,7 +571,7 @@ class _SplashScreenState extends State<SplashScreen>
                                 end: Alignment.bottomRight,
                                 colors: [
                                   iconColor.withOpacity(0.9),
-                                  Colors.white.withOpacity(0.95),
+                                  Colors.white.withOpacity(0.97),
                                   iconColor.withOpacity(0.9),
                                 ],
                                 stops: [0.0, _shimmerOffset.value, 1.0],
@@ -540,7 +583,7 @@ class _SplashScreenState extends State<SplashScreen>
                                 scale: _iconScale.value,
                                 child: Icon(
                                   Icons.menu_book_rounded,
-                                  size: 68,
+                                  size: 70,
                                   color: Colors.white,
                                 ),
                               ),
@@ -584,7 +627,7 @@ class _SplashScreenState extends State<SplashScreen>
                                 end: Alignment.bottomRight,
                                 colors: [
                                   textColor,
-                                  Colors.white.withOpacity(0.9),
+                                  Colors.white.withOpacity(0.95),
                                   textColor,
                                 ],
                                 stops: [0.0, _shimmerOffset.value, 1.0],
@@ -600,8 +643,8 @@ class _SplashScreenState extends State<SplashScreen>
                                 letterSpacing: 2.0,
                                 shadows: [
                                   Shadow(
-                                    color: textColor.withOpacity(0.7),
-                                    blurRadius: 15,
+                                    color: textColor.withOpacity(0.8),
+                                    blurRadius: 18,
                                     offset: const Offset(0, 3),
                                   ),
                                 ],
@@ -647,7 +690,7 @@ class _SplashScreenState extends State<SplashScreen>
                                                               pi) +
                                                           (i * pi / 3),
                                                     ) *
-                                                    0.3,
+                                                    0.4,
                                             child: Container(
                                               width: 8,
                                               height: 8,
@@ -659,8 +702,8 @@ class _SplashScreenState extends State<SplashScreen>
                                                 boxShadow: [
                                                   BoxShadow(
                                                     color: primaryColor
-                                                        .withOpacity(0.4),
-                                                    blurRadius: 5,
+                                                        .withOpacity(0.5),
+                                                    blurRadius: 8,
                                                     spreadRadius: 1,
                                                   ),
                                                 ],
@@ -673,13 +716,13 @@ class _SplashScreenState extends State<SplashScreen>
                                 },
                               ),
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 8),
                             Text(
                               'Loading...',
                               style: TextStyle(
                                 color: Theme.of(
                                   context,
-                                ).colorScheme.onBackground.withOpacity(0.6),
+                                ).colorScheme.onBackground.withOpacity(0.7),
                                 fontSize: 14,
                                 letterSpacing: 2.0,
                               ),
@@ -696,5 +739,157 @@ class _SplashScreenState extends State<SplashScreen>
         ],
       ),
     );
+  }
+}
+
+// New Painters for Enhanced Effects
+class LightRaysPainter extends CustomPainter {
+  final double glowStrength;
+  final double pulseValue;
+  final Color baseColor;
+
+  LightRaysPainter({
+    required this.glowStrength,
+    required this.pulseValue,
+    required this.baseColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final numRays = 12;
+
+    for (int i = 0; i < numRays; i++) {
+      final angle = (i * pi / (numRays / 2)) + (pulseValue * pi / 6);
+      final rayLength = size.width * 0.8 * glowStrength;
+
+      final start = center;
+      final end = Offset(
+        center.dx + cos(angle) * rayLength,
+        center.dy + sin(angle) * rayLength,
+      );
+
+      final paint =
+          Paint()
+            ..shader = LinearGradient(
+              begin: Alignment.center,
+              end: Alignment(cos(angle), sin(angle)),
+              colors: [
+                baseColor.withOpacity(0.4 * glowStrength),
+                baseColor.withOpacity(0.1 * glowStrength),
+                baseColor.withOpacity(0.0),
+              ],
+            ).createShader(Rect.fromPoints(start, end))
+            ..strokeWidth = 20 + (pulseValue * 10)
+            ..strokeCap = StrokeCap.round
+            ..style = PaintingStyle.stroke
+            ..maskFilter = MaskFilter.blur(BlurStyle.normal, 15 * glowStrength);
+
+      canvas.drawLine(start, end, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant LightRaysPainter oldDelegate) {
+    return oldDelegate.glowStrength != glowStrength ||
+        oldDelegate.pulseValue != pulseValue;
+  }
+}
+
+class ParticleTrailPainter extends CustomPainter {
+  final Particle particle;
+  final Animation<double> animation;
+
+  ParticleTrailPainter({required this.particle, required this.animation});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (particle.trail.length < 2) return;
+
+    final path = Path();
+    path.moveTo(particle.trail[0].dx, particle.trail[0].dy);
+
+    for (int i = 1; i < particle.trail.length; i++) {
+      path.lineTo(particle.trail[i].dx, particle.trail[i].dy);
+    }
+
+    final paint =
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              particle.color.withOpacity(0.7 * animation.value),
+              particle.color.withOpacity(0.3 * animation.value),
+              particle.color.withOpacity(0.0),
+            ],
+          ).createShader(
+            Rect.fromPoints(
+              Offset(particle.trail.first.dx, particle.trail.first.dy),
+              Offset(particle.trail.last.dx, particle.trail.last.dy),
+            ),
+          )
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = particle.size * 0.5
+          ..strokeCap = StrokeCap.round
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 2);
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant ParticleTrailPainter oldDelegate) {
+    return true; // Always repaint for animation
+  }
+}
+
+class RipplePainter extends CustomPainter {
+  final Color color;
+  final double glowStrength;
+
+  RipplePainter({required this.color, required this.glowStrength});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final maxRadius = size.width / 2;
+
+    // Draw several ripple circles
+    for (int i = 0; i < 4; i++) {
+      final radius =
+          maxRadius *
+          (0.4 + (i * 0.15)) *
+          (1.0 + sin(glowStrength * pi * 2) * 0.2);
+      final opacity = (0.8 - (i * 0.2)) * glowStrength;
+
+      final paint =
+          Paint()
+            ..color = color.withOpacity(opacity)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.0
+            ..maskFilter = MaskFilter.blur(BlurStyle.normal, 5);
+
+      canvas.drawCircle(center, radius, paint);
+    }
+
+    // Draw central glow
+    final glowPaint =
+        Paint()
+          ..shader = RadialGradient(
+            colors: [
+              color.withOpacity(0.4 * glowStrength),
+              color.withOpacity(0.2 * glowStrength),
+              color.withOpacity(0.0),
+            ],
+            stops: [0.0, 0.5, 1.0],
+          ).createShader(Rect.fromCircle(center: center, radius: maxRadius))
+          ..style = PaintingStyle.fill;
+
+    canvas.drawCircle(center, maxRadius * 0.8, glowPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant RipplePainter oldDelegate) {
+    return oldDelegate.glowStrength != glowStrength;
   }
 }
