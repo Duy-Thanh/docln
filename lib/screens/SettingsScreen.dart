@@ -59,6 +59,7 @@ class SettingsScreenState extends State<SettingsScreen>
     with SingleTickerProviderStateMixin {
   final SettingsService _settingsService = SettingsService();
   final CrawlerService _crawlerService = CrawlerService();
+  static const String _appVersion = 'Version: 2025.05.01';
   bool isDarkMode = false;
   String? currentServer;
   double textSize = 16.0;
@@ -778,7 +779,7 @@ class SettingsScreenState extends State<SettingsScreen>
                   ),
                   const SizedBox(height: 24),
                   const Text(
-                    'Version 1.0.0.0',
+                    _appVersion,
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
@@ -1293,7 +1294,7 @@ class SettingsScreenState extends State<SettingsScreen>
         ListTile(
           leading: const Icon(Icons.info_outline_rounded),
           title: const Text('About App'),
-          subtitle: const Text('Version 1.0.0'),
+          subtitle: const Text(_appVersion),
           onTap: () {
             _showAboutDialog();
           },
