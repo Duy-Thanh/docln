@@ -570,33 +570,70 @@ class CrawlerService {
         // Parse rating
         if (ratingElement != null) {
           final ratingText = ratingElement.text.trim();
-          // Check for pattern like "4.5 / 5 - 123 đánh giá"
-          final ratingMatch = RegExp(
-            r'(\d+\.?\d*)\s*\/\s*\d+(?:\s*-\s*(\d+)\s*đánh giá)?',
-          ).firstMatch(ratingText);
 
-          if (ratingMatch != null && ratingMatch.group(1) != null) {
-            rating = double.tryParse(ratingMatch.group(1)!);
-            // Try to parse reviews count
-            if (ratingMatch.group(2) != null) {
-              reviews = int.tryParse(ratingMatch.group(2)!);
-            }
+          // First try to handle the special case where rating is in HTML with small tag
+          // Format in HTML: 4,96 / <small>112</small>
+          final smallElement = ratingElement.querySelector('small');
+          if (smallElement != null) {
+            // Get the review count from the small element
+            final reviewsStr = smallElement.text.trim().replaceAll(
+              RegExp(r'[^0-9]'),
+              '',
+            );
+            reviews = int.tryParse(reviewsStr);
+
+            // Get the rating value by removing the small element text and any non-numeric chars except decimal point/comma
+            String ratingStr =
+                ratingText.replaceAll(smallElement.text, '').trim();
+
+            // Remove the slash and handle comma as decimal separator
+            ratingStr = ratingStr
+                .replaceAll('/', '')
+                .trim()
+                .replaceAll(',', '.');
+
+            // Try to parse the rating
+            rating = double.tryParse(ratingStr);
           } else {
-            // Try alternative pattern if the first one doesn't match
-            final parts = ratingText.split('-');
-            if (parts.isNotEmpty) {
-              final ratingPart = parts[0].trim();
-              final ratingVal = ratingPart.split('/')[0].trim();
-              rating = double.tryParse(ratingVal);
-            }
+            // Check for pattern like "4.5 / 5 - 123 đánh giá"
+            final ratingMatch = RegExp(
+              r'(\d+[\.,]?\d*)\s*\/\s*\d+(?:\s*-\s*(\d+)\s*đánh giá)?',
+            ).firstMatch(ratingText);
 
-            // Try to parse the reviews part if available
-            if (parts.length >= 2) {
-              // Extract only digits from the second part
-              final reviewsStr = parts[1].replaceAll(RegExp(r'[^0-9]'), '');
-              reviews = int.tryParse(reviewsStr);
+            if (ratingMatch != null && ratingMatch.group(1) != null) {
+              // Handle comma as decimal separator
+              String ratingStr = ratingMatch.group(1)!.replaceAll(',', '.');
+              rating = double.tryParse(ratingStr);
+
+              // Try to parse reviews count
+              if (ratingMatch.group(2) != null) {
+                reviews = int.tryParse(ratingMatch.group(2)!);
+              }
+            } else {
+              // Try alternative pattern if the first one doesn't match
+              final parts = ratingText.split('-');
+              if (parts.isNotEmpty) {
+                final ratingPart = parts[0].trim();
+                final ratingVal = ratingPart
+                    .split('/')[0]
+                    .trim()
+                    .replaceAll(',', '.');
+                rating = double.tryParse(ratingVal);
+              }
+
+              // Try to parse the reviews part if available
+              if (parts.length >= 2) {
+                // Extract only digits from the second part
+                final reviewsStr = parts[1].replaceAll(RegExp(r'[^0-9]'), '');
+                reviews = int.tryParse(reviewsStr);
+              }
             }
           }
+
+          // Debug output for rating extraction
+          print(
+            'Extracted rating: $rating, reviews: $reviews from text: $ratingText',
+          );
         }
 
         // Extract last updated
@@ -1792,17 +1829,9 @@ class CrawlerService {
     final bodyText = document.body?.text ?? '';
 
     // Check if the text contains the Vietnamese "no comments" message
-    if (bodyText.contains('Không có bình luận nào')) {
-      print('No comments found on this page (detected in text)');
-      hasNoCommentsMessage = true;
-    }
-
-    // Also look for the empty state element
-    final emptyStateIcons = document.querySelectorAll(
-      '.comment-empty-icon, .empty-icon',
-    );
-    if (emptyStateIcons.isNotEmpty) {
-      print('No comments found on this page (detected empty icon)');
+    if (bodyText.contains('Không có bình luận nào') ||
+        bodyText.contains('Chưa có bình luận') ||
+        bodyText.contains('Be the first to comment')) {
       hasNoCommentsMessage = true;
     }
 
@@ -1852,347 +1881,316 @@ class CrawlerService {
             'Alternative section ${i + 1} content: ${alternativeCommentSections[i].text.substring(0, math.min(alternativeCommentSections[i].text.length, 100))}...',
           );
         }
-
-        // Try to use the first alternative section found
         commentsSection = alternativeCommentSections.first;
-        print('Using alternative comment section for extraction');
-      } else {
-        // Let's look for any divs that might contain the word "comment" in their class or id
-        final possibleCommentSections = document.querySelectorAll(
-          'div[class*="comment"], div[id*="comment"]',
+      }
+    }
+
+    List<Map<String, dynamic>> comments = [];
+    // Set to track comment IDs we've already processed to avoid duplicates
+    Set<String> processedCommentIds = {};
+
+    // Track comment content to detect duplicates even with different IDs
+    Set<String> processedContentHashes = {};
+
+    // Try to get comment groups which might contain both top-level comments and replies
+    final commentGroups =
+        commentsSection?.querySelectorAll('.ln-comment-group') ?? [];
+    print('Found ${commentGroups.length} comment groups');
+
+    if (commentGroups.isEmpty) {
+      // Fallback to direct comment items if no groups are found
+      final commentItems =
+          commentsSection?.querySelectorAll('.ln-comment-item') ?? [];
+      print('Found ${commentItems.length} direct comment items');
+
+      if (commentItems.isEmpty) {
+        // If still no items, try an even more generic approach
+        print('No standard comment items found, trying generic approach');
+        final allPossibleComments = document.querySelectorAll(
+          '[class*="comment"], [id*="comment"], .ln-comment-content, .flex.gap-1',
         );
-        if (possibleCommentSections.isNotEmpty) {
-          print(
-            'Found possible comment sections by name: ${possibleCommentSections.length}',
-          );
-          for (
-            var i = 0;
-            i < math.min(possibleCommentSections.length, 3);
-            i++
-          ) {
+        print('Found ${allPossibleComments.length} possible comment elements');
+
+        for (final element in allPossibleComments) {
+          // Check if this is likely a standalone comment (has appropriate content and structure)
+          final hasUserSection =
+              element.querySelector('img') != null; // Has avatar
+          final hasContent =
+              element.text.trim().length > 10; // Has reasonable text
+
+          if (hasUserSection && hasContent) {
+            final comment = _extractCommentData(element, url);
+            final commentId = comment['id'] as String;
+            final commentContent = comment['content'] as String;
+
+            // Generate a content hash using username + content to detect duplicate content
+            final userName =
+                (comment['user'] as Map<String, dynamic>)['name'] as String;
+            final contentHash =
+                '$userName-${commentContent.substring(0, math.min(50, commentContent.length))}';
+
+            // Only add if not already processed (by ID or content)
+            if (!processedCommentIds.contains(commentId) &&
+                !processedContentHashes.contains(contentHash)) {
+              processedCommentIds.add(commentId);
+              processedContentHashes.add(contentHash);
+              comments.add(comment);
+            } else {
+              print(
+                'Skipping duplicate comment: $commentId (content hash: $contentHash)',
+              );
+            }
+          }
+        }
+      } else {
+        // Process all comments as top-level (no replies)
+        for (final commentItem in commentItems) {
+          final comment = _extractCommentData(commentItem, url);
+          final commentId = comment['id'] as String;
+          final commentContent = comment['content'] as String;
+
+          // Generate a content hash using username + content to detect duplicate content
+          final userName =
+              (comment['user'] as Map<String, dynamic>)['name'] as String;
+          final contentHash =
+              '$userName-${commentContent.substring(0, math.min(50, commentContent.length))}';
+
+          // Only add if not already processed
+          if (!processedCommentIds.contains(commentId) &&
+              !processedContentHashes.contains(contentHash)) {
+            processedCommentIds.add(commentId);
+            processedContentHashes.add(contentHash);
+            comments.add(comment);
+          } else {
             print(
-              'Possible section ${i + 1} classes: ${possibleCommentSections[i].classes.join(', ')}',
-            );
-            print(
-              'Possible section ${i + 1} content: ${possibleCommentSections[i].text.substring(0, math.min(possibleCommentSections[i].text.length, 100))}...',
+              'Skipping duplicate comment: $commentId (content hash: $contentHash)',
             );
           }
+        }
+      }
+    } else {
+      // Process groups which may contain parent comments and replies
+      for (final group in commentGroups) {
+        // Get the parent comment in this group - avoid complex :not() selector
+        // Instead, get the first direct child .ln-comment-item that's not inside a .ln-comment-reply
+        final allItems = group.querySelectorAll('.ln-comment-item');
+        dom.Element? parentCommentItem;
 
-          // Try to use the first possible section found
-          commentsSection = possibleCommentSections.first;
-          print('Using possible comment section for extraction');
-        } else {
-          // If we still can't find comments, return a special error comment
-          return [
-            {
-              'id': 'error',
-              'user': {'name': '', 'image': '', 'url': '', 'badges': []},
-              'content': 'Không thể tải bình luận',
+        // First try to find a direct child of the group
+        for (final item in allItems) {
+          // Check if this item is a direct child or inside another container
+          final parentNode = item.parent;
+          if (parentNode != null && parentNode == group ||
+              (parentNode?.classes?.isEmpty == true &&
+                  parentNode?.parent == group)) {
+            // This is likely the parent comment
+            parentCommentItem = item;
+            break;
+          }
+        }
+
+        // If not found, just use the first item as parent
+        if (parentCommentItem == null && allItems.isNotEmpty) {
+          parentCommentItem = allItems.first;
+        }
+
+        if (parentCommentItem != null) {
+          // Extract parent comment data
+          final parentComment = _extractCommentData(parentCommentItem, url);
+          final parentId = parentComment['id'] as String;
+          final parentContent = parentComment['content'] as String;
+
+          // Generate a content hash for the parent comment
+          final parentUserName =
+              (parentComment['user'] as Map<String, dynamic>)['name'] as String;
+          final parentContentHash =
+              '$parentUserName-${parentContent.substring(0, math.min(50, parentContent.length))}';
+
+          // Skip if we've already processed this comment
+          if (processedCommentIds.contains(parentId) ||
+              processedContentHashes.contains(parentContentHash)) {
+            print(
+              'Skipping duplicate parent comment: $parentId (content hash: $parentContentHash)',
+            );
+            continue;
+          }
+
+          processedCommentIds.add(parentId);
+          processedContentHashes.add(parentContentHash);
+
+          // Find all replies in this group
+          final replySection = group.querySelector('.ln-comment-reply');
+          if (replySection != null) {
+            final replyItems = replySection.querySelectorAll(
+              '.ln-comment-item',
+            );
+            print(
+              'Found ${replyItems.length} replies for comment ${parentComment['id']}',
+            );
+
+            List<Map<String, dynamic>> replies = [];
+
+            // Extract data from each reply
+            for (final replyItem in replyItems) {
+              final reply = _extractCommentData(replyItem, url);
+              final replyId = reply['id'] as String;
+              final replyContent = reply['content'] as String;
+
+              // Generate a content hash for the reply
+              final replyUserName =
+                  (reply['user'] as Map<String, dynamic>)['name'] as String;
+              final replyContentHash =
+                  '$replyUserName-${replyContent.substring(0, math.min(50, replyContent.length))}';
+
+              // Skip if we've already processed this reply
+              if (processedCommentIds.contains(replyId) ||
+                  processedContentHashes.contains(replyContentHash)) {
+                print(
+                  'Skipping duplicate reply: $replyId (content hash: $replyContentHash)',
+                );
+                continue;
+              }
+
+              processedCommentIds.add(replyId);
+              processedContentHashes.add(replyContentHash);
+              reply['parentId'] = parentComment['id']; // Set parent ID
+              replies.add(reply);
+            }
+
+            // Store replies to be associated with parent later
+            if (replies.isNotEmpty) {
+              parentComment['replies'] = replies;
+            }
+          } else {
+            // Try alternative approach: find replies by looking for items after the parent
+            bool foundParent = false;
+            List<Map<String, dynamic>> replies = [];
+
+            // Go through all comment items in the group and collect those after the parent
+            for (final item in allItems) {
+              if (item == parentCommentItem) {
+                foundParent = true;
+                continue;
+              }
+
+              // If we already found the parent and this is another item, treat it as a reply
+              if (foundParent) {
+                final reply = _extractCommentData(item, url);
+                final replyId = reply['id'] as String;
+
+                // Skip if we've already processed this reply
+                if (processedCommentIds.contains(replyId)) {
+                  continue;
+                }
+
+                processedCommentIds.add(replyId);
+                reply['parentId'] = parentComment['id']; // Set parent ID
+                replies.add(reply);
+              }
+            }
+
+            // Store replies
+            if (replies.isNotEmpty) {
+              print(
+                'Found ${replies.length} alternative replies for comment ${parentComment['id']}',
+              );
+              parentComment['replies'] = replies;
+            }
+          }
+
+          comments.add(parentComment);
+        }
+      }
+    }
+
+    // If we didn't find any comments through structured extraction,
+    // try a more aggressive fallback approach
+    if (comments.isEmpty) {
+      print(
+        'No comments found with standard selectors, trying fallback extraction',
+      );
+      final allCommentElements = document.querySelectorAll(
+        '[id^="comment-"], [class*="comment-item"]',
+      );
+
+      for (final element in allCommentElements) {
+        try {
+          // Basic extraction of just text and info we can find
+          final id =
+              element.id.isNotEmpty
+                  ? element.id
+                  : 'comment-${comments.length + 1}';
+          final content = element.text.trim();
+
+          if (content.isNotEmpty) {
+            comments.add({
+              'id': id,
+              'user': {'name': 'Unknown', 'image': '', 'url': '', 'badges': []},
+              'content': content,
               'timestamp': '',
               'rawTimestamp': '',
               'likes': '',
-              'isErrorPage': true, // Special flag to indicate an error
-              'currentPage': currentPage,
-              'hasMorePages': false,
-              'nextPageUrl': '',
-              'hasPrevPage': currentPage > 1,
-              'prevPageUrl': _constructPrevPageUrl(url, currentPage),
-            },
-          ];
-        }
-      }
-    }
-
-    // Now try to find comments within the comments section (original or alternative)
-    var commentGroups = document.querySelectorAll('.ln-comment-group');
-
-    // If standard comment groups aren't found, try alternative selectors based on the screenshot
-    if (commentGroups.isEmpty) {
-      print('Standard comment groups not found, trying alternatives');
-
-      // Try selectors that match the screenshot structure
-      commentGroups = document.querySelectorAll(
-        '[class*="comment-item"], [class*="comment_item"]',
-      );
-      if (commentGroups.isNotEmpty) {
-        print('Found alternative comment items: ${commentGroups.length}');
-      }
-    }
-
-    final comments = <Map<String, dynamic>>[];
-
-    // If no comment groups are found but we have a comments section
-    if (commentGroups.isEmpty) {
-      print('Comments section found but no comments inside');
-      // Return a special comment for empty comments section
-      return [
-        {
-          'id': 'empty',
-          'user': {'name': '', 'image': '', 'url': '', 'badges': []},
-          'content': 'Không có bình luận nào',
-          'timestamp': '',
-          'rawTimestamp': '',
-          'likes': '',
-          'isEmptyPage': true, // Special flag to indicate an empty page
-          'currentPage': currentPage,
-          'hasMorePages': false,
-          'nextPageUrl': '',
-          'hasPrevPage': currentPage > 1,
-          'prevPageUrl': _constructPrevPageUrl(url, currentPage),
-        },
-      ];
-    }
-
-    for (final group in commentGroups) {
-      // Try to handle both original and alternative comment structures
-      final commentItem = group.querySelector('.ln-comment-item') ?? group;
-      if (commentItem == null) continue;
-
-      // Extract comment ID
-      final commentId =
-          commentItem.attributes['data-comment'] ?? commentItem.id ?? '';
-
-      // Extract user info
-      String userImage = '';
-      String userName = '';
-      String userUrl = '';
-
-      // First try standard selectors
-      final avatarContainer = commentItem.querySelector('.w-\\[50px\\]');
-      if (avatarContainer != null) {
-        final imgElement = avatarContainer.querySelector('img');
-        if (imgElement != null) {
-          userImage = imgElement.attributes['src'] ?? '';
-        }
-      }
-
-      // If still no image, try alternative selectors based on screenshot
-      if (userImage.isEmpty) {
-        // Try looking for avatar images with standard classes
-        final imgElements = commentItem.querySelectorAll(
-          'img[class*="avatar"], .avatar img, img[src*="avatar"]',
-        );
-        if (imgElements.isNotEmpty) {
-          userImage = imgElements.first.attributes['src'] ?? '';
-        } else {
-          // Fallback to first image in the comment
-          final allImgs = commentItem.querySelectorAll('img');
-          if (allImgs.isNotEmpty) {
-            userImage = allImgs.first.attributes['src'] ?? '';
+            });
           }
+        } catch (e) {
+          print('Error in fallback extraction: $e');
         }
-      }
-
-      // Try standard username selector
-      userName = commentItem.querySelector('.ln-username')?.text.trim() ?? '';
-      userUrl =
-          commentItem.querySelector('.ln-username')?.attributes['href'] ?? '';
-
-      // If username is empty, try alternatives
-      if (userName.isEmpty) {
-        // Try common username selectors based on the screenshot
-        final usernameElement =
-            commentItem.querySelector(
-              '.username, .user-name, .author, [class*="user-name"], strong, b',
-            ) ??
-            commentItem.querySelector('a');
-        if (usernameElement != null) {
-          userName = usernameElement.text.trim();
-          if (usernameElement.localName == 'a') {
-            userUrl = usernameElement.attributes['href'] ?? '';
-          }
-        }
-      }
-
-      // Get user badges/roles - try both original and alternative selectors
-      final badges = <String>[];
-
-      // First try standard badge selectors
-      final userInfo = commentItem.querySelector('.flex-wrap');
-      if (userInfo != null) {
-        final badgeElements = userInfo.querySelectorAll('.leading-4');
-        for (final badgeElement in badgeElements) {
-          final badgeText = badgeElement.text.trim();
-          if (badgeText.isNotEmpty) {
-            badges.add(badgeText);
-          }
-        }
-      }
-
-      // Try alternative badge selectors if none found
-      if (badges.isEmpty) {
-        final altBadgeElements = commentItem.querySelectorAll(
-          '.badge, [class*="badge"], .tag, [class*="role"]',
-        );
-        for (final badgeElement in altBadgeElements) {
-          final badgeText = badgeElement.text.trim();
-          if (badgeText.isNotEmpty) {
-            badges.add(badgeText);
-          }
-        }
-      }
-
-      // Extract comment content - try both standard and alternative selectors
-      var commentContent =
-          commentItem.querySelector('.ln-comment-content')?.text.trim() ?? '';
-
-      // If content is empty, try alternatives
-      if (commentContent.isEmpty) {
-        // Try common content selectors
-        final contentElement =
-            commentItem.querySelector(
-              '.content, .comment-content, .text, [class*="content"], p',
-            ) ??
-            commentItem.querySelector('div:not(:has(img))');
-        if (contentElement != null) {
-          commentContent = contentElement.text.trim();
-
-          // If the content includes the username at the beginning, try to remove it
-          if (userName.isNotEmpty && commentContent.startsWith(userName)) {
-            commentContent = commentContent.substring(userName.length).trim();
-          }
-        } else {
-          // As a last resort, get all text from the comment item and try to extract content
-          commentContent = commentItem.text.trim();
-
-          // Try to clean up by removing username if present
-          if (userName.isNotEmpty && commentContent.startsWith(userName)) {
-            commentContent = commentContent.substring(userName.length).trim();
-          }
-        }
-      }
-
-      // Extract timestamp - try both standard and alternative selectors
-      final timeElement = commentItem.querySelector('time.timeago');
-      String timestamp = '';
-      String rawTimestamp = '';
-
-      if (timeElement != null) {
-        timestamp = timeElement.text.trim();
-        rawTimestamp = timeElement.attributes['datetime'] ?? '';
-      } else {
-        // Try alternative timestamp selectors
-        final altTimeElement =
-            commentItem.querySelector(
-              '.time, .timestamp, .date, [class*="time"], [class*="date"], small',
-            ) ??
-            commentItem.querySelectorAll('span').lastOrNull;
-        if (altTimeElement != null) {
-          timestamp = altTimeElement.text.trim();
-          rawTimestamp = altTimeElement.attributes['datetime'] ?? timestamp;
-
-          // If timestamp is not empty but looks like other content, clear it
-          if (timestamp.length > 30) {
-            timestamp = '';
-          }
-        }
-      }
-
-      // Create comment object
-      final comment = {
-        'id': commentId,
-        'user': {
-          'name': userName,
-          'image': userImage,
-          'url': userUrl,
-          'badges': badges,
-        },
-        'content': commentContent,
-        'timestamp': timestamp,
-        'rawTimestamp': rawTimestamp,
-        'likes': '',
-      };
-
-      comments.add(comment);
-    }
-
-    // Check for pagination
-    final paginationDiv = document.querySelector('.ln-comment-page');
-    bool hasMorePages = false;
-    String nextPageUrl = '';
-    bool hasPrevPage = false;
-    String prevPageUrl = '';
-    // We already have currentPage defined at the beginning of the method
-
-    if (paginationDiv != null) {
-      // Extract current page from next/prev links
-      final prevButton = paginationDiv.querySelector('.paging_item.prev');
-      final nextButton = paginationDiv.querySelector('.paging_item.next');
-
-      // Check if next button exists and is not disabled
-      if (nextButton != null && !nextButton.classes.contains('disabled')) {
-        hasMorePages = true;
-        nextPageUrl = nextButton.attributes['href'] ?? '';
-
-        // Make sure we have a properly formatted URL
-        if (nextPageUrl.isNotEmpty && !nextPageUrl.startsWith('http')) {
-          // Extract base URL from the original URL
-          String baseUrl = '';
-          if (url.startsWith('http')) {
-            Uri uri = Uri.parse(url);
-            baseUrl = '${uri.scheme}://${uri.host}';
-            if (!nextPageUrl.startsWith('/')) {
-              nextPageUrl = '/$nextPageUrl';
-            }
-            nextPageUrl = '$baseUrl$nextPageUrl';
-          }
-        }
-
-        // Extract page number from URL if we couldn't determine it otherwise
-        if (currentPage <= 1) {
-          final pageMatch = RegExp(r'page=(\d+)').firstMatch(nextPageUrl);
-          if (pageMatch != null && pageMatch.group(1) != null) {
-            // Current page is one less than next page
-            currentPage = int.parse(pageMatch.group(1)!) - 1;
-          }
-        }
-      }
-
-      // Check if prev button exists and is not disabled
-      if (prevButton != null && !prevButton.classes.contains('disabled')) {
-        hasPrevPage = true;
-        prevPageUrl = prevButton.attributes['href'] ?? '';
-
-        // Make sure we have a properly formatted URL
-        if (prevPageUrl.isNotEmpty && !prevPageUrl.startsWith('http')) {
-          // Extract base URL from the original URL
-          String baseUrl = '';
-          if (url.startsWith('http')) {
-            Uri uri = Uri.parse(url);
-            baseUrl = '${uri.scheme}://${uri.host}';
-            if (!prevPageUrl.startsWith('/')) {
-              prevPageUrl = '/$prevPageUrl';
-            }
-            prevPageUrl = '$baseUrl$prevPageUrl';
-          }
-        }
-
-        // If we couldn't determine current page from next link, try from prev link
-        if (currentPage <= 1 && prevPageUrl.isNotEmpty) {
-          final pageMatch = RegExp(r'page=(\d+)').firstMatch(prevPageUrl);
-          if (pageMatch != null && pageMatch.group(1) != null) {
-            // Current page is one more than prev page
-            currentPage = int.parse(pageMatch.group(1)!) + 1;
-          }
-        }
-      } else if (prevButton != null &&
-          prevButton.classes.contains('disabled')) {
-        // If prev is disabled, we're on page 1
-        currentPage = 1;
-      }
-
-      // If there's text in the pagination that indicates the page number
-      final paginationText = paginationDiv.text;
-      final explicitPageMatch = RegExp(
-        r'Trang\s+(\d+)',
-      ).firstMatch(paginationText);
-      if (explicitPageMatch != null && explicitPageMatch.group(1) != null) {
-        currentPage = int.parse(explicitPageMatch.group(1)!);
       }
     }
 
     // Add pagination info to the last comment
     if (comments.isNotEmpty) {
+      // Check for pagination
+      final paginationDiv = document.querySelector('.ln-comment-page');
+      bool hasMorePages = false;
+      String nextPageUrl = '';
+      bool hasPrevPage = false;
+      String prevPageUrl = '';
+
+      if (paginationDiv != null) {
+        // Extract pagination info from the DOM
+        final paginationInfo = _extractPaginationInfo(
+          paginationDiv,
+          url,
+          currentPage,
+        );
+        hasMorePages = paginationInfo['hasMorePages'] as bool;
+        nextPageUrl = paginationInfo['nextPageUrl'] as String;
+        hasPrevPage = paginationInfo['hasPrevPage'] as bool;
+        prevPageUrl = paginationInfo['prevPageUrl'] as String;
+        currentPage = paginationInfo['currentPage'] as int;
+      } else {
+        // Fallback: check if there's any link that seems like pagination
+        final nextLink = document.querySelector(
+          'a[href*="page="], a[href*="?page"], .next, .pagination a',
+        );
+        if (nextLink != null) {
+          hasMorePages = true;
+          nextPageUrl = nextLink.attributes['href'] ?? '';
+
+          // Make sure we have a properly formatted URL
+          if (nextPageUrl.isNotEmpty && !nextPageUrl.startsWith('http')) {
+            // Extract base URL from the original URL
+            String baseUrl = '';
+            if (url.startsWith('http')) {
+              Uri uri = Uri.parse(url);
+              baseUrl = '${uri.scheme}://${uri.host}';
+              if (!nextPageUrl.startsWith('/')) {
+                nextPageUrl = '/$nextPageUrl';
+              }
+              nextPageUrl = '$baseUrl$nextPageUrl';
+            }
+          }
+        }
+
+        // If we're not on page 1, enable prev page
+        if (currentPage > 1) {
+          hasPrevPage = true;
+          prevPageUrl = _constructPrevPageUrl(url, currentPage);
+        }
+      }
+
+      // Update the last comment with pagination info
       comments.last['hasMorePages'] = hasMorePages;
       comments.last['nextPageUrl'] = nextPageUrl;
       comments.last['hasPrevPage'] = hasPrevPage;
@@ -2201,6 +2199,323 @@ class CrawlerService {
     }
 
     return comments;
+  }
+
+  // Helper to extract pagination information
+  Map<String, dynamic> _extractPaginationInfo(
+    dom.Element paginationDiv,
+    String url,
+    int currentPage,
+  ) {
+    bool hasMorePages = false;
+    String nextPageUrl = '';
+    bool hasPrevPage = false;
+    String prevPageUrl = '';
+
+    // Extract current page from next/prev links
+    final prevButton = paginationDiv.querySelector('.paging_item.prev');
+    final nextButton = paginationDiv.querySelector('.paging_item.next');
+
+    // Check if next button exists and is not disabled
+    if (nextButton != null && !nextButton.classes.contains('disabled')) {
+      hasMorePages = true;
+      nextPageUrl = nextButton.attributes['href'] ?? '';
+
+      // Make sure we have a properly formatted URL
+      if (nextPageUrl.isNotEmpty && !nextPageUrl.startsWith('http')) {
+        // Extract base URL from the original URL
+        String baseUrl = '';
+        if (url.startsWith('http')) {
+          Uri uri = Uri.parse(url);
+          baseUrl = '${uri.scheme}://${uri.host}';
+          if (!nextPageUrl.startsWith('/')) {
+            nextPageUrl = '/$nextPageUrl';
+          }
+          nextPageUrl = '$baseUrl$nextPageUrl';
+        }
+      }
+
+      // Extract page number from URL if we couldn't determine it otherwise
+      if (currentPage <= 1) {
+        final pageMatch = RegExp(r'page=(\d+)').firstMatch(nextPageUrl);
+        if (pageMatch != null && pageMatch.group(1) != null) {
+          // Current page is one less than next page
+          currentPage = int.parse(pageMatch.group(1)!) - 1;
+        }
+      }
+    }
+
+    // Check if prev button exists and is not disabled
+    if (prevButton != null && !prevButton.classes.contains('disabled')) {
+      hasPrevPage = true;
+      prevPageUrl = prevButton.attributes['href'] ?? '';
+
+      // Make sure we have a properly formatted URL
+      if (prevPageUrl.isNotEmpty && !prevPageUrl.startsWith('http')) {
+        // Extract base URL from the original URL
+        String baseUrl = '';
+        if (url.startsWith('http')) {
+          Uri uri = Uri.parse(url);
+          baseUrl = '${uri.scheme}://${uri.host}';
+          if (!prevPageUrl.startsWith('/')) {
+            prevPageUrl = '/$prevPageUrl';
+          }
+          prevPageUrl = '$baseUrl$prevPageUrl';
+        }
+      }
+
+      // If we couldn't determine current page from next link, try from prev link
+      if (currentPage <= 1 && prevPageUrl.isNotEmpty) {
+        final pageMatch = RegExp(r'page=(\d+)').firstMatch(prevPageUrl);
+        if (pageMatch != null && pageMatch.group(1) != null) {
+          // Current page is one more than prev page
+          currentPage = int.parse(pageMatch.group(1)!) + 1;
+        }
+      }
+    } else if (prevButton != null && prevButton.classes.contains('disabled')) {
+      // If prev is disabled, we're on page 1
+      currentPage = 1;
+    }
+
+    // If there's text in the pagination that indicates the page number
+    final paginationText = paginationDiv.text;
+    final explicitPageMatch = RegExp(
+      r'Trang\s+(\d+)',
+    ).firstMatch(paginationText);
+    if (explicitPageMatch != null && explicitPageMatch.group(1) != null) {
+      currentPage = int.parse(explicitPageMatch.group(1)!);
+    }
+
+    return {
+      'hasMorePages': hasMorePages,
+      'nextPageUrl': nextPageUrl,
+      'hasPrevPage': hasPrevPage,
+      'prevPageUrl': prevPageUrl,
+      'currentPage': currentPage,
+    };
+  }
+
+  // Helper to extract comment data from a comment element
+  Map<String, dynamic> _extractCommentData(
+    dom.Element commentItem,
+    String url,
+  ) {
+    // Extract comment ID - ensure we get a unique ID to avoid duplicates
+    String commentId = '';
+
+    // First try to get ID from element attributes
+    if (commentItem.id.isNotEmpty) {
+      commentId = commentItem.id;
+    } else if (commentItem.attributes.containsKey('data-comment')) {
+      commentId = commentItem.attributes['data-comment'] ?? '';
+    } else {
+      // Try to extract ID from href if available (often contains the comment ID)
+      final idLink = commentItem.querySelector(
+        'a[href*="comment_id="], a[href*="#ln-comment-"]',
+      );
+      if (idLink != null) {
+        final href = idLink.attributes['href'] ?? '';
+
+        // Try to extract ID from href with regex
+        final idMatch = RegExp(
+          r'comment_id=(\d+)|#ln-comment-(\d+)',
+        ).firstMatch(href);
+        if (idMatch != null) {
+          commentId = idMatch.group(1) ?? idMatch.group(2) ?? '';
+        }
+      }
+    }
+
+    // If still no ID, try finding it inside a data attribute of any child element
+    if (commentId.isEmpty) {
+      final elementsWithData = commentItem.querySelectorAll('[data-comment]');
+      if (elementsWithData.isNotEmpty) {
+        commentId = elementsWithData.first.attributes['data-comment'] ?? '';
+      }
+    }
+
+    // Try additional custom extractors for specific patterns
+    if (commentId.isEmpty) {
+      // Look for any attribute that might contain comment ID
+      final possibleAttributes = ['data-id', 'data-comment-id', 'data-cid'];
+      for (final attr in possibleAttributes) {
+        if (commentItem.attributes.containsKey(attr)) {
+          commentId = commentItem.attributes[attr] ?? '';
+          if (commentId.isNotEmpty) break;
+        }
+
+        // Also check all child elements
+        final children = commentItem.querySelectorAll('*');
+        for (final child in children) {
+          if (child.attributes.containsKey(attr)) {
+            commentId = child.attributes[attr] ?? '';
+            if (commentId.isNotEmpty) break;
+          }
+        }
+        if (commentId.isNotEmpty) break;
+      }
+    }
+
+    // Last resort - create a hash from content and username
+    if (commentId.isEmpty) {
+      // Extract timestamp and username for generating a unique ID
+      final timeElement = commentItem.querySelector('time.timeago');
+      final userNameElement =
+          commentItem.querySelector('.ln-username') ??
+          commentItem.querySelector('.font-bold');
+
+      final userName = userNameElement?.text.trim() ?? '';
+
+      // Try to get a stable timestamp
+      final timeString =
+          timeElement?.attributes['datetime'] ??
+          timeElement?.text.trim() ??
+          ''; // Use empty string instead of current time for stability
+
+      // Get a content sample to generate a more reliable ID
+      final contentElement =
+          commentItem.querySelector('.ln-comment-content') ??
+          commentItem.querySelector('.content') ??
+          commentItem;
+
+      final contentSample = contentElement.text.trim();
+
+      // Generate a hash only if we have username or content
+      if (userName.isNotEmpty || contentSample.isNotEmpty) {
+        // Use first part of content for stability
+        final contentForHash =
+            contentSample.length > 50
+                ? contentSample.substring(0, 50)
+                : contentSample;
+
+        // Generate a more stable hash from the combination of user + content sample
+        final combinedString = '$userName|$contentForHash';
+        commentId = 'comment-${combinedString.hashCode}';
+      } else {
+        // Absolute last resort - use a UUID-like random string with timestamp
+        commentId =
+            'comment-${DateTime.now().millisecondsSinceEpoch}-${math.Random().nextInt(10000)}';
+      }
+    }
+
+    // Extract user info
+    String userImage = '';
+    String userName = '';
+    String userUrl = '';
+
+    // Try standard avatar container selector
+    final avatarContainer = commentItem.querySelector('.w-\\[50px\\]');
+    if (avatarContainer != null) {
+      final imgElement = avatarContainer.querySelector('img');
+      if (imgElement != null) {
+        userImage = imgElement.attributes['src'] ?? '';
+      }
+    }
+
+    // If still no image, try alternative selectors
+    if (userImage.isEmpty) {
+      // Try looking for avatar images with standard classes
+      final imgElements = commentItem.querySelectorAll(
+        'img[class*="avatar"], .avatar img, img[src*="avatar"], img.rounded-full',
+      );
+      if (imgElements.isNotEmpty) {
+        userImage = imgElements.first.attributes['src'] ?? '';
+      } else {
+        // Fallback to first image in the comment
+        final allImgs = commentItem.querySelectorAll('img');
+        if (allImgs.isNotEmpty) {
+          userImage = allImgs.first.attributes['src'] ?? '';
+        }
+      }
+    }
+
+    // Try standard username selector
+    userName = commentItem.querySelector('.ln-username')?.text.trim() ?? '';
+    userUrl =
+        commentItem.querySelector('.ln-username')?.attributes['href'] ?? '';
+
+    // If username is empty, try alternatives
+    if (userName.isEmpty) {
+      // Try common username selectors
+      final usernameElement = commentItem.querySelector(
+        '.username, .user-name, .author, [class*="user-name"], .font-bold a, .self-center a.font-bold, a[href*="thanh-vien"]',
+      );
+      if (usernameElement != null) {
+        userName = usernameElement.text.trim();
+        if (usernameElement.localName == 'a') {
+          userUrl = usernameElement.attributes['href'] ?? '';
+        }
+      }
+    }
+
+    // Get user badges/roles
+    final badges = <String>[];
+
+    // Try badge selectors from the HTML structure
+    final badgeElements = commentItem.querySelectorAll(
+      '.leading-4, .font-bold:not(a), .self-center > div.flex',
+    );
+    for (final badgeElement in badgeElements) {
+      final badgeText = badgeElement.text.trim();
+      if (badgeText.isNotEmpty && badgeText != userName) {
+        badges.add(badgeText);
+      }
+    }
+
+    // Extract comment content
+    var commentContent =
+        commentItem.querySelector('.ln-comment-content')?.text.trim() ?? '';
+
+    // If content is empty, try alternatives
+    if (commentContent.isEmpty) {
+      // Try common content selectors
+      final contentElement = commentItem.querySelector(
+        '.content, .comment-content, .text, [class*="content"], .long-text, p',
+      );
+      if (contentElement != null) {
+        commentContent = contentElement.text.trim();
+
+        // If the content includes the username at the beginning, try to remove it
+        if (userName.isNotEmpty && commentContent.startsWith(userName)) {
+          commentContent = commentContent.substring(userName.length).trim();
+        }
+      }
+    }
+
+    // Extract timestamp
+    final timeElement = commentItem.querySelector('time.timeago');
+    String timestamp = '';
+    String rawTimestamp = '';
+
+    if (timeElement != null) {
+      timestamp = timeElement.text.trim();
+      rawTimestamp = timeElement.attributes['datetime'] ?? '';
+    } else {
+      // Try alternative timestamp selectors
+      final altTimeElement = commentItem.querySelector(
+        '.time, .timestamp, .date, .text-slate-500 a, [class*="time"], [class*="date"], small',
+      );
+      if (altTimeElement != null) {
+        timestamp = altTimeElement.text.trim();
+        rawTimestamp = altTimeElement.attributes['datetime'] ?? timestamp;
+      }
+    }
+
+    // Create comment object
+    return {
+      'id': commentId,
+      'user': {
+        'name': userName,
+        'image': userImage,
+        'url': userUrl,
+        'badges': badges,
+      },
+      'content': commentContent,
+      'timestamp': timestamp,
+      'rawTimestamp': rawTimestamp,
+      'likes': '',
+      'replies': <Map<String, dynamic>>[],
+    };
   }
 
   // Helper to extract page number from URL

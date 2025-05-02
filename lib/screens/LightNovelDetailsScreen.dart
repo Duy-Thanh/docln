@@ -43,6 +43,8 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
   String? _lastUpdated;
   String _novelType = '';
   bool _loadError = false;
+  double? _rating;
+  int? _reviews;
 
   @override
   void initState() {
@@ -148,6 +150,8 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
         final int? views =
             novelDetails['views'] ??
             _extractNumberFromString(summary, r'Lượt xem[:\s]*([0-9,.]+)');
+        final double? rating = novelDetails['rating'];
+        final int? reviews = novelDetails['reviews'];
         final String? lastUpdated = novelDetails['lastUpdated'];
 
         setState(() {
@@ -164,6 +168,8 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
           _lastUpdated = lastUpdated;
           _novelType = novelType;
           _isLoading = false;
+          _rating = rating;
+          _reviews = reviews;
 
           // Update history with the loaded chapter information
           Provider.of<HistoryService>(
@@ -472,7 +478,7 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
                           ],
                         ),
 
-                      if (widget.novel.rating != null)
+                      if (widget.novel.rating != null || _rating != null)
                         Padding(
                           padding: const EdgeInsets.only(top: 8),
                           child: Row(
@@ -480,10 +486,18 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
                               ...List.generate(
                                 5,
                                 (index) => Icon(
-                                  index < (widget.novel.rating ?? 0) / 1
+                                  index <
+                                          (_rating ??
+                                                  widget.novel.rating ??
+                                                  0) /
+                                              1
                                       ? Icons.star
                                       : index <
-                                          (widget.novel.rating ?? 0) / 1 + 0.5
+                                          (_rating ??
+                                                      widget.novel.rating ??
+                                                      0) /
+                                                  1 +
+                                              0.5
                                       ? Icons.star_half
                                       : Icons.star_border,
                                   color: Colors.amber,
@@ -492,16 +506,15 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                '${widget.novel.rating}/5',
+                                '${_rating ?? widget.novel.rating ?? 0}/5',
                                 style: textTheme.bodyMedium?.copyWith(
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              if (widget.novel.reviews != null)
-                                Text(
-                                  ' (${widget.novel.reviews})',
-                                  style: textTheme.bodySmall,
-                                ),
+                              Text(
+                                ' (${_reviews ?? widget.novel.reviews ?? 0})',
+                                style: textTheme.bodySmall,
+                              ),
                             ],
                           ),
                         ),
@@ -635,7 +648,7 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
             _buildVerticalDivider(),
             _buildStatItemEnhanced(
               'Đánh giá',
-              '${widget.novel.rating ?? 'N/A'} / ${widget.novel.reviews ?? '0'}',
+              _formatRating(_rating, _reviews),
               Icons.star,
               Colors.amber,
               textTheme,
@@ -771,6 +784,18 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
     } catch (e) {
       return dateStr; // Return original on error
     }
+  }
+
+  String _formatRating(double? rating, int? reviews) {
+    if (rating == null || rating == 0) {
+      return reviews != null && reviews > 0 ? '0,00 / $reviews' : 'N/A / 0';
+    }
+
+    // Format with comma as decimal separator to match original format
+    String ratingStr = rating.toStringAsFixed(2).replaceAll('.', ',');
+
+    // Return in the format "X,XX / Y" to match the original format
+    return '$ratingStr / ${reviews ?? 0}';
   }
 
   Widget _buildAlternativeTitlesSection() {

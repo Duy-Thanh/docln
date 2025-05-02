@@ -26,17 +26,63 @@ class _CommentsScreenState extends State<CommentsScreen> {
   bool _isLoadingMore = false;
   String _errorMessage = '';
   int _currentPage = 1; // Track current page
+  bool _recentlyChangedPage =
+      false; // Prevent auto-loading right after page change
+  DateTime _lastLoadTime = DateTime.now(); // Track when we last loaded comments
+  double _lastScrollPosition =
+      0; // Track last scroll position to determine direction
 
   @override
   void initState() {
     super.initState();
     _loadComments();
+    // Add scroll listener for more reliable pagination
+    _scrollController.addListener(_handleScroll);
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  // Dedicated scroll handler for pagination
+  void _handleScroll() {
+    // Skip if no clients or content
+    if (!_scrollController.hasClients) return;
+
+    // Return if conditions aren't right for loading more
+    if (_isLoadingMore || !_hasMoreComments || _recentlyChangedPage) {
+      return;
+    }
+
+    // We define "near the bottom" as within 500 pixels OR when scroll position is 70% of the way down
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.position.pixels;
+    final threshold = maxScroll * 0.7; // 70% threshold
+
+    final isNearBottom =
+        currentScroll >= threshold ||
+        (maxScroll > 0 && maxScroll - currentScroll <= 500);
+
+    if (isNearBottom) {
+      // Debounce to prevent multiple calls
+      final now = DateTime.now();
+      if (now.difference(_lastLoadTime).inMilliseconds < 200) {
+        return;
+      }
+
+      print("Auto-loading next page from scroll handler");
+      _loadMoreComments();
+    }
+  }
+
+  // The rest of the existing code for tracking scroll position can remain
+  void _onScroll() {
+    setState(() {
+      _lastScrollPosition = _scrollController.position.pixels;
+    });
   }
 
   Future<void> _loadComments() async {
@@ -62,6 +108,8 @@ class _CommentsScreenState extends State<CommentsScreen> {
         _comments.clear();
         _comments.addAll(comments);
         _isLoading = false;
+        _recentlyChangedPage = true; // Set flag to prevent auto-loading
+        _lastLoadTime = DateTime.now(); // Update last load time
 
         // Check if there are more pages
         if (comments.isNotEmpty) {
@@ -76,6 +124,15 @@ class _CommentsScreenState extends State<CommentsScreen> {
 
       // Make sure we scroll to top after loading initial data
       _scrollToTop();
+
+      // Reset the recently changed page flag after a delay
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted) {
+          setState(() {
+            _recentlyChangedPage = false;
+          });
+        }
+      });
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -86,11 +143,17 @@ class _CommentsScreenState extends State<CommentsScreen> {
   }
 
   Future<void> _loadMoreComments() async {
+    // Don't load more if we're already loading, have no more comments, or just changed pages
     if (_isLoadingMore || !_hasMoreComments || _nextPageUrl.isEmpty) return;
 
+    // Update loading state
     setState(() {
       _isLoadingMore = true;
+      _recentlyChangedPage = true; // Set this flag to prevent recursive loading
+      _lastLoadTime = DateTime.now(); // Update last load time
     });
+
+    print("Loading more comments from: $_nextPageUrl");
 
     try {
       final commentsList = await _crawlerService.getChapterComments(
@@ -116,6 +179,7 @@ class _CommentsScreenState extends State<CommentsScreen> {
           _prevPageUrl = comments.last.prevPageUrl;
           _currentPage =
               comments.last.currentPage; // Get actual page number from API
+          print("Loaded page: $_currentPage, has more: $_hasMoreComments");
         } else {
           _hasMoreComments = false;
         }
@@ -123,9 +187,20 @@ class _CommentsScreenState extends State<CommentsScreen> {
 
       // Scroll to top after loading new page
       _scrollToTop();
+
+      // Reset the recently changed page flag after a very short delay
+      // This prevents immediate loading of the next page after this one
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted) {
+          setState(() {
+            _recentlyChangedPage = false;
+          });
+        }
+      });
     } catch (e) {
       setState(() {
         _isLoadingMore = false;
+        _recentlyChangedPage = false;
         _errorMessage = 'Không thể tải thêm bình luận: ${e.toString()}';
       });
       print('Error loading more comments: $e');
@@ -133,10 +208,19 @@ class _CommentsScreenState extends State<CommentsScreen> {
   }
 
   Future<void> _loadPreviousComments() async {
+    // Don't load previous if we're already loading, have no previous page, or just changed pages
     if (_isLoadingMore || !_hasPrevPage || _prevPageUrl.isEmpty) return;
+
+    // Add debounce to prevent rapid loading
+    final now = DateTime.now();
+    if (now.difference(_lastLoadTime).inMilliseconds < 300) {
+      return;
+    }
 
     setState(() {
       _isLoadingMore = true;
+      _recentlyChangedPage = true; // Set flag to prevent auto-loading
+      _lastLoadTime = now; // Update last load time
     });
 
     try {
@@ -170,9 +254,19 @@ class _CommentsScreenState extends State<CommentsScreen> {
 
       // Scroll to top after loading previous page
       _scrollToTop();
+
+      // Reset the recently changed page flag after a delay
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted) {
+          setState(() {
+            _recentlyChangedPage = false;
+          });
+        }
+      });
     } catch (e) {
       setState(() {
         _isLoadingMore = false;
+        _recentlyChangedPage = false;
         _errorMessage = 'Không thể tải trang trước: ${e.toString()}';
       });
       print('Error loading previous comments: $e');
@@ -182,11 +276,25 @@ class _CommentsScreenState extends State<CommentsScreen> {
   // Helper method to scroll to top
   void _scrollToTop() {
     if (_scrollController.hasClients) {
+      // Set the flag right before scrolling to prevent auto-loading
+      setState(() {
+        _recentlyChangedPage = true;
+      });
+
       _scrollController.animateTo(
         0,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
+
+      // Reset the flag after a longer delay to give time for the animation to complete
+      Future.delayed(const Duration(milliseconds: 400), () {
+        if (mounted) {
+          setState(() {
+            _recentlyChangedPage = false;
+          });
+        }
+      });
     }
   }
 
@@ -305,31 +413,265 @@ class _CommentsScreenState extends State<CommentsScreen> {
   }
 
   Widget _buildCommentsList() {
-    return NotificationListener<ScrollNotification>(
-      onNotification: (ScrollNotification scrollInfo) {
-        if (!_isLoadingMore &&
-            _hasMoreComments &&
-            scrollInfo.metrics.pixels == scrollInfo.metrics.maxScrollExtent) {
-          _loadMoreComments();
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.all(16),
+      // Each comment can have multiple items (the comment itself + its replies)
+      itemCount: _calculateTotalItemCount() + (_hasMoreComments ? 1 : 0),
+      itemBuilder: (context, index) {
+        // Show loading indicator if we're at the end and have more comments to load
+        if (index == _calculateTotalItemCount() && _hasMoreComments) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: CircularProgressIndicator(),
+            ),
+          );
         }
-        return true;
-      },
-      child: ListView.builder(
-        controller: _scrollController,
-        padding: const EdgeInsets.all(16),
-        itemCount: _comments.length + (_hasMoreComments ? 1 : 0),
-        itemBuilder: (context, index) {
-          if (index == _comments.length) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16.0),
-                child: CircularProgressIndicator(),
-              ),
-            );
-          }
 
-          return _buildCommentItem(_comments[index]);
-        },
+        // Find which comment and/or reply this index refers to
+        final indexInfo = _getCommentAtIndex(index);
+        if (indexInfo == null) return const SizedBox.shrink();
+
+        final comment = indexInfo['comment'] as Comment;
+        final isReply = indexInfo['isReply'] as bool;
+
+        if (isReply) {
+          // This is a reply, render it as indented
+          return _buildReplyItem(comment);
+        } else {
+          // This is a top-level comment
+          return _buildCommentItem(comment);
+        }
+      },
+    );
+  }
+
+  // Helper to get comment at the given flattened index
+  Map<String, dynamic>? _getCommentAtIndex(int index) {
+    int currentIndex = 0;
+
+    // Special case: if we have no comments, return null
+    if (_comments.isEmpty) return null;
+
+    // Special case: if our only comment is an empty page indicator
+    if (_comments.length == 1 && _comments.first.isEmptyPage) {
+      return index == 0 ? {'comment': _comments.first, 'isReply': false} : null;
+    }
+
+    for (final comment in _comments) {
+      // Skip empty page indicators
+      if (comment.isEmptyPage) continue;
+
+      // Check if this is the comment we're looking for
+      if (currentIndex == index) {
+        return {'comment': comment, 'isReply': false};
+      }
+      currentIndex++;
+
+      // Check replies
+      if (comment.replies.isNotEmpty) {
+        for (final reply in comment.replies) {
+          if (currentIndex == index) {
+            return {'comment': reply, 'isReply': true};
+          }
+          currentIndex++;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  // Helper to calculate total number of items (comments + replies)
+  int _calculateTotalItemCount() {
+    int count = 0;
+
+    // Special case: if we have no comments, return 0
+    if (_comments.isEmpty) return 0;
+
+    // Special case: if our only comment is an empty page indicator
+    if (_comments.length == 1 && _comments.first.isEmptyPage) {
+      return 1; // Just show the empty state
+    }
+
+    for (final comment in _comments) {
+      // Skip empty page indicators when counting
+      if (comment.isEmptyPage) continue;
+
+      // Add 1 for the comment itself
+      count++;
+      // Add the number of replies
+      count += comment.replies.length;
+    }
+    return count;
+  }
+
+  // Build a reply comment with indentation
+  Widget _buildReplyItem(Comment reply) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 40.0, bottom: 16.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Reply indicator line with improved visual design
+          Container(
+            width: 2,
+            height: 40,
+            margin: const EdgeInsets.only(right: 10),
+            decoration: BoxDecoration(
+              // Use a gradient to make the connecting line fade at the top
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  theme.colorScheme.primary.withOpacity(0.2),
+                  theme.colorScheme.primary.withOpacity(0.7),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(1),
+            ),
+          ),
+
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color:
+                    isDarkMode
+                        ? Colors.grey.shade800.withOpacity(0.6)
+                        : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+                // Add a subtle border to better distinguish replies
+                border: Border.all(
+                  color: theme.colorScheme.primary.withOpacity(0.15),
+                  width: 1,
+                ),
+                // Add a subtle shadow for depth
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.03),
+                    offset: const Offset(0, 1),
+                    blurRadius: 3,
+                    spreadRadius: 0,
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // User Avatar
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: OptimizedNetworkImage(
+                          imageUrl: reply.user.image,
+                          fit: BoxFit.cover,
+                          errorWidget:
+                              (context, url, error) => Container(
+                                color: Colors.grey.shade300,
+                                child: const Icon(Icons.person, size: 16),
+                              ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+
+                    // Reply Content
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Username and badges with reply indicator
+                          Row(
+                            children: [
+                              Text(
+                                reply.user.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              // Add "reply" indicator
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primary.withOpacity(
+                                    0.1,
+                                  ),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  'Trả lời',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                              if (reply.user.badges.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                ...reply.user.badges.map(
+                                  (badge) => Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                      vertical: 1,
+                                    ),
+                                    margin: const EdgeInsets.only(right: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      badge,
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blue.shade700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+
+                          // Comment time
+                          Text(
+                            reply.timestamp,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+
+                          const SizedBox(height: 4),
+
+                          // Comment content
+                          Text(
+                            reply.content,
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

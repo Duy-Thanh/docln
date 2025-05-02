@@ -12,6 +12,8 @@ class Comment {
   final int currentPage;
   final bool isEmptyPage;
   final bool isErrorPage;
+  final String parentId; // ID of the parent comment if this is a reply
+  final List<Comment> replies; // List of replies to this comment
 
   Comment({
     required this.id,
@@ -27,23 +29,55 @@ class Comment {
     this.currentPage = 1,
     this.isEmptyPage = false,
     this.isErrorPage = false,
+    this.parentId = '',
+    this.replies = const [],
   });
 
   factory Comment.fromJson(Map<String, dynamic> json) {
+    // Handle the case where replies might be a different type (Map instead of List)
+    List<dynamic> repliesJson = [];
+    if (json['replies'] != null) {
+      if (json['replies'] is List) {
+        repliesJson = json['replies'] as List;
+      } else if (json['replies'] is Map) {
+        // If replies is a Map, convert it to a List
+        repliesJson =
+            (json['replies'] as Map<dynamic, dynamic>).values.toList();
+      }
+    }
+
     return Comment(
-      id: json['id'] ?? '',
+      id: json['id']?.toString() ?? '',
       user: CommentUser.fromJson(json['user'] ?? {}),
-      content: json['content'] ?? '',
-      timestamp: json['timestamp'] ?? '',
-      rawTimestamp: json['rawTimestamp'] ?? '',
-      likes: json['likes'] ?? '',
-      hasMorePages: json['hasMorePages'] ?? false,
-      nextPageUrl: json['nextPageUrl'] ?? '',
-      hasPrevPage: json['hasPrevPage'] ?? false,
-      prevPageUrl: json['prevPageUrl'] ?? '',
-      currentPage: json['currentPage'] ?? 1,
-      isEmptyPage: json['isEmptyPage'] ?? false,
-      isErrorPage: json['isErrorPage'] ?? false,
+      content: json['content']?.toString() ?? '',
+      timestamp: json['timestamp']?.toString() ?? '',
+      rawTimestamp: json['rawTimestamp']?.toString() ?? '',
+      likes: json['likes']?.toString() ?? '',
+      hasMorePages: json['hasMorePages'] == true,
+      nextPageUrl: json['nextPageUrl']?.toString() ?? '',
+      hasPrevPage: json['hasPrevPage'] == true,
+      prevPageUrl: json['prevPageUrl']?.toString() ?? '',
+      currentPage:
+          json['currentPage'] is int
+              ? json['currentPage']
+              : (int.tryParse(json['currentPage']?.toString() ?? '1') ?? 1),
+      isEmptyPage: json['isEmptyPage'] == true,
+      isErrorPage: json['isErrorPage'] == true,
+      parentId: json['parentId']?.toString() ?? '',
+      replies:
+          repliesJson.isNotEmpty
+              ? repliesJson
+                  .map(
+                    (reply) => Comment.fromJson(
+                      reply is Map<String, dynamic>
+                          ? reply
+                          : reply is Map
+                          ? Map<String, dynamic>.from(reply)
+                          : {},
+                    ),
+                  )
+                  .toList()
+              : [],
     );
   }
 
@@ -62,8 +96,16 @@ class Comment {
       'currentPage': currentPage,
       'isEmptyPage': isEmptyPage,
       'isErrorPage': isErrorPage,
+      'parentId': parentId,
+      'replies': replies.map((reply) => reply.toJson()).toList(),
     };
   }
+
+  // Helper method to check if this comment has any replies
+  bool get hasReplies => replies.isNotEmpty;
+
+  // Helper to get the complete thread (this comment + all its replies)
+  List<Comment> get thread => [this, ...replies];
 }
 
 class CommentUser {
@@ -80,11 +122,29 @@ class CommentUser {
   });
 
   factory CommentUser.fromJson(Map<String, dynamic> json) {
+    // Handle case where badges might be a different type
+    List<String> badgesList = [];
+    if (json['badges'] != null) {
+      if (json['badges'] is List) {
+        badgesList =
+            (json['badges'] as List)
+                .map((badge) => badge?.toString() ?? '')
+                .where((badge) => badge.isNotEmpty)
+                .toList();
+      } else if (json['badges'] is String) {
+        // If it's a single string, add it as a single badge
+        final badge = json['badges'].toString().trim();
+        if (badge.isNotEmpty) {
+          badgesList = [badge];
+        }
+      }
+    }
+
     return CommentUser(
-      name: json['name'] ?? '',
-      image: json['image'] ?? '',
-      url: json['url'] ?? '',
-      badges: List<String>.from(json['badges'] ?? []),
+      name: json['name']?.toString() ?? '',
+      image: json['image']?.toString() ?? '',
+      url: json['url']?.toString() ?? '',
+      badges: badgesList,
     );
   }
 
