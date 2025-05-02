@@ -59,7 +59,7 @@ class SettingsScreenState extends State<SettingsScreen>
     with SingleTickerProviderStateMixin {
   final SettingsService _settingsService = SettingsService();
   final CrawlerService _crawlerService = CrawlerService();
-  static const String _appVersion = 'Version: 2025.05.01';
+  static const String _appVersion = 'Version: 2025.05.02';
   bool isDarkMode = false;
   String? currentServer;
   double textSize = 16.0;
