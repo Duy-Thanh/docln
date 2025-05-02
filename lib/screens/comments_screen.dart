@@ -60,23 +60,24 @@ class _CommentsScreenState extends State<CommentsScreen> {
       return;
     }
 
-    // We define "near the bottom" as within 500 pixels OR when scroll position is 70% of the way down
+    // Only load when user has scrolled all the way to the bottom (within a small threshold)
     final maxScroll = _scrollController.position.maxScrollExtent;
     final currentScroll = _scrollController.position.pixels;
-    final threshold = maxScroll * 0.7; // 70% threshold
 
-    final isNearBottom =
-        currentScroll >= threshold ||
-        (maxScroll > 0 && maxScroll - currentScroll <= 500);
+    // Define a very small threshold (20 pixels) to account for rounding errors
+    const threshold = 10.0;
 
-    if (isNearBottom) {
+    // Only trigger pagination when exactly at the bottom
+    final isAtBottom = (maxScroll - currentScroll) <= threshold;
+
+    if (isAtBottom) {
       // Debounce to prevent multiple calls
       final now = DateTime.now();
       if (now.difference(_lastLoadTime).inMilliseconds < 200) {
         return;
       }
 
-      print("Auto-loading next page from scroll handler");
+      print("Auto-loading next page from scroll handler - user at bottom");
       _loadMoreComments();
     }
   }
@@ -291,7 +292,8 @@ class _CommentsScreenState extends State<CommentsScreen> {
       );
 
       // Reset the flag after a longer delay to give time for the animation to complete
-      Future.delayed(const Duration(milliseconds: 400), () {
+      // and prevent accidental triggering of auto-loading
+      Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) {
           setState(() {
             _recentlyChangedPage = false;
