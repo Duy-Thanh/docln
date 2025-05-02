@@ -2,11 +2,11 @@
 
 Light Novel Reader written in Flutter (for Android, Windows and Linux)
 
+iOS build officially released in release: **release_2025.05.01_02-32**! Check it out! 
+
 ## IMPORTANT NOTICE:
 
 **UPDATE: After an break, I will continue developing this application, from now!**
-
-**UPDATE 2: I'm trying to add iOS again, but not ready for now. Please stay tuned!**
 
 **The Android build currently build supported, iOS build is in experimental. Stay tuned!**
 
