@@ -2540,4 +2540,77 @@ class CrawlerService {
       return '$baseUrl?page=${currentPage - 1}';
     }
   }
+
+  // Add a method to fetch additional replies for a comment
+  Future<Map<String, dynamic>> fetchCommentReplies(
+    String parentId,
+    String offset,
+    String afterId,
+    BuildContext context,
+  ) async {
+    try {
+      // Get working server
+      final server = await _getWorkingServer();
+      if (server == null) {
+        throw Exception('No server available');
+      }
+
+      // Get CSRF token
+      String csrfToken = '';
+      final tokenResponse = await _httpClient.get(
+        '$server',
+        headers: {
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept':
+              'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        },
+      );
+
+      if (tokenResponse.statusCode == 200) {
+        final htmlDoc = parser.parse(tokenResponse.body);
+        final metaTag = htmlDoc.querySelector('meta[name="csrf-token"]');
+        csrfToken = metaTag?.attributes['content'] ?? '';
+        print('Found CSRF token: ${csrfToken.isNotEmpty ? "Yes" : "No"}');
+      }
+
+      // Make the API call to fetch replies
+      final response = await _httpClient.post(
+        '$server/comment/fetch_reply',
+        headers: {
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json, text/javascript, */*; q=0.01',
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'X-Requested-With': 'XMLHttpRequest',
+          'Origin': server,
+          'Referer': '$server',
+          'X-CSRF-TOKEN': csrfToken,
+        },
+        body:
+            '_token=${Uri.encodeComponent(csrfToken)}&parent_id=$parentId&offset=$offset&after=$afterId',
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to load replies: HTTP ${response.statusCode}');
+      }
+
+      // Parse the response
+      final jsonResponse = json.decode(response.body);
+
+      if (jsonResponse['status'] == 'success') {
+        return {
+          'html': jsonResponse['html'],
+          'fetchReplyText': jsonResponse['fetchReplyText'],
+          'remaining': jsonResponse['remaining'],
+        };
+      } else {
+        throw Exception('Failed to load replies: Invalid response');
+      }
+    } catch (e) {
+      print('Error fetching comment replies: $e');
+      CustomToast.show(context, 'Error loading replies: $e');
+      return {'html': '', 'fetchReplyText': 'Xem thêm trả lời', 'remaining': 0};
+    }
+  }
 }

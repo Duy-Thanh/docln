@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../modules/comment.dart';
 import '../services/crawler_service.dart';
 import '../widgets/network_image.dart';
+import 'package:html/parser.dart' as parser;
+import '../screens/custom_toast.dart';
 
 class CommentsScreen extends StatefulWidget {
   final String url;
@@ -31,6 +33,7 @@ class _CommentsScreenState extends State<CommentsScreen> {
   DateTime _lastLoadTime = DateTime.now(); // Track when we last loaded comments
   double _lastScrollPosition =
       0; // Track last scroll position to determine direction
+  final Set<String> _loadingRepliesIds = {};
 
   @override
   void initState() {
@@ -416,7 +419,7 @@ class _CommentsScreenState extends State<CommentsScreen> {
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.all(16),
-      // Each comment can have multiple items (the comment itself + its replies)
+      // Each comment can have multiple items (the comment itself + its replies + load more buttons)
       itemCount: _calculateTotalItemCount() + (_hasMoreComments ? 1 : 0),
       itemBuilder: (context, index) {
         // Show loading indicator if we're at the end and have more comments to load
@@ -435,8 +438,13 @@ class _CommentsScreenState extends State<CommentsScreen> {
 
         final comment = indexInfo['comment'] as Comment;
         final isReply = indexInfo['isReply'] as bool;
+        final isLoadMoreButton =
+            indexInfo['isLoadMoreButton'] as bool? ?? false;
 
-        if (isReply) {
+        // Handle different types of items
+        if (isLoadMoreButton) {
+          return _buildLoadMoreRepliesButton(comment);
+        } else if (isReply) {
           // This is a reply, render it as indented
           return _buildReplyItem(comment);
         } else {
@@ -473,17 +481,31 @@ class _CommentsScreenState extends State<CommentsScreen> {
       if (comment.replies.isNotEmpty) {
         for (final reply in comment.replies) {
           if (currentIndex == index) {
-            return {'comment': reply, 'isReply': true};
+            return {
+              'comment': reply,
+              'isReply': true,
+              'parentComment': comment,
+            };
           }
           currentIndex++;
         }
+      }
+
+      // Check if this is the "load more replies" button index
+      if (comment.hasMoreReplies && currentIndex == index) {
+        return {'comment': comment, 'isReply': false, 'isLoadMoreButton': true};
+      }
+
+      // Increment index for load more button if it exists
+      if (comment.hasMoreReplies) {
+        currentIndex++;
       }
     }
 
     return null;
   }
 
-  // Helper to calculate total number of items (comments + replies)
+  // Helper to calculate total number of items (comments + replies + load more buttons)
   int _calculateTotalItemCount() {
     int count = 0;
 
@@ -503,6 +525,10 @@ class _CommentsScreenState extends State<CommentsScreen> {
       count++;
       // Add the number of replies
       count += comment.replies.length;
+      // Add 1 for "load more replies" button if applicable
+      if (comment.hasMoreReplies) {
+        count++;
+      }
     }
     return count;
   }
@@ -769,6 +795,178 @@ class _CommentsScreenState extends State<CommentsScreen> {
         ),
       ),
     );
+  }
+
+  // Widget to display the load more replies button
+  Widget _buildLoadMoreRepliesButton(Comment comment) {
+    // Track if this specific button is in loading state
+    final isLoading = _loadingRepliesIds.contains(comment.id);
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 40.0, bottom: 16.0),
+      child: InkWell(
+        onTap: isLoading ? null : () => _loadMoreReplies(comment),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+          decoration: BoxDecoration(
+            color: Theme.of(
+              context,
+            ).colorScheme.surfaceVariant.withOpacity(0.7),
+            borderRadius: BorderRadius.circular(8.0),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isLoading)
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                )
+              else
+                Text(
+                  'Xem thêm ${comment.remainingReplies} trả lời',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              if (!isLoading) ...[
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.keyboard_arrow_down,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Method to load more replies for a comment
+  Future<void> _loadMoreReplies(Comment comment) async {
+    // Don't load if already loading
+    if (_loadingRepliesIds.contains(comment.id)) return;
+
+    setState(() {
+      // Set loading state
+      _loadingRepliesIds.add(comment.id);
+    });
+
+    try {
+      // Call the service to load more replies
+      final result = await _crawlerService.fetchCommentReplies(
+        comment.id,
+        comment.replies.length.toString(), // offset
+        comment.lastReplyId, // after ID
+        context,
+      );
+
+      if (!mounted) return;
+
+      // Parse the HTML content to extract comments
+      final document = parser.parse(result['html'] as String);
+      final commentItems = document.querySelectorAll('.ln-comment-item');
+
+      print('Found ${commentItems.length} additional replies');
+
+      // Parse the new replies
+      final List<Map<String, dynamic>> newRepliesJson = [];
+      for (final item in commentItems) {
+        try {
+          final id = item.attributes['data-comment'] ?? '';
+          final parentId = item.attributes['data-parent'] ?? '';
+
+          if (id.isEmpty || parentId.isEmpty) continue;
+
+          // Extract user information
+          final userElement = item.querySelector('.ln-username');
+          final userName = userElement?.text ?? 'Unknown';
+          final userUrl = userElement?.attributes['href'] ?? '';
+
+          // Extract avatar
+          final avatarElement = item.querySelector('.w-\\[50px\\] img');
+          final userImage = avatarElement?.attributes['src'] ?? '';
+
+          // Extract content
+          final contentElement = item.querySelector('.ln-comment-content');
+          final content = contentElement?.text.trim() ?? '';
+
+          // Extract timestamp
+          final timeElement = item.querySelector('time.timeago');
+          final timestamp = timeElement?.text.trim() ?? '';
+          final rawTimestamp = timeElement?.attributes['datetime'] ?? '';
+
+          // Create a comment object
+          newRepliesJson.add({
+            'id': id,
+            'parentId': parentId,
+            'user': {
+              'name': userName,
+              'image': userImage,
+              'url': userUrl,
+              'badges': [],
+            },
+            'content': content,
+            'timestamp': timestamp,
+            'rawTimestamp': rawTimestamp,
+          });
+        } catch (e) {
+          print('Error parsing reply: $e');
+        }
+      }
+
+      // Parse the remaining replies count
+      final remaining =
+          result['remaining'] is int
+              ? result['remaining'] as int
+              : int.tryParse(result['remaining']?.toString() ?? '0') ?? 0;
+
+      // Convert JSON to Comment objects
+      final newReplies =
+          newRepliesJson.map((json) => Comment.fromJson(json)).toList();
+
+      if (newRepliesJson.isEmpty) {
+        print('No new replies found in the response');
+      }
+
+      // Update the comment with new replies
+      setState(() {
+        // Find the comment index
+        final index = _comments.indexWhere((c) => c.id == comment.id);
+        if (index >= 0) {
+          // Update the comment with the new replies
+          _comments[index] = _comments[index].copyWithAdditionalReplies(
+            newReplies,
+            remaining,
+          );
+
+          print(
+            'Updated comment ${comment.id} with ${newReplies.length} new replies. Remaining: $remaining',
+          );
+        } else {
+          print('Comment not found in list. ID: ${comment.id}');
+        }
+
+        // Remove loading state
+        _loadingRepliesIds.remove(comment.id);
+      });
+    } catch (e) {
+      // Show error and log
+      print('Error loading more replies: $e');
+      CustomToast.show(context, 'Error loading more replies: $e');
+
+      setState(() {
+        // Remove loading state on error
+        _loadingRepliesIds.remove(comment.id);
+      });
+    }
   }
 
   Widget? _buildPaginationBar() {

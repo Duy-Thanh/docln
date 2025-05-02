@@ -15,6 +15,11 @@ class Comment {
   final String parentId; // ID of the parent comment if this is a reply
   final List<Comment> replies; // List of replies to this comment
 
+  // Fields for additional replies loading
+  final int remainingReplies; // Number of remaining replies to load
+  final String lastReplyId; // ID of the last reply in the current list
+  final bool hasMoreReplies; // Whether there are more replies to load
+
   Comment({
     required this.id,
     required this.user,
@@ -31,6 +36,9 @@ class Comment {
     this.isErrorPage = false,
     this.parentId = '',
     this.replies = const [],
+    this.remainingReplies = 0,
+    this.lastReplyId = '',
+    this.hasMoreReplies = false,
   });
 
   factory Comment.fromJson(Map<String, dynamic> json) {
@@ -44,6 +52,27 @@ class Comment {
         repliesJson =
             (json['replies'] as Map<dynamic, dynamic>).values.toList();
       }
+    }
+
+    final replies =
+        repliesJson.isNotEmpty
+            ? repliesJson
+                .map(
+                  (reply) => Comment.fromJson(
+                    reply is Map<String, dynamic>
+                        ? reply
+                        : reply is Map
+                        ? Map<String, dynamic>.from(reply)
+                        : {},
+                  ),
+                )
+                .toList()
+            : <Comment>[];
+
+    // Get the ID of the last reply if there are any replies
+    String lastReplyId = '';
+    if (replies.isNotEmpty) {
+      lastReplyId = replies.last.id;
     }
 
     return Comment(
@@ -64,20 +93,18 @@ class Comment {
       isEmptyPage: json['isEmptyPage'] == true,
       isErrorPage: json['isErrorPage'] == true,
       parentId: json['parentId']?.toString() ?? '',
-      replies:
-          repliesJson.isNotEmpty
-              ? repliesJson
-                  .map(
-                    (reply) => Comment.fromJson(
-                      reply is Map<String, dynamic>
-                          ? reply
-                          : reply is Map
-                          ? Map<String, dynamic>.from(reply)
-                          : {},
-                    ),
-                  )
-                  .toList()
-              : [],
+      replies: replies,
+      remainingReplies:
+          json['remainingReplies'] is int
+              ? json['remainingReplies']
+              : (int.tryParse(json['remainingReplies']?.toString() ?? '0') ??
+                  0),
+      lastReplyId: lastReplyId,
+      hasMoreReplies:
+          json['hasMoreReplies'] == true ||
+          (json['remainingReplies'] != null &&
+              (int.tryParse(json['remainingReplies']?.toString() ?? '0') ?? 0) >
+                  0),
     );
   }
 
@@ -98,6 +125,9 @@ class Comment {
       'isErrorPage': isErrorPage,
       'parentId': parentId,
       'replies': replies.map((reply) => reply.toJson()).toList(),
+      'remainingReplies': remainingReplies,
+      'lastReplyId': lastReplyId,
+      'hasMoreReplies': hasMoreReplies,
     };
   }
 
@@ -106,6 +136,31 @@ class Comment {
 
   // Helper to get the complete thread (this comment + all its replies)
   List<Comment> get thread => [this, ...replies];
+
+  // Create a copy of this comment with updated replies
+  Comment copyWithAdditionalReplies(List<Comment> newReplies, int remaining) {
+    final List<Comment> updatedReplies = [...replies, ...newReplies];
+    return Comment(
+      id: id,
+      user: user,
+      content: content,
+      timestamp: timestamp,
+      rawTimestamp: rawTimestamp,
+      likes: likes,
+      hasMorePages: hasMorePages,
+      nextPageUrl: nextPageUrl,
+      hasPrevPage: hasPrevPage,
+      prevPageUrl: prevPageUrl,
+      currentPage: currentPage,
+      isEmptyPage: isEmptyPage,
+      isErrorPage: isErrorPage,
+      parentId: parentId,
+      replies: updatedReplies,
+      remainingReplies: remaining,
+      lastReplyId: updatedReplies.isNotEmpty ? updatedReplies.last.id : '',
+      hasMoreReplies: remaining > 0,
+    );
+  }
 }
 
 class CommentUser {
