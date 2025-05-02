@@ -39,50 +39,18 @@ class _CommentsScreenState extends State<CommentsScreen> {
   void initState() {
     super.initState();
     _loadComments();
-    // Add scroll listener for more reliable pagination
-    _scrollController.addListener(_handleScroll);
+    // Track scroll position for UI purposes, but don't auto-load
+    _scrollController.addListener(_onScroll);
   }
 
   @override
   void dispose() {
-    _scrollController.removeListener(_handleScroll);
+    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
   }
 
-  // Dedicated scroll handler for pagination
-  void _handleScroll() {
-    // Skip if no clients or content
-    if (!_scrollController.hasClients) return;
-
-    // Return if conditions aren't right for loading more
-    if (_isLoadingMore || !_hasMoreComments || _recentlyChangedPage) {
-      return;
-    }
-
-    // Only load when user has scrolled all the way to the bottom (within a small threshold)
-    final maxScroll = _scrollController.position.maxScrollExtent;
-    final currentScroll = _scrollController.position.pixels;
-
-    // Define a very small threshold (20 pixels) to account for rounding errors
-    const threshold = 10.0;
-
-    // Only trigger pagination when exactly at the bottom
-    final isAtBottom = (maxScroll - currentScroll) <= threshold;
-
-    if (isAtBottom) {
-      // Debounce to prevent multiple calls
-      final now = DateTime.now();
-      if (now.difference(_lastLoadTime).inMilliseconds < 200) {
-        return;
-      }
-
-      print("Auto-loading next page from scroll handler - user at bottom");
-      _loadMoreComments();
-    }
-  }
-
-  // The rest of the existing code for tracking scroll position can remain
+  // Just track scroll position without auto-loading
   void _onScroll() {
     setState(() {
       _lastScrollPosition = _scrollController.position.pixels;
@@ -424,12 +392,25 @@ class _CommentsScreenState extends State<CommentsScreen> {
       // Each comment can have multiple items (the comment itself + its replies + load more buttons)
       itemCount: _calculateTotalItemCount() + (_hasMoreComments ? 1 : 0),
       itemBuilder: (context, index) {
-        // Show loading indicator if we're at the end and have more comments to load
+        // Show load more button if we're at the end and have more comments to load
         if (index == _calculateTotalItemCount() && _hasMoreComments) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(16.0),
-              child: CircularProgressIndicator(),
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16.0),
+            child: Center(
+              child: ElevatedButton.icon(
+                onPressed: _isLoadingMore ? null : _loadMoreComments,
+                icon:
+                    _isLoadingMore
+                        ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                        : const Icon(Icons.more_horiz),
+                label: Text(
+                  _isLoadingMore ? 'Đang tải...' : 'Tải thêm bình luận',
+                ),
+              ),
             ),
           );
         }
