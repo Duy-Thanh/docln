@@ -11,6 +11,7 @@ dependencies:
     sdk: flutter
   flutter:
     sdk: flutter
+  sqlite3: ^2.7.5
   http: ^1.3.0
   html: ^0.15.6
   shared_preferences: ^2.5.3
@@ -52,6 +53,7 @@ dependencies:
   timeago: ^3.7.0
   path_provider: ^2.1.5
   wireguard_flutter: ^0.1.3
+  file_picker: ^8.0.0+1 # For importing/exporting preferences
 
 dev_dependencies:
   flutter_test:

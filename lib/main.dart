@@ -16,6 +16,7 @@ import 'screens/HistoryScreen.dart';
 import 'handler/system_ui_handler.dart';
 import 'screens/HomeScreen.dart';
 import 'services/crawler_service.dart';
+import 'services/preferences_recovery_service.dart';
 
 // Firebase
 import 'package:firebase_core/firebase_core.dart';
@@ -47,6 +48,9 @@ void main() async {
     parameters: {'time': DateTime.now().toString()},
   );
 
+  // Check and repair preferences if corrupted (before initializing other services)
+  await PreferencesRecoveryService.repairIfNeeded();
+
   final themeService = ThemeServices();
   final languageService = LanguageService();
   final notificationService = NotificationService();
@@ -56,6 +60,7 @@ void main() async {
   final httpClient = AppHttpClient();
   final dnsService = DnsService();
   final crawlerService = CrawlerService();
+  final preferencesRecoveryService = PreferencesRecoveryService();
 
   await Future.wait([
     themeService.init(),
@@ -67,6 +72,7 @@ void main() async {
     httpClient.initialize(),
     dnsService.initialize(),
     crawlerService.initialize(),
+    preferencesRecoveryService.initialize(),
   ]);
 
   // Set initial system UI styling

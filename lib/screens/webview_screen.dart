@@ -17,6 +17,8 @@ import '../screens/HistoryScreen.dart';
 import 'package:provider/provider.dart';
 import '../modules/light_novel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/preferences_recovery_service.dart';
+import '../screens/custom_toast.dart';
 
 class WebViewScreen extends StatefulWidget {
   final String url;
@@ -38,6 +40,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   bool _isDarkMode = false;
   double _textZoom = 100.0;
   bool _isAdBlockEnabled = true;
+  bool _preferencesBackedUp = false;
 
   // List of allowed domains
   final List<String> _allowedDomains = [
@@ -77,8 +80,66 @@ class _WebViewScreenState extends State<WebViewScreen> {
   void initState() {
     super.initState();
     _optimizeScreen();
+    _backupPreferencesSafely();
     _loadSettings();
     _loadAdBlockRules();
+  }
+
+  @override
+  void dispose() {
+    _checkForCorruptionOnExit();
+    super.dispose();
+  }
+
+  Future<void> _backupPreferencesSafely() async {
+    try {
+      final recoveryService = PreferencesRecoveryService();
+      final success = await recoveryService.backupPreferences();
+
+      if (mounted) {
+        setState(() {
+          _preferencesBackedUp = success;
+        });
+      }
+
+      if (success) {
+        debugPrint('Preferences backed up successfully before WebView session');
+      } else {
+        debugPrint('Failed to backup preferences before WebView session');
+      }
+    } catch (e) {
+      debugPrint('Error backing up preferences: $e');
+    }
+  }
+
+  Future<void> _checkForCorruptionOnExit() async {
+    if (!_preferencesBackedUp) return;
+
+    try {
+      final recoveryService = PreferencesRecoveryService();
+      final prefs = await SharedPreferences.getInstance();
+      final recoveryNeeded = prefs.getKeys().length > 0 && Platform.isIOS;
+
+      if (recoveryNeeded && mounted) {
+        debugPrint('Proactively checking preferences after WebView session');
+
+        CustomToast.show(
+          context,
+          'Verifying preferences integrity after WebView...',
+          duration: const Duration(seconds: 3),
+        );
+
+        final repaired = await recoveryService.recoverPreferences(context);
+
+        if (repaired && mounted) {
+          debugPrint('Successfully verified preferences after WebView');
+        } else if (mounted) {
+          debugPrint('Failed to verify preferences after WebView');
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking for preferences corruption: $e');
+    }
   }
 
   Future<void> _loadSettings() async {
@@ -1554,11 +1615,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
         ),
       ],
     );
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
   }
 
   // Function to add the current novel to history
