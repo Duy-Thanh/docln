@@ -13,6 +13,8 @@ import '../widgets/eye_protection_overlay.dart';
 import '../widgets/eye_friendly_text.dart';
 import '../widgets/network_image.dart';
 import '../screens/EyeCareScreen.dart';
+import '../services/settings_services.dart';
+import 'comments_screen.dart';
 
 // Define content block types
 enum ContentBlockType { paragraph, header, image }
@@ -992,6 +994,11 @@ class _ReaderScreenState extends State<ReaderScreen>
         iconTheme: IconThemeData(color: _textColor),
         actions: [
           IconButton(
+            icon: const Icon(Icons.comment),
+            onPressed: _openComments,
+            tooltip: 'View comments',
+          ),
+          IconButton(
             icon: Icon(_isDarkMode ? Icons.light_mode : Icons.dark_mode),
             onPressed: _toggleTheme,
             tooltip: 'Toggle theme',
@@ -1534,6 +1541,19 @@ class _ReaderScreenState extends State<ReaderScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _openComments() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder:
+            (context) => CommentsScreen(
+              url: widget.url,
+              title: widget.chapterTitle ?? widget.title,
+            ),
       ),
     );
   }

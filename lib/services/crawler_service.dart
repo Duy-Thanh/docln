@@ -11,6 +11,8 @@ import '../services/http_client.dart';
 import '../services/dns_service.dart';
 import '../services/settings_services.dart';
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math' as math;
 
 class CrawlerService {
   // Primary server domains
@@ -1566,5 +1568,661 @@ class CrawlerService {
     );
 
     return cleanedHtml;
+  }
+
+  // Add a new method to fetch comments
+  Future<List<Map<String, dynamic>>> getChapterComments(
+    String url,
+    BuildContext context,
+  ) async {
+    try {
+      // Extract the chapter ID and novel ID from the URL if needed for AJAX requests
+      String chapterId = '';
+      String novelId = '';
+
+      // Parse the URL to extract needed identifiers
+      RegExp urlPattern = RegExp(r'/truyen/(\d+)-[^/]+/c(\d+)-');
+      Match? match = urlPattern.firstMatch(url);
+      if (match != null && match.groupCount >= 2) {
+        novelId = match.group(1) ?? '';
+        chapterId = match.group(2) ?? '';
+        print('Extracted novelId: $novelId, chapterId: $chapterId');
+      } else {
+        // Use direct URL approach as fallback
+        print('Could not extract IDs from URL, using direct approach');
+      }
+
+      // Check if this is a pagination request (called with page parameter)
+      if (url.contains('page=')) {
+        // Extract the page number
+        RegExp pagePattern = RegExp(r'page=(\d+)');
+        Match? pageMatch = pagePattern.firstMatch(url);
+        int page = pageMatch != null ? int.parse(pageMatch.group(1) ?? '1') : 1;
+
+        // Use AJAX pagination endpoint instead
+        String baseUrl = '';
+        if (url.startsWith('http')) {
+          Uri uri = Uri.parse(url);
+          baseUrl = '${uri.scheme}://${uri.host}';
+        } else {
+          // Try to determine the base URL from a working server
+          baseUrl = await _getWorkingServer() ?? 'https://ln.hako.vn';
+        }
+
+        // First, we need to get a valid CSRF token by loading the main page
+        final chapterUrl = url.split('?')[0];
+        final tokenResponse = await _httpClient.get(
+          chapterUrl,
+          headers: {
+            'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept':
+                'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          },
+        );
+
+        // Extract CSRF token from the response
+        String csrfToken = '';
+        if (tokenResponse.statusCode == 200) {
+          final htmlDoc = parser.parse(tokenResponse.body);
+          final metaTag = htmlDoc.querySelector('meta[name="csrf-token"]');
+          csrfToken = metaTag?.attributes['content'] ?? '';
+          print('Found CSRF token: ${csrfToken.isNotEmpty ? "Yes" : "No"}');
+        }
+
+        // Get cookies from the response
+        Map<String, String> cookieMap = {};
+        String rawCookies = tokenResponse.headers['set-cookie'] ?? '';
+
+        // Process all cookies from the response
+        if (rawCookies.isNotEmpty) {
+          final cookieParts = rawCookies.split(',');
+          for (final cookiePart in cookieParts) {
+            final cookieString = cookiePart.trim();
+            if (cookieString.isNotEmpty) {
+              final mainPart = cookieString.split(';').first.trim();
+              if (mainPart.contains('=')) {
+                final keyValue = mainPart.split('=');
+                if (keyValue.length == 2) {
+                  final key = keyValue[0].trim();
+                  final value = keyValue[1].trim();
+                  cookieMap[key] = value;
+                }
+              }
+            }
+          }
+        }
+
+        // Also check for XSRF-TOKEN in the cookies - many Laravel apps use this
+        final xsrfTokenFromCookie = cookieMap['XSRF-TOKEN'] ?? '';
+        if (xsrfTokenFromCookie.isNotEmpty && csrfToken.isEmpty) {
+          // Decode URL-encoded token
+          try {
+            csrfToken = Uri.decodeComponent(xsrfTokenFromCookie);
+            // Some Laravel applications encode the token twice
+            if (csrfToken.contains('%')) {
+              csrfToken = Uri.decodeComponent(csrfToken);
+            }
+          } catch (e) {
+            print('Error decoding XSRF token: $e');
+            csrfToken = xsrfTokenFromCookie;
+          }
+        }
+
+        // Build cookie header value from map
+        final cookieHeader = cookieMap.entries
+            .map((e) => '${e.key}=${e.value}')
+            .join('; ');
+        print('Prepared cookies: ${cookieHeader.isNotEmpty ? "Yes" : "No"}');
+
+        // Extract the type_id (chapter ID) from the URL for AJAX request
+        String typeId = '';
+        RegExp chapterPattern = RegExp(r'/c(\d+)-');
+        Match? chapterMatch = chapterPattern.firstMatch(chapterUrl);
+
+        if (chapterMatch != null && chapterMatch.groupCount >= 1) {
+          typeId = chapterMatch.group(1) ?? '';
+          print('Extracted typeId for request: $typeId');
+        } else {
+          typeId = chapterId; // Fallback to previously extracted chapter ID
+        }
+
+        // Use the AJAX endpoint for pagination
+        url = '$baseUrl/comment/ajax_paging';
+
+        // Make a POST request to the AJAX endpoint with the correct parameters
+        final response = await _httpClient.post(
+          url,
+          headers: {
+            'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json, text/javascript, */*; q=0.01',
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Origin': baseUrl,
+            'Referer': chapterUrl,
+            'X-CSRF-TOKEN': csrfToken,
+            if (cookieHeader.isNotEmpty) 'Cookie': cookieHeader,
+          },
+          body:
+              '_token=${Uri.encodeComponent(csrfToken)}&type=chapter&type_id=$typeId&page=$page',
+        );
+
+        if (response.statusCode != 200) {
+          throw Exception(
+            'Failed to load comments: HTTP ${response.statusCode}',
+          );
+        }
+
+        // Print raw response for debugging
+        print(
+          'Raw AJAX response body: ${response.body.substring(0, math.min(1000, response.body.length))}...',
+        );
+
+        // Parse the JSON response
+        final jsonResponse = json.decode(response.body);
+        if (jsonResponse['html'] != null) {
+          // Print a sample of the HTML for debugging
+          print(
+            'HTML content sample: ${jsonResponse['html'].substring(0, math.min(500, jsonResponse['html'].length))}...',
+          );
+
+          // Parse the HTML content from the JSON response
+          final document = parser.parse(jsonResponse['html']);
+          return _extractCommentsFromDocument(document, url);
+        } else {
+          throw Exception('Invalid AJAX response format');
+        }
+      } else {
+        // Initial load - use direct URL approach
+        if (!url.contains('?comment_id=')) {
+          // Ensure we're using the base chapter URL without comment parameters
+          url = url.split('?')[0];
+        }
+
+        print('Fetching comments from URL: $url');
+
+        final response = await _httpClient.get(
+          url,
+          headers: {
+            'User-Agent':
+                'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
+            'Accept':
+                'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          },
+        );
+
+        if (response.statusCode != 200) {
+          throw Exception(
+            'Failed to load comments: HTTP ${response.statusCode}',
+          );
+        }
+
+        // Print raw response for debugging
+        print(
+          'Raw direct URL response sample: ${response.body.substring(0, math.min(1000, response.body.length))}...',
+        );
+
+        final document = parser.parse(response.body);
+        return _extractCommentsFromDocument(document, url);
+      }
+    } catch (e) {
+      print('Error fetching comments: $e');
+      CustomToast.show(context, 'Error loading comments: $e');
+      return [];
+    }
+  }
+
+  // Helper method to extract comments from HTML document
+  List<Map<String, dynamic>> _extractCommentsFromDocument(
+    dom.Document document,
+    String url,
+  ) {
+    // Get current page number from URL
+    int currentPage = _extractPageNumberFromUrl(url);
+
+    // Print document information for debugging
+    print('Document body length: ${document.body?.text.length ?? 0}');
+    print(
+      'Document tags found: ${document.querySelectorAll('main, div, section').length}',
+    );
+
+    // Check if the document has the "no comments" message using text content
+    bool hasNoCommentsMessage = false;
+    final bodyText = document.body?.text ?? '';
+
+    // Check if the text contains the Vietnamese "no comments" message
+    if (bodyText.contains('Không có bình luận nào')) {
+      print('No comments found on this page (detected in text)');
+      hasNoCommentsMessage = true;
+    }
+
+    // Also look for the empty state element
+    final emptyStateIcons = document.querySelectorAll(
+      '.comment-empty-icon, .empty-icon',
+    );
+    if (emptyStateIcons.isNotEmpty) {
+      print('No comments found on this page (detected empty icon)');
+      hasNoCommentsMessage = true;
+    }
+
+    // If we found a "no comments" message, return an empty list with a special flag
+    if (hasNoCommentsMessage) {
+      // Return a special comment that indicates no comments were found
+      return [
+        {
+          'id': 'empty',
+          'user': {'name': '', 'image': '', 'url': '', 'badges': []},
+          'content': 'Không có bình luận nào',
+          'timestamp': '',
+          'rawTimestamp': '',
+          'likes': '',
+          'isEmptyPage': true, // Special flag to indicate an empty page
+          'currentPage': currentPage,
+          'hasMorePages': false,
+          'nextPageUrl': '',
+          'hasPrevPage': currentPage > 1,
+          'prevPageUrl': _constructPrevPageUrl(url, currentPage),
+        },
+      ];
+    }
+
+    // Find comments section in the document
+    var commentsSection = document.querySelector('main.ln-comment-body');
+    if (commentsSection == null) {
+      print('No comments section found in the HTML');
+
+      // Try alternative selectors and log what we find
+      final alternativeCommentSections = document.querySelectorAll(
+        '.ln-comment, #comments, .comments-section, .comment-list',
+      );
+      if (alternativeCommentSections.isNotEmpty) {
+        print(
+          'Found alternative comment sections: ${alternativeCommentSections.length}',
+        );
+        for (
+          var i = 0;
+          i < math.min(alternativeCommentSections.length, 3);
+          i++
+        ) {
+          print(
+            'Alternative section ${i + 1} classes: ${alternativeCommentSections[i].classes.join(', ')}',
+          );
+          print(
+            'Alternative section ${i + 1} content: ${alternativeCommentSections[i].text.substring(0, math.min(alternativeCommentSections[i].text.length, 100))}...',
+          );
+        }
+
+        // Try to use the first alternative section found
+        commentsSection = alternativeCommentSections.first;
+        print('Using alternative comment section for extraction');
+      } else {
+        // Let's look for any divs that might contain the word "comment" in their class or id
+        final possibleCommentSections = document.querySelectorAll(
+          'div[class*="comment"], div[id*="comment"]',
+        );
+        if (possibleCommentSections.isNotEmpty) {
+          print(
+            'Found possible comment sections by name: ${possibleCommentSections.length}',
+          );
+          for (
+            var i = 0;
+            i < math.min(possibleCommentSections.length, 3);
+            i++
+          ) {
+            print(
+              'Possible section ${i + 1} classes: ${possibleCommentSections[i].classes.join(', ')}',
+            );
+            print(
+              'Possible section ${i + 1} content: ${possibleCommentSections[i].text.substring(0, math.min(possibleCommentSections[i].text.length, 100))}...',
+            );
+          }
+
+          // Try to use the first possible section found
+          commentsSection = possibleCommentSections.first;
+          print('Using possible comment section for extraction');
+        } else {
+          // If we still can't find comments, return a special error comment
+          return [
+            {
+              'id': 'error',
+              'user': {'name': '', 'image': '', 'url': '', 'badges': []},
+              'content': 'Không thể tải bình luận',
+              'timestamp': '',
+              'rawTimestamp': '',
+              'likes': '',
+              'isErrorPage': true, // Special flag to indicate an error
+              'currentPage': currentPage,
+              'hasMorePages': false,
+              'nextPageUrl': '',
+              'hasPrevPage': currentPage > 1,
+              'prevPageUrl': _constructPrevPageUrl(url, currentPage),
+            },
+          ];
+        }
+      }
+    }
+
+    // Now try to find comments within the comments section (original or alternative)
+    var commentGroups = document.querySelectorAll('.ln-comment-group');
+
+    // If standard comment groups aren't found, try alternative selectors based on the screenshot
+    if (commentGroups.isEmpty) {
+      print('Standard comment groups not found, trying alternatives');
+
+      // Try selectors that match the screenshot structure
+      commentGroups = document.querySelectorAll(
+        '[class*="comment-item"], [class*="comment_item"]',
+      );
+      if (commentGroups.isNotEmpty) {
+        print('Found alternative comment items: ${commentGroups.length}');
+      }
+    }
+
+    final comments = <Map<String, dynamic>>[];
+
+    // If no comment groups are found but we have a comments section
+    if (commentGroups.isEmpty) {
+      print('Comments section found but no comments inside');
+      // Return a special comment for empty comments section
+      return [
+        {
+          'id': 'empty',
+          'user': {'name': '', 'image': '', 'url': '', 'badges': []},
+          'content': 'Không có bình luận nào',
+          'timestamp': '',
+          'rawTimestamp': '',
+          'likes': '',
+          'isEmptyPage': true, // Special flag to indicate an empty page
+          'currentPage': currentPage,
+          'hasMorePages': false,
+          'nextPageUrl': '',
+          'hasPrevPage': currentPage > 1,
+          'prevPageUrl': _constructPrevPageUrl(url, currentPage),
+        },
+      ];
+    }
+
+    for (final group in commentGroups) {
+      // Try to handle both original and alternative comment structures
+      final commentItem = group.querySelector('.ln-comment-item') ?? group;
+      if (commentItem == null) continue;
+
+      // Extract comment ID
+      final commentId =
+          commentItem.attributes['data-comment'] ?? commentItem.id ?? '';
+
+      // Extract user info
+      String userImage = '';
+      String userName = '';
+      String userUrl = '';
+
+      // First try standard selectors
+      final avatarContainer = commentItem.querySelector('.w-\\[50px\\]');
+      if (avatarContainer != null) {
+        final imgElement = avatarContainer.querySelector('img');
+        if (imgElement != null) {
+          userImage = imgElement.attributes['src'] ?? '';
+        }
+      }
+
+      // If still no image, try alternative selectors based on screenshot
+      if (userImage.isEmpty) {
+        // Try looking for avatar images with standard classes
+        final imgElements = commentItem.querySelectorAll(
+          'img[class*="avatar"], .avatar img, img[src*="avatar"]',
+        );
+        if (imgElements.isNotEmpty) {
+          userImage = imgElements.first.attributes['src'] ?? '';
+        } else {
+          // Fallback to first image in the comment
+          final allImgs = commentItem.querySelectorAll('img');
+          if (allImgs.isNotEmpty) {
+            userImage = allImgs.first.attributes['src'] ?? '';
+          }
+        }
+      }
+
+      // Try standard username selector
+      userName = commentItem.querySelector('.ln-username')?.text.trim() ?? '';
+      userUrl =
+          commentItem.querySelector('.ln-username')?.attributes['href'] ?? '';
+
+      // If username is empty, try alternatives
+      if (userName.isEmpty) {
+        // Try common username selectors based on the screenshot
+        final usernameElement =
+            commentItem.querySelector(
+              '.username, .user-name, .author, [class*="user-name"], strong, b',
+            ) ??
+            commentItem.querySelector('a');
+        if (usernameElement != null) {
+          userName = usernameElement.text.trim();
+          if (usernameElement.localName == 'a') {
+            userUrl = usernameElement.attributes['href'] ?? '';
+          }
+        }
+      }
+
+      // Get user badges/roles - try both original and alternative selectors
+      final badges = <String>[];
+
+      // First try standard badge selectors
+      final userInfo = commentItem.querySelector('.flex-wrap');
+      if (userInfo != null) {
+        final badgeElements = userInfo.querySelectorAll('.leading-4');
+        for (final badgeElement in badgeElements) {
+          final badgeText = badgeElement.text.trim();
+          if (badgeText.isNotEmpty) {
+            badges.add(badgeText);
+          }
+        }
+      }
+
+      // Try alternative badge selectors if none found
+      if (badges.isEmpty) {
+        final altBadgeElements = commentItem.querySelectorAll(
+          '.badge, [class*="badge"], .tag, [class*="role"]',
+        );
+        for (final badgeElement in altBadgeElements) {
+          final badgeText = badgeElement.text.trim();
+          if (badgeText.isNotEmpty) {
+            badges.add(badgeText);
+          }
+        }
+      }
+
+      // Extract comment content - try both standard and alternative selectors
+      var commentContent =
+          commentItem.querySelector('.ln-comment-content')?.text.trim() ?? '';
+
+      // If content is empty, try alternatives
+      if (commentContent.isEmpty) {
+        // Try common content selectors
+        final contentElement =
+            commentItem.querySelector(
+              '.content, .comment-content, .text, [class*="content"], p',
+            ) ??
+            commentItem.querySelector('div:not(:has(img))');
+        if (contentElement != null) {
+          commentContent = contentElement.text.trim();
+
+          // If the content includes the username at the beginning, try to remove it
+          if (userName.isNotEmpty && commentContent.startsWith(userName)) {
+            commentContent = commentContent.substring(userName.length).trim();
+          }
+        } else {
+          // As a last resort, get all text from the comment item and try to extract content
+          commentContent = commentItem.text.trim();
+
+          // Try to clean up by removing username if present
+          if (userName.isNotEmpty && commentContent.startsWith(userName)) {
+            commentContent = commentContent.substring(userName.length).trim();
+          }
+        }
+      }
+
+      // Extract timestamp - try both standard and alternative selectors
+      final timeElement = commentItem.querySelector('time.timeago');
+      String timestamp = '';
+      String rawTimestamp = '';
+
+      if (timeElement != null) {
+        timestamp = timeElement.text.trim();
+        rawTimestamp = timeElement.attributes['datetime'] ?? '';
+      } else {
+        // Try alternative timestamp selectors
+        final altTimeElement =
+            commentItem.querySelector(
+              '.time, .timestamp, .date, [class*="time"], [class*="date"], small',
+            ) ??
+            commentItem.querySelectorAll('span').lastOrNull;
+        if (altTimeElement != null) {
+          timestamp = altTimeElement.text.trim();
+          rawTimestamp = altTimeElement.attributes['datetime'] ?? timestamp;
+
+          // If timestamp is not empty but looks like other content, clear it
+          if (timestamp.length > 30) {
+            timestamp = '';
+          }
+        }
+      }
+
+      // Create comment object
+      final comment = {
+        'id': commentId,
+        'user': {
+          'name': userName,
+          'image': userImage,
+          'url': userUrl,
+          'badges': badges,
+        },
+        'content': commentContent,
+        'timestamp': timestamp,
+        'rawTimestamp': rawTimestamp,
+        'likes': '',
+      };
+
+      comments.add(comment);
+    }
+
+    // Check for pagination
+    final paginationDiv = document.querySelector('.ln-comment-page');
+    bool hasMorePages = false;
+    String nextPageUrl = '';
+    bool hasPrevPage = false;
+    String prevPageUrl = '';
+    // We already have currentPage defined at the beginning of the method
+
+    if (paginationDiv != null) {
+      // Extract current page from next/prev links
+      final prevButton = paginationDiv.querySelector('.paging_item.prev');
+      final nextButton = paginationDiv.querySelector('.paging_item.next');
+
+      // Check if next button exists and is not disabled
+      if (nextButton != null && !nextButton.classes.contains('disabled')) {
+        hasMorePages = true;
+        nextPageUrl = nextButton.attributes['href'] ?? '';
+
+        // Make sure we have a properly formatted URL
+        if (nextPageUrl.isNotEmpty && !nextPageUrl.startsWith('http')) {
+          // Extract base URL from the original URL
+          String baseUrl = '';
+          if (url.startsWith('http')) {
+            Uri uri = Uri.parse(url);
+            baseUrl = '${uri.scheme}://${uri.host}';
+            if (!nextPageUrl.startsWith('/')) {
+              nextPageUrl = '/$nextPageUrl';
+            }
+            nextPageUrl = '$baseUrl$nextPageUrl';
+          }
+        }
+
+        // Extract page number from URL if we couldn't determine it otherwise
+        if (currentPage <= 1) {
+          final pageMatch = RegExp(r'page=(\d+)').firstMatch(nextPageUrl);
+          if (pageMatch != null && pageMatch.group(1) != null) {
+            // Current page is one less than next page
+            currentPage = int.parse(pageMatch.group(1)!) - 1;
+          }
+        }
+      }
+
+      // Check if prev button exists and is not disabled
+      if (prevButton != null && !prevButton.classes.contains('disabled')) {
+        hasPrevPage = true;
+        prevPageUrl = prevButton.attributes['href'] ?? '';
+
+        // Make sure we have a properly formatted URL
+        if (prevPageUrl.isNotEmpty && !prevPageUrl.startsWith('http')) {
+          // Extract base URL from the original URL
+          String baseUrl = '';
+          if (url.startsWith('http')) {
+            Uri uri = Uri.parse(url);
+            baseUrl = '${uri.scheme}://${uri.host}';
+            if (!prevPageUrl.startsWith('/')) {
+              prevPageUrl = '/$prevPageUrl';
+            }
+            prevPageUrl = '$baseUrl$prevPageUrl';
+          }
+        }
+
+        // If we couldn't determine current page from next link, try from prev link
+        if (currentPage <= 1 && prevPageUrl.isNotEmpty) {
+          final pageMatch = RegExp(r'page=(\d+)').firstMatch(prevPageUrl);
+          if (pageMatch != null && pageMatch.group(1) != null) {
+            // Current page is one more than prev page
+            currentPage = int.parse(pageMatch.group(1)!) + 1;
+          }
+        }
+      } else if (prevButton != null &&
+          prevButton.classes.contains('disabled')) {
+        // If prev is disabled, we're on page 1
+        currentPage = 1;
+      }
+
+      // If there's text in the pagination that indicates the page number
+      final paginationText = paginationDiv.text;
+      final explicitPageMatch = RegExp(
+        r'Trang\s+(\d+)',
+      ).firstMatch(paginationText);
+      if (explicitPageMatch != null && explicitPageMatch.group(1) != null) {
+        currentPage = int.parse(explicitPageMatch.group(1)!);
+      }
+    }
+
+    // Add pagination info to the last comment
+    if (comments.isNotEmpty) {
+      comments.last['hasMorePages'] = hasMorePages;
+      comments.last['nextPageUrl'] = nextPageUrl;
+      comments.last['hasPrevPage'] = hasPrevPage;
+      comments.last['prevPageUrl'] = prevPageUrl;
+      comments.last['currentPage'] = currentPage;
+    }
+
+    return comments;
+  }
+
+  // Helper to extract page number from URL
+  int _extractPageNumberFromUrl(String url) {
+    final pageMatch = RegExp(r'page=(\d+)').firstMatch(url);
+    if (pageMatch != null && pageMatch.group(1) != null) {
+      return int.parse(pageMatch.group(1)!);
+    }
+    return 1; // Default to page 1 if no page number found
+  }
+
+  // Helper to construct previous page URL
+  String _constructPrevPageUrl(String url, int currentPage) {
+    if (currentPage <= 1) return '';
+
+    final baseUrl = url.split('?')[0];
+    if (currentPage == 2) {
+      // For page 2, going back to page 1 means the original URL without page parameter
+      return baseUrl;
+    } else {
+      // For other pages, decrement the page number
+      return '$baseUrl?page=${currentPage - 1}';
+    }
   }
 }
