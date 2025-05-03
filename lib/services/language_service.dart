@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'preferences_service.dart';
 
 class Language {
   final String code;
@@ -14,6 +14,9 @@ class LanguageService extends ChangeNotifier {
   static final LanguageService _instance = LanguageService._internal();
   factory LanguageService() => _instance;
   LanguageService._internal();
+
+  // Preferences service instance
+  final PreferencesService _prefsService = PreferencesService();
 
   // List of supported languages
   static const List<Language> supportedLanguages = [
@@ -37,8 +40,13 @@ class LanguageService extends ChangeNotifier {
 
   Future<void> init() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final savedCode = prefs.getString('languageCode') ?? 'en';
+      // Initialize preferences service if not already initialized
+      await _prefsService.initialize();
+
+      final savedCode = _prefsService.getString(
+        'languageCode',
+        defaultValue: 'en',
+      );
       await setLanguage(savedCode);
     } catch (e) {
       print('🌐 Error initializing language service: $e');
@@ -52,12 +60,11 @@ class LanguageService extends ChangeNotifier {
         orElse: () => supportedLanguages.first,
       );
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('languageCode', code);
-      
+      await _prefsService.setString('languageCode', code);
+
       _currentLocale = Locale(code);
       _currentLanguage = language;
-      
+
       print('🌐 Language set to: ${language.name} (${language.nativeName})');
       notifyListeners();
     } catch (e) {

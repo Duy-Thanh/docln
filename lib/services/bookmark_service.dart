@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../modules/light_novel.dart';
+import 'preferences_service.dart';
 
 class BookmarkService extends ChangeNotifier {
   static final BookmarkService _instance = BookmarkService._internal();
   factory BookmarkService() => _instance;
 
   BookmarkService._internal();
+
+  // Preferences service instance
+  final PreferencesService _prefsService = PreferencesService();
 
   static const String _bookmarksKey = 'bookmarked_novels';
   List<LightNovel> _bookmarkedNovels = [];
@@ -20,10 +23,12 @@ class BookmarkService extends ChangeNotifier {
 
   Future<void> loadBookmarks() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final String? bookmarksJson = prefs.getString(_bookmarksKey);
+      // Initialize preferences service if not already initialized
+      await _prefsService.initialize();
 
-      if (bookmarksJson != null) {
+      final String bookmarksJson = _prefsService.getString(_bookmarksKey);
+
+      if (bookmarksJson.isNotEmpty) {
         final List<dynamic> bookmarksList = jsonDecode(bookmarksJson);
         _bookmarkedNovels =
             bookmarksList.map((json) => LightNovel.fromJson(json)).toList();
@@ -39,12 +44,11 @@ class BookmarkService extends ChangeNotifier {
 
   Future<void> saveBookmarks() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
       final String bookmarksJson = jsonEncode(
         _bookmarkedNovels.map((novel) => novel.toJson()).toList(),
       );
 
-      await prefs.setString(_bookmarksKey, bookmarksJson);
+      await _prefsService.setString(_bookmarksKey, bookmarksJson);
     } catch (e) {
       print('Error saving bookmarks: $e');
     }

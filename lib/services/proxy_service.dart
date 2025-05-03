@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'settings_services.dart';
 import 'dart:async';
 

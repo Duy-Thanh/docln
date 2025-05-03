@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:convert';
+import 'preferences_service.dart';
 
 /// Eye Protection Service to reduce eye strain while reading
 ///
@@ -55,6 +55,9 @@ class EyeProtectionService {
 
   // Ambient light sensitivity (0.0-1.0)
   double _ambientLightSensitivity = 0.5;
+
+  // Preferences service instance
+  final PreferencesService _prefsService = PreferencesService();
 
   // Getters
   bool get eyeProtectionEnabled => _eyeProtectionEnabled;
@@ -157,96 +160,99 @@ class EyeProtectionService {
     _readingStartTime = DateTime.now();
   }
 
-  // Load preferences from SharedPreferences
+  // Load preferences from PreferencesService
   Future<void> loadPreferences() async {
-    final prefs = await SharedPreferences.getInstance();
+    // Initialize preferences service
+    await _prefsService.initialize();
 
     _eyeProtectionEnabled =
-        prefs.getBool('eye_protection_enabled') ?? defaultEyeProtectionEnabled;
+        _prefsService.getBool('eye_protection_enabled') ??
+        defaultEyeProtectionEnabled;
     _blueFilterLevel =
-        prefs.getDouble('blue_filter_level') ?? defaultBlueFilter;
+        _prefsService.getDouble('blue_filter_level') ?? defaultBlueFilter;
     _contrastReduction =
-        prefs.getDouble('contrast_reduction') ?? defaultContrastReduction;
+        _prefsService.getDouble('contrast_reduction') ??
+        defaultContrastReduction;
     _brightnessAdjustment =
-        prefs.getDouble('brightness_adjustment') ?? defaultBrightnessAdjustment;
+        _prefsService.getDouble('brightness_adjustment') ??
+        defaultBrightnessAdjustment;
     _readingTimerDuration =
-        prefs.getInt('reading_timer_duration') ?? defaultReadingTimer;
+        _prefsService.getInt('reading_timer_duration') ?? defaultReadingTimer;
     _adaptiveBrightnessEnabled =
-        prefs.getBool('adaptive_brightness_enabled') ??
+        _prefsService.getBool('adaptive_brightness_enabled') ??
         defaultAdaptiveBrightnessEnabled;
     _warmColorTemperature =
-        prefs.getDouble('warm_color_temperature') ??
+        _prefsService.getDouble('warm_color_temperature') ??
         defaultWarmColorTemperature;
     _dynamicFilteringEnabled =
-        prefs.getBool('dynamic_filtering_enabled') ??
+        _prefsService.getBool('dynamic_filtering_enabled') ??
         defaultDynamicFilteringEnabled;
     _pupilResponseCompensation =
-        prefs.getDouble('pupil_response_compensation') ??
+        _prefsService.getDouble('pupil_response_compensation') ??
         defaultPupilResponseCompensation;
-    _readingTimerInterval = prefs.getInt('reading_timer_interval') ?? 20;
+    _readingTimerInterval =
+        _prefsService.getInt('reading_timer_interval') ?? 20;
     _periodicalReminderEnabled =
-        prefs.getBool('periodical_reminder_enabled') ?? true;
-    _warmthLevel = prefs.getDouble('warmth_level') ?? 0.5;
+        _prefsService.getBool('periodical_reminder_enabled') ?? true;
+    _warmthLevel = _prefsService.getDouble('warmth_level') ?? 0.5;
     _ambientLightSensitivity =
-        prefs.getDouble('ambient_light_sensitivity') ?? 0.5;
+        _prefsService.getDouble('ambient_light_sensitivity') ?? 0.5;
   }
 
   // Save a preference
   Future<void> savePreference(String key, dynamic value) async {
-    final prefs = await SharedPreferences.getInstance();
-
     switch (key) {
       case 'eye_protection_enabled':
         _eyeProtectionEnabled = value;
-        await prefs.setBool(key, value);
+        await _prefsService.setBool(key, value);
         break;
       case 'blue_filter_level':
         _blueFilterLevel = value;
-        await prefs.setDouble(key, value);
+        await _prefsService.setDouble(key, value);
         break;
       case 'contrast_reduction':
         _contrastReduction = value;
-        await prefs.setDouble(key, value);
+        await _prefsService.setDouble(key, value);
         break;
       case 'brightness_adjustment':
         _brightnessAdjustment = value;
-        await prefs.setDouble(key, value);
+        await _prefsService.setDouble(key, value);
         break;
       case 'reading_timer_duration':
         _readingTimerDuration = value;
-        await prefs.setInt(key, value);
+        await _prefsService.setInt(key, value);
         break;
       case 'adaptive_brightness_enabled':
         _adaptiveBrightnessEnabled = value;
-        await prefs.setBool(key, value);
+        await _prefsService.setBool(key, value);
         break;
       case 'warm_color_temperature':
         _warmColorTemperature = value;
-        await prefs.setDouble(key, value);
+        await _prefsService.setDouble(key, value);
         break;
       case 'dynamic_filtering_enabled':
         _dynamicFilteringEnabled = value;
-        await prefs.setBool(key, value);
+        await _prefsService.setBool(key, value);
         break;
       case 'pupil_response_compensation':
         _pupilResponseCompensation = value;
-        await prefs.setDouble(key, value);
+        await _prefsService.setDouble(key, value);
         break;
       case 'reading_timer_interval':
         _readingTimerInterval = value;
-        await prefs.setInt(key, value);
+        await _prefsService.setInt(key, value);
         break;
       case 'periodical_reminder_enabled':
         _periodicalReminderEnabled = value;
-        await prefs.setBool(key, value);
+        await _prefsService.setBool(key, value);
         break;
       case 'warmth_level':
         _warmthLevel = value;
-        await prefs.setDouble(key, value);
+        await _prefsService.setDouble(key, value);
         break;
       case 'ambient_light_sensitivity':
         _ambientLightSensitivity = value;
-        await prefs.setDouble(key, value);
+        await _prefsService.setDouble(key, value);
         break;
     }
   }

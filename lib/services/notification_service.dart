@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:app_settings/app_settings.dart';
+import 'preferences_service.dart';
 
 class NotificationService extends ChangeNotifier {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _notifications =
+      FlutterLocalNotificationsPlugin();
   bool _isInitialized = false;
   bool _isEnabled = false;
+
+  // Preferences service instance
+  final PreferencesService _prefsService = PreferencesService();
 
   bool get isEnabled => _isEnabled;
 
@@ -20,18 +24,20 @@ class NotificationService extends ChangeNotifier {
 
     try {
       // Initialize settings
-      const initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const initializationSettingsAndroid = AndroidInitializationSettings(
+        '@mipmap/ic_launcher',
+      );
       const initializationSettingsIOS = DarwinInitializationSettings(
         requestAlertPermission: true,
         requestBadgePermission: true,
         requestSoundPermission: true,
       );
-      
+
       final initializationSettings = const InitializationSettings(
         android: initializationSettingsAndroid,
         iOS: initializationSettingsIOS,
       );
-      
+
       await _notifications.initialize(
         initializationSettings,
         onDidReceiveNotificationResponse: (NotificationResponse response) {
@@ -42,11 +48,16 @@ class NotificationService extends ChangeNotifier {
       // Create default channel for Android
       final hasPermission = await Permission.notification.status.isGranted;
       _isEnabled = hasPermission;
-      print('🔔 Notification permission status: ${hasPermission ? 'granted' : 'denied'}');
+      print(
+        '🔔 Notification permission status: ${hasPermission ? 'granted' : 'denied'}',
+      );
 
-      final platform = _notifications.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
-          
+      final platform =
+          _notifications
+              .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin
+              >();
+
       if (platform != null) {
         const channel = AndroidNotificationChannel(
           'high_importance_channel',
@@ -65,10 +76,10 @@ class NotificationService extends ChangeNotifier {
 
       _isInitialized = true;
       print('🔔 Notification service initialized successfully');
-      
+
       // Load saved preference
-      final prefs = await SharedPreferences.getInstance();
-      _isEnabled = prefs.getBool('notifications') ?? false;
+      await _prefsService.initialize();
+      _isEnabled = _prefsService.getBool('notifications', defaultValue: false);
       notifyListeners();
     } catch (e) {
       print('🔔 Error initializing notification service: $e');
@@ -104,9 +115,9 @@ class NotificationService extends ChangeNotifier {
           return false;
         }
       }
-      
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('notifications', enabled);
+
+      await _prefsService.initialize();
+      await _prefsService.setBool('notifications', enabled);
       _isEnabled = enabled;
       notifyListeners();
       return true;
@@ -120,8 +131,11 @@ class NotificationService extends ChangeNotifier {
 
   Future<bool> isNotificationEnabled() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final enabled = prefs.getBool('notifications') ?? false;
+      await _prefsService.initialize();
+      final enabled = _prefsService.getBool(
+        'notifications',
+        defaultValue: false,
+      );
       _isEnabled = enabled && await Permission.notification.isGranted;
       notifyListeners();
       return _isEnabled;
@@ -189,8 +203,8 @@ class NotificationService extends ChangeNotifier {
 
       await _notifications.show(
         DateTime.now().millisecondsSinceEpoch.remainder(100000),
-        title, 
-        body, 
+        title,
+        body,
         notificationDetails,
         payload: payload,
       );

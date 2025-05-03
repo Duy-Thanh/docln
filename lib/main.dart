@@ -16,6 +16,7 @@ import 'screens/HistoryScreen.dart';
 import 'handler/system_ui_handler.dart';
 import 'screens/HomeScreen.dart';
 import 'services/crawler_service.dart';
+import 'services/preferences_service.dart';
 import 'services/preferences_recovery_service.dart';
 
 // Firebase
@@ -26,6 +27,38 @@ import 'package:firebase_analytics/firebase_analytics.dart';
 
 // Dart libs
 import 'dart:ui';
+
+// Function to migrate from old preferences to new SQLite-based preferences
+Future<void> migratePreferences() async {
+  try {
+    // Check if migration has already been done
+    final prefsService = PreferencesService();
+    await prefsService.initialize();
+
+    if (prefsService.getBool(
+      '_sqlite_migration_completed',
+      defaultValue: false,
+    )) {
+      debugPrint('SQLite preferences migration already completed, skipping');
+      return;
+    }
+
+    debugPrint(
+      'Starting migration from SharedPreferences to SQLite preferences...',
+    );
+
+    // The migration is now handled in the PreferencesService
+    // This simply triggers the migration process
+    await prefsService.migrateToSQLite();
+
+    // Mark migration as complete
+    await prefsService.setBool('_sqlite_migration_completed', true);
+
+    debugPrint('Preferences migration to SQLite completed successfully');
+  } catch (e) {
+    debugPrint('Error migrating preferences: $e');
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,8 +81,11 @@ void main() async {
     parameters: {'time': DateTime.now().toString()},
   );
 
-  // Check and repair preferences if corrupted (before initializing other services)
-  await PreferencesRecoveryService.repairIfNeeded();
+  // Initialize and repair SQLite preferences if needed (before initializing other services)
+  await PreferencesService.repairIfNeeded();
+
+  // Migrate from old preferences to new SQLite-based preferences
+  await migratePreferences();
 
   final themeService = ThemeServices();
   final languageService = LanguageService();
@@ -60,9 +96,10 @@ void main() async {
   final httpClient = AppHttpClient();
   final dnsService = DnsService();
   final crawlerService = CrawlerService();
-  final preferencesRecoveryService = PreferencesRecoveryService();
+  final preferencesService = PreferencesService();
 
   await Future.wait([
+    preferencesService.initialize(),
     themeService.init(),
     languageService.init(),
     notificationService.init(),
@@ -72,7 +109,6 @@ void main() async {
     httpClient.initialize(),
     dnsService.initialize(),
     crawlerService.initialize(),
-    preferencesRecoveryService.initialize(),
   ]);
 
   // Set initial system UI styling
@@ -93,6 +129,9 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider<PreferencesService>.value(
+          value: preferencesService,
+        ),
         ChangeNotifierProvider<ThemeServices>.value(value: themeService),
         ChangeNotifierProvider<LanguageService>.value(value: languageService),
         ChangeNotifierProvider<NotificationService>.value(

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../services/theme_services.dart';
 import '../screens/custom_toast.dart';
@@ -15,6 +14,7 @@ import '../widgets/network_image.dart';
 import '../screens/EyeCareScreen.dart';
 import '../services/settings_services.dart';
 import 'comments_screen.dart';
+import '../services/preferences_service.dart';
 
 // Define content block types
 enum ContentBlockType { paragraph, header, image }
@@ -244,9 +244,11 @@ class _ReaderScreenState extends State<ReaderScreen>
     if (widget.novel == null || widget.chapterTitle == null) return;
 
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefsService = PreferencesService();
+      await prefsService.initialize();
+
       final key = 'progress_${widget.novel!.id}_${widget.chapterTitle}';
-      await prefs.setDouble(key, _readingProgress);
+      await prefsService.setDouble(key, _readingProgress);
     } catch (e) {
       print('Error saving reading progress: $e');
     }
@@ -254,17 +256,36 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   Future<void> _loadSettings() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefsService = PreferencesService();
+      await prefsService.initialize();
 
       // Load font settings
       setState(() {
-        _fontSize = prefs.getDouble('reader_font_size') ?? 18.0;
-        _fontFamily = prefs.getString('reader_font_family') ?? 'Roboto';
-        _lineHeight = prefs.getDouble('reader_line_height') ?? 1.8;
-        _paragraphSpacing = prefs.getDouble('reader_paragraph_spacing') ?? 1.5;
-        _isDarkMode = prefs.getBool('darkMode') ?? false;
-        _enableTextSelection = prefs.getBool('reader_text_selection') ?? true;
-        _screenBrightness = prefs.getDouble('reader_brightness') ?? 1.0;
+        _fontSize = prefsService.getDouble(
+          'reader_font_size',
+          defaultValue: 18.0,
+        );
+        _fontFamily = prefsService.getString(
+          'reader_font_family',
+          defaultValue: 'Roboto',
+        );
+        _lineHeight = prefsService.getDouble(
+          'reader_line_height',
+          defaultValue: 1.8,
+        );
+        _paragraphSpacing = prefsService.getDouble(
+          'reader_paragraph_spacing',
+          defaultValue: 1.5,
+        );
+        _isDarkMode = prefsService.getBool('darkMode');
+        _enableTextSelection = prefsService.getBool(
+          'reader_text_selection',
+          defaultValue: true,
+        );
+        _screenBrightness = prefsService.getDouble(
+          'reader_brightness',
+          defaultValue: 1.0,
+        );
 
         // Apply adaptive brightness from eye protection service if enabled
         if (_eyeProtectionService.adaptiveBrightnessEnabled) {
@@ -276,30 +297,34 @@ class _ReaderScreenState extends State<ReaderScreen>
 
         // Set colors based on theme
         if (_isDarkMode) {
+          final textColorStr = prefsService.getString('reader_text_color_dark');
           _textColor =
-              prefs.getString('reader_text_color_dark') != null
-                  ? Color(int.parse(prefs.getString('reader_text_color_dark')!))
+              textColorStr.isNotEmpty
+                  ? Color(int.parse(textColorStr))
                   : Colors.white.withOpacity(0.9);
+
+          final bgColorStr = prefsService.getString(
+            'reader_background_color_dark',
+          );
           _backgroundColor =
-              prefs.getString('reader_background_color_dark') != null
-                  ? Color(
-                    int.parse(prefs.getString('reader_background_color_dark')!),
-                  )
+              bgColorStr.isNotEmpty
+                  ? Color(int.parse(bgColorStr))
                   : const Color(0xFF121212);
         } else {
+          final textColorStr = prefsService.getString(
+            'reader_text_color_light',
+          );
           _textColor =
-              prefs.getString('reader_text_color_light') != null
-                  ? Color(
-                    int.parse(prefs.getString('reader_text_color_light')!),
-                  )
+              textColorStr.isNotEmpty
+                  ? Color(int.parse(textColorStr))
                   : Colors.black.withOpacity(0.9);
+
+          final bgColorStr = prefsService.getString(
+            'reader_background_color_light',
+          );
           _backgroundColor =
-              prefs.getString('reader_background_color_light') != null
-                  ? Color(
-                    int.parse(
-                      prefs.getString('reader_background_color_light')!,
-                    ),
-                  )
+              bgColorStr.isNotEmpty
+                  ? Color(int.parse(bgColorStr))
                   : Colors.white;
         }
 
@@ -313,8 +338,8 @@ class _ReaderScreenState extends State<ReaderScreen>
       // Load reading progress if available
       if (widget.novel != null && widget.chapterTitle != null) {
         final key = 'progress_${widget.novel!.id}_${widget.chapterTitle}';
-        final savedProgress = prefs.getDouble(key);
-        if (savedProgress != null) {
+        final savedProgress = prefsService.getDouble(key);
+        if (savedProgress > 0) {
           setState(() {
             _readingProgress = savedProgress;
           });
@@ -412,9 +437,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     });
 
     // Save the theme preference
-    SharedPreferences.getInstance().then((prefs) {
-      prefs.setBool('darkMode', _isDarkMode);
-    });
+    PreferencesService().setBool('darkMode', _isDarkMode);
   }
 
   void _toggleControls() {
@@ -428,9 +451,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       _screenBrightness = value;
     });
 
-    SharedPreferences.getInstance().then((prefs) {
-      prefs.setDouble('reader_brightness', value);
-    });
+    PreferencesService().setDouble('reader_brightness', value);
   }
 
   void _showSettingsPanel() {
@@ -486,9 +507,10 @@ class _ReaderScreenState extends State<ReaderScreen>
                               });
                             },
                             onChangeEnd: (value) async {
-                              final prefs =
-                                  await SharedPreferences.getInstance();
-                              prefs.setDouble('reader_font_size', value);
+                              await PreferencesService().setDouble(
+                                'reader_font_size',
+                                value,
+                              );
                             },
                           ),
                         ),
@@ -515,9 +537,10 @@ class _ReaderScreenState extends State<ReaderScreen>
                               });
                             },
                             onChangeEnd: (value) async {
-                              final prefs =
-                                  await SharedPreferences.getInstance();
-                              prefs.setDouble('reader_line_height', value);
+                              await PreferencesService().setDouble(
+                                'reader_line_height',
+                                value,
+                              );
                             },
                           ),
                         ),
@@ -543,9 +566,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                               });
                             },
                             onChangeEnd: (value) async {
-                              final prefs =
-                                  await SharedPreferences.getInstance();
-                              prefs.setDouble(
+                              await PreferencesService().setDouble(
                                 'reader_paragraph_spacing',
                                 value,
                               );
@@ -640,9 +661,10 @@ class _ReaderScreenState extends State<ReaderScreen>
                               });
                             },
                             onChangeEnd: (value) async {
-                              final prefs =
-                                  await SharedPreferences.getInstance();
-                              prefs.setDouble('reader_brightness', value);
+                              await PreferencesService().setDouble(
+                                'reader_brightness',
+                                value,
+                              );
                             },
                           ),
                         ),
@@ -674,9 +696,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                         });
 
                         // Save the setting
-                        SharedPreferences.getInstance().then((prefs) {
-                          prefs.setBool('darkMode', value);
-                        });
+                        PreferencesService().setBool('darkMode', value);
                       },
                     ),
 
@@ -881,9 +901,10 @@ class _ReaderScreenState extends State<ReaderScreen>
                         });
 
                         // Save the setting
-                        SharedPreferences.getInstance().then((prefs) {
-                          prefs.setBool('reader_text_selection', value);
-                        });
+                        PreferencesService().setBool(
+                          'reader_text_selection',
+                          value,
+                        );
                       },
                     ),
 

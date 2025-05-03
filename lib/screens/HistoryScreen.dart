@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../modules/light_novel.dart';
 import './widgets/light_novel_card.dart';
@@ -8,6 +7,7 @@ import './LightNovelDetailsScreen.dart';
 import './custom_toast.dart';
 import '../screens/HomeScreen.dart';
 import '../widgets/network_image.dart';
+import '../services/preferences_service.dart';
 
 // Create a History service
 class HistoryService extends ChangeNotifier {
@@ -19,6 +19,9 @@ class HistoryService extends ChangeNotifier {
   List<HistoryItem> get historyItems => _historyItems;
 
   static const String _historyKey = 'reading_history';
+
+  // Preferences service instance
+  final PreferencesService _prefsService = PreferencesService();
 
   // Add a history item
   void addToHistory(LightNovel novel, String? chapterTitle) {
@@ -67,10 +70,12 @@ class HistoryService extends ChangeNotifier {
   // Load history from storage
   Future<void> loadHistory() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final String? historyJson = prefs.getString(_historyKey);
+      // Initialize preferences service if not already initialized
+      await _prefsService.initialize();
 
-      if (historyJson != null) {
+      final String historyJson = _prefsService.getString(_historyKey);
+
+      if (historyJson.isNotEmpty) {
         final List<dynamic> historyList = jsonDecode(historyJson);
         _historyItems =
             historyList.map((json) => HistoryItem.fromJson(json)).toList();
@@ -90,12 +95,11 @@ class HistoryService extends ChangeNotifier {
   // Save history to storage
   Future<void> _saveHistory() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
       final String historyJson = jsonEncode(
         _historyItems.map((item) => item.toJson()).toList(),
       );
 
-      await prefs.setString(_historyKey, historyJson);
+      await _prefsService.setString(_historyKey, historyJson);
     } catch (e) {
       print('Error saving history: $e');
     }

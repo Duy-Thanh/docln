@@ -1,8 +1,8 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart' show compute;
+import 'preferences_service.dart';
 
 class AdBlockService {
   // Multiple filter lists for better coverage
@@ -36,10 +36,12 @@ class AdBlockService {
 
   static Future<String?> _getCachedScript() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final cacheData = prefs.getString(CACHE_KEY);
+      final prefsService = PreferencesService();
+      await prefsService.initialize();
 
-      if (cacheData != null) {
+      final cacheData = prefsService.getString(CACHE_KEY);
+
+      if (cacheData.isNotEmpty) {
         final cacheJson = json.decode(cacheData);
         final timestamp = DateTime.fromMillisecondsSinceEpoch(
           cacheJson['timestamp'],
@@ -60,13 +62,15 @@ class AdBlockService {
 
   static Future<void> _cacheScript(String script) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefsService = PreferencesService();
+      await prefsService.initialize();
+
       final cacheData = json.encode({
         'timestamp': DateTime.now().millisecondsSinceEpoch,
         'script': script,
       });
 
-      await prefs.setString(CACHE_KEY, cacheData);
+      await prefsService.setString(CACHE_KEY, cacheData);
     } catch (e) {
       print('Error caching script: $e');
     }

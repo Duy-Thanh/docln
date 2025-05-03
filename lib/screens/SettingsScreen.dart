@@ -3,24 +3,26 @@ import 'package:provider/provider.dart';
 import '../services/theme_services.dart';
 import '../services/language_service.dart';
 import '../services/notification_service.dart';
-import 'package:http/http.dart' as http;
-import '../services/crawler_service.dart';
-import 'dart:async'; // For TimeoutException
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:ui';
-import '../services/settings_services.dart';
 import '../services/proxy_service.dart';
 import '../services/dns_service.dart';
+import '../services/settings_services.dart';
+import '../services/crawler_service.dart';
 import '../screens/custom_toast.dart';
+import '../services/preferences_service.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:share_plus/share_plus.dart';
+import 'dart:io';
+import 'dart:async';
+import 'dart:ui';
+import 'package:http/http.dart' as http;
+import '../services/performance_service.dart';
 import '../services/update_service.dart';
 import '../screens/widgets/update_dialog.dart';
-import 'package:url_launcher/url_launcher.dart'; // Add this import
-import '../services/performance_service.dart';
 import '../screens/WireGuardSettingsScreen.dart';
-import '../services/preferences_recovery_service.dart'; // Add this import
-import 'package:file_picker/file_picker.dart'; // Add this import
-import 'package:share_plus/share_plus.dart'; // Add this import
-import 'dart:io';
+import '../services/preferences_recovery_service.dart';
+import 'package:file_picker/file_picker.dart';
 
 // GridPainter class at the top level
 class GridPainter extends CustomPainter {
@@ -149,7 +151,9 @@ class SettingsScreenState extends State<SettingsScreen>
 
   Future<void> _loadSettings() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefsService = PreferencesService();
+      await prefsService.initialize();
+
       final themeService = Provider.of<ThemeServices>(context, listen: false);
       final notificationService = Provider.of<NotificationService>(
         context,
@@ -160,13 +164,20 @@ class SettingsScreenState extends State<SettingsScreen>
       final hasPermission = await notificationService.checkPermission();
 
       setState(() {
-        isDarkMode = prefs.getBool('darkMode') ?? false;
+        isDarkMode = prefsService.getBool('darkMode', defaultValue: false);
         textSize = themeService.textSize.clamp(12.0, 24.0);
         // Only enable notifications if we have permission
         isNotificationsEnabled =
-            hasPermission && (prefs.getBool('isNotifications') ?? true);
-        selectedLanguage = prefs.getString('language') ?? 'English';
-        isDataSaverEnabled = prefs.getBool('dataSaver') ?? false;
+            hasPermission &&
+            prefsService.getBool('isNotifications', defaultValue: true);
+        selectedLanguage = prefsService.getString(
+          'language',
+          defaultValue: 'English',
+        );
+        isDataSaverEnabled = prefsService.getBool(
+          'dataSaver',
+          defaultValue: false,
+        );
 
         _initialDarkMode = isDarkMode;
         _initialTextSize = textSize;
@@ -287,7 +298,9 @@ class SettingsScreenState extends State<SettingsScreen>
 
   Future<void> _saveSettings() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefsService = PreferencesService();
+      await prefsService.initialize();
+
       final themeService = Provider.of<ThemeServices>(context, listen: false);
       final languageService = Provider.of<LanguageService>(
         context,
@@ -302,12 +315,12 @@ class SettingsScreenState extends State<SettingsScreen>
 
       // Save all settings
       await Future.wait([
-        prefs.setBool('darkMode', isDarkMode),
-        prefs.setDouble('textSize', textSize),
+        prefsService.setBool('darkMode', isDarkMode),
+        prefsService.setDouble('textSize', textSize),
         Future(() => themeService.setTextSize(textSize)),
         notificationService.setNotificationEnabled(isNotificationsEnabled),
-        prefs.setString('language', selectedLanguage ?? 'English'),
-        prefs.setBool('dataSaver', isDataSaverEnabled),
+        prefsService.setString('language', selectedLanguage ?? 'English'),
+        prefsService.setBool('dataSaver', isDataSaverEnabled),
         _settingsService.saveCurrentServer(currentServer ?? ''),
 
         // Save proxy settings
@@ -2169,15 +2182,17 @@ class SettingsScreenState extends State<SettingsScreen>
             ),
             SizedBox(height: 8),
             Text(
-              'The app automatically creates backups of your preferences every 6 hours. '
-              'Use these tools if you experience issues with settings or want to transfer '
-              'settings between devices.',
+              'The app now uses SQLite for preferences storage, which is more reliable and less prone to corruption than the previous system.',
               style: TextStyle(fontSize: 14),
             ),
             SizedBox(height: 8),
             Text(
-              'If the app crashes or shows blank screens after using WebView, try the '
-              '"Repair Preferences" option to fix potential corruption issues.',
+              'Automatic backups are created every 6 hours. Multiple backup formats are supported, including SQL database backups and JSON exports.',
+              style: TextStyle(fontSize: 14),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'If the app crashes or shows blank screens, try the "Repair Preferences" option to fix potential corruption issues.',
               style: TextStyle(fontSize: 14),
             ),
           ],
@@ -2188,144 +2203,287 @@ class SettingsScreenState extends State<SettingsScreen>
 
   // Show backup dialog
   void _showBackupDialog() async {
-    // Show loading indicator
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
-
-    // Create backup
-    final recoveryService = PreferencesRecoveryService();
-    final success = await recoveryService.backupPreferences();
-
-    // Dismiss loading indicator
-    if (mounted) Navigator.pop(context);
-
-    if (!mounted) return;
-
-    // Show result
-    if (success) {
-      CustomToast.show(
-        context,
-        'Preferences backup created successfully',
-        duration: const Duration(seconds: 3),
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
       );
-    } else {
+
+      // Create backup
+      final recoveryService = PreferencesRecoveryService();
+      final success = await recoveryService.backupPreferences();
+
+      // Dismiss loading indicator
+      if (mounted) Navigator.pop(context);
+
+      if (!mounted) return;
+
+      // Show result dialog
+      if (success) {
+        showDialog(
+          context: context,
+          builder:
+              (context) => AlertDialog(
+                title: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.green),
+                    SizedBox(width: 8),
+                    Text('Backup Successful'),
+                  ],
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Your preferences have been successfully backed up.'),
+                    SizedBox(height: 16),
+                    Text(
+                      'The backup includes:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 8),
+                    _buildBackupInfoItem(
+                      'Theme and appearance settings',
+                      Icons.color_lens,
+                    ),
+                    _buildBackupInfoItem(
+                      'Language preferences',
+                      Icons.language,
+                    ),
+                    _buildBackupInfoItem(
+                      'Network and proxy settings',
+                      Icons.router,
+                    ),
+                    _buildBackupInfoItem(
+                      'All other app configurations',
+                      Icons.settings,
+                    ),
+                  ],
+                ),
+                actions: [
+                  FilledButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+                    child: Text('OK'),
+                  ),
+                ],
+              ),
+        );
+      } else {
+        CustomToast.show(
+          context,
+          'Failed to create backup',
+          duration: const Duration(seconds: 3),
+        );
+      }
+    } catch (e) {
+      // Dismiss loading indicator if showing
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
       CustomToast.show(
         context,
-        'Failed to create backup',
+        'Error creating backup: $e',
         duration: const Duration(seconds: 3),
       );
     }
+  }
+
+  Widget _buildBackupInfoItem(String text, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.blue),
+          SizedBox(width: 8),
+          Expanded(child: Text(text)),
+        ],
+      ),
+    );
   }
 
   // Show restore dialog
   void _showRestoreDialog() async {
-    // Show loading indicator
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
-
-    // Get available backups
-    final recoveryService = PreferencesRecoveryService();
-    final backups = await recoveryService.getAvailableBackups();
-
-    // Dismiss loading indicator
-    if (mounted) Navigator.pop(context);
-
-    if (!mounted) return;
-
-    if (backups.isEmpty) {
-      CustomToast.show(
-        context,
-        'No backups found',
-        duration: const Duration(seconds: 3),
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
       );
-      return;
-    }
 
-    // Show backup list in bottom sheet
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder:
-          (context) => DraggableScrollableSheet(
-            initialChildSize: 0.7,
-            minChildSize: 0.5,
-            maxChildSize: 0.9,
-            expand: false,
-            builder:
-                (context, scrollController) => Column(
-                  children: [
-                    Container(
-                      margin: const EdgeInsets.symmetric(vertical: 8),
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text(
-                        'Select Backup to Restore',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+      // Get available backups
+      final recoveryService = PreferencesRecoveryService();
+      final backups = await recoveryService.getAvailableBackups();
+
+      // Dismiss loading indicator
+      if (mounted) Navigator.pop(context);
+
+      if (!mounted) return;
+
+      if (backups.isEmpty) {
+        CustomToast.show(
+          context,
+          'No backups found',
+          duration: const Duration(seconds: 3),
+        );
+        return;
+      }
+
+      // Show backup list in bottom sheet
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder:
+            (context) => DraggableScrollableSheet(
+              initialChildSize: 0.7,
+              minChildSize: 0.5,
+              maxChildSize: 0.9,
+              expand: false,
+              builder:
+                  (context, scrollController) => Column(
+                    children: [
+                      Container(
+                        margin: const EdgeInsets.symmetric(vertical: 8),
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-                    ),
-                    Expanded(
-                      child: ListView.builder(
-                        controller: scrollController,
-                        itemCount: backups.length,
-                        itemBuilder: (context, index) {
-                          final backup = backups[index];
-                          final timestamp = DateTime.parse(
-                            backup['timestamp'] as String,
-                          );
-                          final formattedDate =
-                              '${timestamp.year}-${timestamp.month.toString().padLeft(2, '0')}-${timestamp.day.toString().padLeft(2, '0')} ${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
-
-                          return ListTile(
-                            leading: const Icon(Icons.restore),
-                            title: Text('Backup $formattedDate'),
-                            subtitle: Text(
-                              'Size: ${(backup['size'] as int) ~/ 1024} KB',
-                            ),
-                            onTap: () {
-                              Navigator.pop(context);
-                              _confirmAndRestoreBackup(
-                                backup['path'] as String,
-                              );
-                            },
-                          );
-                        },
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          'Select Backup to Restore',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-          ),
-    );
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          'Choose a backup from the list below. Backups are ordered from newest to oldest.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                      ),
+                      SizedBox(height: 16),
+                      Expanded(
+                        child: ListView.builder(
+                          controller: scrollController,
+                          itemCount: backups.length,
+                          itemBuilder: (context, index) {
+                            final backup = backups[index];
+                            final timestamp = DateTime.parse(
+                              backup['timestamp'] as String,
+                            );
+                            final formattedDate =
+                                '${timestamp.year}-${timestamp.month.toString().padLeft(2, '0')}-${timestamp.day.toString().padLeft(2, '0')} ${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
+
+                            final type = backup['type'] as String;
+                            final format = backup['format'] as String;
+
+                            IconData backupIcon;
+                            Color backupColor;
+
+                            if (format == 'SQLite') {
+                              backupIcon = Icons.storage;
+                              backupColor = Colors.purple;
+                            } else if (type == 'sqlite') {
+                              backupIcon = Icons.backup;
+                              backupColor = Colors.blue;
+                            } else {
+                              backupIcon = Icons.restore;
+                              backupColor = Colors.amber;
+                            }
+
+                            return ListTile(
+                              leading: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: backupColor.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(backupIcon, color: backupColor),
+                              ),
+                              title: Text(
+                                'Backup from $formattedDate',
+                                style: TextStyle(fontWeight: FontWeight.w500),
+                              ),
+                              subtitle: Text(
+                                'Type: ${format} ${type == "legacy" ? "(Legacy)" : ""} • Size: ${(backup['size'] as int) ~/ 1024} KB',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                              onTap: () {
+                                Navigator.pop(context);
+                                _confirmAndRestoreBackup(
+                                  backup['path'] as String,
+                                  format,
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+            ),
+      );
+    } catch (e) {
+      // Dismiss loading indicator if showing
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      CustomToast.show(
+        context,
+        'Error loading backups: $e',
+        duration: const Duration(seconds: 3),
+      );
+    }
   }
 
   // Confirm and restore backup
-  void _confirmAndRestoreBackup(String backupPath) {
+  void _confirmAndRestoreBackup(String backupPath, String backupFormat) {
     showDialog(
       context: context,
       builder:
           (context) => AlertDialog(
-            title: const Text('Restore Backup'),
-            content: const Text(
-              'This will replace all your current settings with the selected backup. '
-              'Are you sure you want to continue?',
+            title: Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.amber),
+                SizedBox(width: 8),
+                Text('Restore Backup'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'This will replace all your current settings with the selected backup.',
+                ),
+                SizedBox(height: 12),
+                Text(
+                  'Backup Type: $backupFormat',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'Are you sure you want to continue?',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
             ),
             actions: [
               TextButton(
@@ -2346,65 +2504,214 @@ class SettingsScreenState extends State<SettingsScreen>
 
   // Restore from backup
   void _restoreBackup(String backupPath) async {
-    // Show loading indicator
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
+    try {
+      // Show loading indicator with more detailed steps
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder:
+            (context) => AlertDialog(
+              title: Text('Restoring Backup'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Please wait while your settings are being restored...'),
+                  SizedBox(height: 8),
+                  Text(
+                    'This may take a moment. Do not close the app.',
+                    style: TextStyle(fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+      );
 
-    final recoveryService = PreferencesRecoveryService();
-    final success = await recoveryService.restoreFromBackup(
-      backupPath,
-      context,
-    );
+      final recoveryService = PreferencesRecoveryService();
+      final success = await recoveryService.restoreFromBackup(
+        backupPath,
+        context,
+      );
 
-    // Dismiss loading indicator
-    if (mounted) Navigator.pop(context);
+      // Dismiss loading indicator
+      if (mounted) Navigator.pop(context);
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    if (success) {
-      // Reload settings
-      await _loadSettings();
+      if (success) {
+        // Reload settings
+        await _loadSettings();
 
-      // Show success message
+        // Show success dialog
+        showDialog(
+          context: context,
+          builder:
+              (context) => AlertDialog(
+                title: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.green),
+                    SizedBox(width: 8),
+                    Text('Restore Successful'),
+                  ],
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Your preferences have been successfully restored from backup.',
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      'The following settings have been restored:',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    SizedBox(height: 8),
+                    _buildBackupInfoItem(
+                      'Theme and appearance settings',
+                      Icons.color_lens,
+                    ),
+                    _buildBackupInfoItem(
+                      'Language preferences',
+                      Icons.language,
+                    ),
+                    _buildBackupInfoItem(
+                      'Network and proxy settings',
+                      Icons.router,
+                    ),
+                    _buildBackupInfoItem(
+                      'All other app configurations',
+                      Icons.settings,
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      'It\'s recommended to restart the app for all changes to take full effect.',
+                      style: TextStyle(
+                        fontStyle: FontStyle.italic,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+                actions: [
+                  FilledButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+                    child: Text('OK'),
+                  ),
+                ],
+              ),
+        );
+      }
+    } catch (e) {
+      // Dismiss loading indicator if showing
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      if (!mounted) return;
+
       CustomToast.show(
         context,
-        'Settings restored successfully. Restart app for all changes to take effect.',
-        duration: const Duration(seconds: 4),
+        'Error restoring backup: $e',
+        duration: const Duration(seconds: 3),
       );
     }
   }
 
   // Export preferences
   void _exportPreferences() async {
-    // Show loading indicator
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
-
-    final recoveryService = PreferencesRecoveryService();
-    final exportPath = await recoveryService.createExportFile();
-
-    // Dismiss loading indicator
-    if (mounted) Navigator.pop(context);
-
-    if (!mounted) return;
-
-    if (exportPath != null) {
-      // Show share dialog
-      await Share.shareXFiles(
-        [XFile(exportPath)],
-        subject: 'DocLN Preferences Export',
-        text: 'DocLN Preferences Export',
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
       );
-    } else {
+
+      final recoveryService = PreferencesRecoveryService();
+      final exportPath = await recoveryService.createExportFile();
+
+      // Dismiss loading indicator
+      if (mounted) Navigator.pop(context);
+
+      if (!mounted) return;
+
+      if (exportPath != null) {
+        // Show success dialog with export details
+        showDialog(
+          context: context,
+          builder:
+              (context) => AlertDialog(
+                title: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.green),
+                    SizedBox(width: 8),
+                    Text('Export Successful'),
+                  ],
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Your preferences have been successfully exported.'),
+                    SizedBox(height: 12),
+                    Text(
+                      'File location:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      exportPath,
+                      style: TextStyle(fontSize: 12),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(height: 12),
+                    Text('Would you like to share this file?'),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+                    child: Text('Close'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      // Share the file
+                      await Share.shareXFiles(
+                        [XFile(exportPath)],
+                        subject: 'DocLN Preferences Export',
+                        text: 'DocLN Preferences Export',
+                      );
+                    },
+                    icon: Icon(Icons.share),
+                    label: Text('Share'),
+                  ),
+                ],
+              ),
+        );
+      } else {
+        CustomToast.show(
+          context,
+          'Failed to create export file',
+          duration: const Duration(seconds: 3),
+        );
+      }
+    } catch (e) {
+      // Dismiss loading indicator if showing
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
       CustomToast.show(
         context,
-        'Failed to create export file',
+        'Error exporting preferences: $e',
         duration: const Duration(seconds: 3),
       );
     }
@@ -2413,6 +2720,51 @@ class SettingsScreenState extends State<SettingsScreen>
   // Import preferences
   void _importPreferences() async {
     try {
+      // Show info dialog first
+      bool? shouldProceed = await showDialog<bool>(
+        context: context,
+        builder:
+            (context) => AlertDialog(
+              title: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.blue),
+                  SizedBox(width: 8),
+                  Text('Import Preferences'),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'You can import preferences that were previously exported from this app.',
+                  ),
+                  SizedBox(height: 12),
+                  Text(
+                    'This will replace all your current settings with the imported file.',
+                  ),
+                  SizedBox(height: 12),
+                  Text(
+                    'Make sure the file is a valid preferences export file.',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: Text('Continue'),
+                ),
+              ],
+            ),
+      );
+
+      if (shouldProceed != true) return;
+
       // Pick file
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -2432,10 +2784,33 @@ class SettingsScreenState extends State<SettingsScreen>
         context: context,
         builder:
             (context) => AlertDialog(
-              title: const Text('Import Preferences'),
-              content: const Text(
-                'This will replace all your current settings with the imported file. '
-                'Are you sure you want to continue?',
+              title: Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.amber),
+                  SizedBox(width: 8),
+                  Text('Confirm Import'),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Selected file:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    filePath.split('/').last,
+                    style: TextStyle(fontSize: 14),
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'This will replace ALL your current settings with the imported file. This cannot be undone.',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                  SizedBox(height: 12),
+                  Text('Are you sure you want to continue?'),
+                ],
               ),
               actions: [
                 TextButton(
@@ -2471,11 +2846,39 @@ class SettingsScreenState extends State<SettingsScreen>
         // Reload settings
         await _loadSettings();
 
-        // Show success message
-        CustomToast.show(
-          context,
-          'Settings imported successfully. Restart app for all changes to take effect.',
-          duration: const Duration(seconds: 4),
+        // Show success dialog
+        showDialog(
+          context: context,
+          builder:
+              (context) => AlertDialog(
+                title: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.green),
+                    SizedBox(width: 8),
+                    Text('Import Successful'),
+                  ],
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Your preferences have been successfully imported.'),
+                    SizedBox(height: 12),
+                    Text(
+                      'It\'s recommended to restart the app for all changes to take full effect.',
+                      style: TextStyle(fontStyle: FontStyle.italic),
+                    ),
+                  ],
+                ),
+                actions: [
+                  FilledButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+                    child: Text('OK'),
+                  ),
+                ],
+              ),
         );
       }
     } catch (e) {
@@ -2500,11 +2903,36 @@ class SettingsScreenState extends State<SettingsScreen>
       context: context,
       builder:
           (context) => AlertDialog(
-            title: const Text('Repair Preferences'),
-            content: const Text(
-              'This will attempt to repair corrupted preferences. '
-              'Use this if you\'re experiencing issues with app settings or crashes. '
-              'Continue?',
+            title: Row(
+              children: [
+                Icon(Icons.healing, color: Colors.red),
+                SizedBox(width: 8),
+                Text('Repair Preferences'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'This will attempt to repair corrupted preferences. Use this if you\'re experiencing:',
+                ),
+                SizedBox(height: 12),
+                _buildRepairInfoItem('Crash after opening webview'),
+                _buildRepairInfoItem('Settings not saving properly'),
+                _buildRepairInfoItem('App freezing or showing blank screens'),
+                _buildRepairInfoItem('Other unexpected behavior'),
+                SizedBox(height: 16),
+                Text(
+                  'Note: A backup will be created before attempting repair.',
+                  style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Continue with repair?',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
             ),
             actions: [
               TextButton(
@@ -2520,8 +2948,23 @@ class SettingsScreenState extends State<SettingsScreen>
                     context: context,
                     barrierDismissible: false,
                     builder:
-                        (context) =>
-                            const Center(child: CircularProgressIndicator()),
+                        (context) => AlertDialog(
+                          title: Text('Repairing Preferences'),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircularProgressIndicator(),
+                              SizedBox(height: 16),
+                              Text('Please wait...'),
+                              SizedBox(height: 8),
+                              Text(
+                                'We\'re checking for issues and attempting to fix them.',
+                                style: TextStyle(fontSize: 12),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ),
                   );
 
                   final recoveryService = PreferencesRecoveryService();
@@ -2539,10 +2982,40 @@ class SettingsScreenState extends State<SettingsScreen>
                     await _loadSettings();
 
                     // Show success message
-                    CustomToast.show(
-                      context,
-                      'Preferences repair completed. Restart app for full effect.',
-                      duration: const Duration(seconds: 4),
+                    showDialog(
+                      context: context,
+                      builder:
+                          (context) => AlertDialog(
+                            title: Row(
+                              children: [
+                                Icon(Icons.check_circle, color: Colors.green),
+                                SizedBox(width: 8),
+                                Text('Repair Successful'),
+                              ],
+                            ),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Preferences repair completed successfully.',
+                                ),
+                                SizedBox(height: 12),
+                                Text(
+                                  'It\'s recommended to restart the app for all changes to take full effect.',
+                                  style: TextStyle(fontStyle: FontStyle.italic),
+                                ),
+                              ],
+                            ),
+                            actions: [
+                              FilledButton(
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                },
+                                child: Text('OK'),
+                              ),
+                            ],
+                          ),
                     );
                   }
                 },
@@ -2550,6 +3023,19 @@ class SettingsScreenState extends State<SettingsScreen>
               ),
             ],
           ),
+    );
+  }
+
+  Widget _buildRepairInfoItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(Icons.check, size: 16, color: Colors.green),
+          SizedBox(width: 8),
+          Expanded(child: Text(text)),
+        ],
+      ),
     );
   }
 

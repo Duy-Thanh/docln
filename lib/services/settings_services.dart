@@ -1,4 +1,4 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'preferences_service.dart';
 
 class SettingsService {
   static const String _serverKey = 'current_server';
@@ -40,122 +40,136 @@ class SettingsService {
 
   static final SettingsService _instance = SettingsService._internal();
 
+  // Preferences service instance
+  final PreferencesService _prefsService = PreferencesService();
+
+  // Flag to track initialization
+  bool _initialized = false;
+
   factory SettingsService() {
     return _instance;
   }
 
   SettingsService._internal();
 
-  Future<void> saveCurrentServer(String server) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_serverKey, server);
+  // Initialize the preferences service
+  Future<void> _ensureInitialized() async {
+    if (!_initialized) {
+      await _prefsService.initialize();
+      _initialized = true;
+    }
   }
 
-  Future<String?> getCurrentServer() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_serverKey);
+  Future<void> saveCurrentServer(String server) async {
+    await _ensureInitialized();
+    await _prefsService.setString(_serverKey, server);
+  }
+
+  Future<String> getCurrentServer() async {
+    await _ensureInitialized();
+    return _prefsService.getString(_serverKey);
   }
 
   Future<void> setDataSaver(bool enabled) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_dataSaverKey, enabled);
+    await _ensureInitialized();
+    await _prefsService.setBool(_dataSaverKey, enabled);
   }
 
   Future<bool> getDataSaver() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_dataSaverKey) ?? false;
+    await _ensureInitialized();
+    return _prefsService.getBool(_dataSaverKey, defaultValue: false);
   }
 
   // Proxy settings
   Future<bool> isProxyEnabled() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_proxyEnabledKey) ?? false;
+    await _ensureInitialized();
+    return _prefsService.getBool(_proxyEnabledKey, defaultValue: false);
   }
 
   Future<void> setProxyEnabled(bool enabled) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_proxyEnabledKey, enabled);
+    await _ensureInitialized();
+    await _prefsService.setBool(_proxyEnabledKey, enabled);
   }
 
   Future<String> getProxyType() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_proxyTypeKey) ?? 'None';
+    await _ensureInitialized();
+    return _prefsService.getString(_proxyTypeKey, defaultValue: 'None');
   }
 
   Future<void> setProxyType(String type) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_proxyTypeKey, type);
+    await _ensureInitialized();
+    await _prefsService.setString(_proxyTypeKey, type);
   }
 
   Future<String> getProxyAddress() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_proxyAddressKey) ?? '';
+    await _ensureInitialized();
+    return _prefsService.getString(_proxyAddressKey, defaultValue: '');
   }
 
   Future<void> setProxyAddress(String address) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_proxyAddressKey, address);
+    await _ensureInitialized();
+    await _prefsService.setString(_proxyAddressKey, address);
   }
 
   Future<String> getProxyPort() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_proxyPortKey) ?? '';
+    await _ensureInitialized();
+    return _prefsService.getString(_proxyPortKey, defaultValue: '');
   }
 
   Future<void> setProxyPort(String port) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_proxyPortKey, port);
+    await _ensureInitialized();
+    await _prefsService.setString(_proxyPortKey, port);
   }
 
   Future<String> getProxyUsername() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_proxyUsernameKey) ?? '';
+    await _ensureInitialized();
+    return _prefsService.getString(_proxyUsernameKey, defaultValue: '');
   }
 
   Future<void> setProxyUsername(String username) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_proxyUsernameKey, username);
+    await _ensureInitialized();
+    await _prefsService.setString(_proxyUsernameKey, username);
   }
 
   Future<String> getProxyPassword() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_proxyPasswordKey) ?? '';
+    await _ensureInitialized();
+    return _prefsService.getString(_proxyPasswordKey, defaultValue: '');
   }
 
   Future<void> setProxyPassword(String password) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_proxyPasswordKey, password);
+    await _ensureInitialized();
+    await _prefsService.setString(_proxyPasswordKey, password);
   }
 
   // DNS settings
   Future<bool> isDnsEnabled() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_dnsEnabledKey) ?? false;
+    await _ensureInitialized();
+    return _prefsService.getBool(_dnsEnabledKey, defaultValue: false);
   }
 
   Future<void> setDnsEnabled(bool enabled) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_dnsEnabledKey, enabled);
+    await _ensureInitialized();
+    await _prefsService.setBool(_dnsEnabledKey, enabled);
   }
 
   Future<String> getDnsProvider() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_dnsProviderKey) ?? 'Default';
+    await _ensureInitialized();
+    return _prefsService.getString(_dnsProviderKey, defaultValue: 'Default');
   }
 
   Future<void> setDnsProvider(String provider) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_dnsProviderKey, provider);
+    await _ensureInitialized();
+    await _prefsService.setString(_dnsProviderKey, provider);
   }
 
   Future<String> getCustomDns() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_customDnsKey) ?? '';
+    await _ensureInitialized();
+    return _prefsService.getString(_customDnsKey, defaultValue: '');
   }
 
   Future<void> setCustomDns(String dns) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_customDnsKey, dns);
+    await _ensureInitialized();
+    await _prefsService.setString(_customDnsKey, dns);
   }
 
   // Helper method to get all proxy settings at once

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
+import 'preferences_service.dart';
 
 class ThemeServices extends ChangeNotifier {
   static final ThemeServices _instance = ThemeServices._internal();
@@ -15,6 +16,9 @@ class ThemeServices extends ChangeNotifier {
   double _textScaleFactor = 1.0;
   double _textSize = 16.0;
 
+  // Preferences service instance
+  final PreferencesService _prefsService = PreferencesService();
+
   ThemeMode get themeMode => _themeMode;
   // New getter for textScaler
   TextScaler get textScaler => TextScaler.linear(_textSize / 16.0);
@@ -22,10 +26,16 @@ class ThemeServices extends ChangeNotifier {
 
   Future<void> init() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      // Initialize preferences service if not already initialized
+      await _prefsService.initialize();
+
+      // Get values from preferences service
       _themeMode =
-          prefs.getBool('darkMode') == true ? ThemeMode.dark : ThemeMode.light;
-      _textSize = (prefs.getDouble('textSize') ?? 16.0).clamp(12.0, 24.0);
+          _prefsService.getBool('darkMode') ? ThemeMode.dark : ThemeMode.light;
+      _textSize = (_prefsService.getDouble(
+        'textSize',
+        defaultValue: 16.0,
+      )).clamp(12.0, 24.0);
       print('🔤 Initialized text size: $_textSize');
       notifyListeners();
     } catch (e) {
@@ -37,8 +47,7 @@ class ThemeServices extends ChangeNotifier {
   }
 
   Future<void> setThemeMode(bool isDark) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('darkMode', isDark);
+    await _prefsService.setBool('darkMode', isDark);
     _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
     notifyListeners();
   }
@@ -46,8 +55,7 @@ class ThemeServices extends ChangeNotifier {
   Future<void> setTextSize(double size) async {
     try {
       size = size.clamp(12.0, 24.0);
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setDouble('textSize', size);
+      await _prefsService.setDouble('textSize', size);
       _textSize = size;
       print('🔤 Set text size to: $_textSize');
       notifyListeners();

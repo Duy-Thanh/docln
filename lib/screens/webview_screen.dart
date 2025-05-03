@@ -16,9 +16,9 @@ import '../services/performance_service.dart';
 import '../screens/HistoryScreen.dart';
 import 'package:provider/provider.dart';
 import '../modules/light_novel.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../services/preferences_recovery_service.dart';
 import '../screens/custom_toast.dart';
+import '../services/preferences_service.dart';
 
 class WebViewScreen extends StatefulWidget {
   final String url;
@@ -117,8 +117,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
     try {
       final recoveryService = PreferencesRecoveryService();
-      final prefs = await SharedPreferences.getInstance();
-      final recoveryNeeded = prefs.getKeys().length > 0 && Platform.isIOS;
+      final prefsService = PreferencesService();
+      await prefsService.initialize();
+      final recoveryNeeded =
+          prefsService.getKeys().isNotEmpty && Platform.isIOS;
 
       if (recoveryNeeded && mounted) {
         debugPrint('Proactively checking preferences after WebView session');
@@ -144,10 +146,15 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   Future<void> _loadSettings() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefsService = PreferencesService();
+      await prefsService.initialize();
+
       if (mounted) {
         setState(() {
-          _isAdBlockEnabled = prefs.getBool('ad_block_enabled') ?? true;
+          _isAdBlockEnabled = prefsService.getBool(
+            'ad_block_enabled',
+            defaultValue: true,
+          );
         });
       }
     } catch (e) {
@@ -184,8 +191,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
       final newState = !_isAdBlockEnabled;
 
       // Save preference
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('ad_block_enabled', newState);
+      final prefsService = PreferencesService();
+      await prefsService.initialize();
+      await prefsService.setBool('ad_block_enabled', newState);
 
       if (mounted) {
         setState(() {
