@@ -1,7 +1,9 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart' show compute;
+import 'package:path_provider/path_provider.dart';
 import 'preferences_service.dart';
 
 class AdBlockService {
@@ -15,7 +17,8 @@ class AdBlockService {
     'https://filters.adtidy.org/extension/ublock/filters/224.txt', // Vietnamese filter
   ];
 
-  static const String CACHE_KEY = 'adblock_rules_cache';
+  static const String CACHE_KEY =
+      'adblock_rules_cache_timestamp'; // Only store the timestamp in preferences
   static const Duration CACHE_DURATION = Duration(days: 3);
 
   static Future<String> getAdBlockScript() async {
@@ -39,18 +42,21 @@ class AdBlockService {
       final prefsService = PreferencesService();
       await prefsService.initialize();
 
-      final cacheData = prefsService.getString(CACHE_KEY);
+      final cacheTimestamp = prefsService.getString(CACHE_KEY);
 
-      if (cacheData.isNotEmpty) {
-        final cacheJson = json.decode(cacheData);
+      if (cacheTimestamp.isNotEmpty) {
         final timestamp = DateTime.fromMillisecondsSinceEpoch(
-          cacheJson['timestamp'],
+          int.parse(cacheTimestamp),
         );
         final now = DateTime.now();
 
         // Check if cache is still valid
         if (now.difference(timestamp) < CACHE_DURATION) {
-          return cacheJson['script'];
+          // Load the script from a file instead of preferences
+          final cacheFile = await _getCacheFile();
+          if (await cacheFile.exists()) {
+            return await cacheFile.readAsString();
+          }
         }
       }
       return null;
@@ -60,17 +66,26 @@ class AdBlockService {
     }
   }
 
+  static Future<File> _getCacheFile() async {
+    final directory = await getApplicationDocumentsDirectory();
+    return File('${directory.path}/adblock_cache.js');
+  }
+
   static Future<void> _cacheScript(String script) async {
     try {
+      // Only store the timestamp in preferences
       final prefsService = PreferencesService();
       await prefsService.initialize();
 
-      final cacheData = json.encode({
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-        'script': script,
-      });
+      // Store the current timestamp
+      await prefsService.setString(
+        CACHE_KEY,
+        DateTime.now().millisecondsSinceEpoch.toString(),
+      );
 
-      await prefsService.setString(CACHE_KEY, cacheData);
+      // Save the actual script to a file
+      final cacheFile = await _getCacheFile();
+      await cacheFile.writeAsString(script);
     } catch (e) {
       print('Error caching script: $e');
     }
@@ -96,13 +111,29 @@ class AdBlockService {
       // Process rules in isolation for better performance
       final uniqueRules = await compute(_deduplicateRules, allRules);
 
+      // Limit the number of rules to keep script size manageable
+      final limitedRules = _limitRules(uniqueRules);
+
       // Generate script with the rules
-      final script = _generateJavaScript(uniqueRules);
+      final script = _generateJavaScript(limitedRules);
 
-      // Cache the script
-      await _cacheScript(script);
+      // Check script size before caching
+      final scriptSize = utf8.encode(script).length;
+      print(
+        'AdBlock script size: ${(scriptSize / 1024).toStringAsFixed(2)} KB',
+      );
 
-      return script;
+      // Only cache if size is reasonable (less than 500KB)
+      if (scriptSize < 500 * 1024) {
+        await _cacheScript(script);
+        return script;
+      } else {
+        // If script is too large, use a more compact version
+        print('Generated script too large, using compact version');
+        final compactScript = _generateCompactScript(limitedRules);
+        await _cacheScript(compactScript);
+        return compactScript;
+      }
     } catch (e) {
       print('Error generating AdBlock script: $e');
       return _getBasicAdBlockScript();
@@ -603,6 +634,188 @@ class AdBlockService {
       }
       
       applyBasicAdBlock();
+    ''';
+  }
+
+  // Helper method to limit the number of rules based on type
+  static List<String> _limitRules(List<String> rules) {
+    // Separate CSS rules from network filters
+    final networkFilters =
+        rules.where((rule) => rule.startsWith('/* NETWORK_FILTERS')).toList();
+
+    final cssRules =
+        rules.where((rule) => !rule.startsWith('/* NETWORK_FILTERS')).toList();
+
+    // Limit CSS rules to a reasonable number (2000 max)
+    final limitedCssRules =
+        cssRules.length > 2000 ? cssRules.sublist(0, 2000) : cssRules;
+
+    // Limit network filters (if there are any)
+    final limitedNetworkFilters =
+        networkFilters.isNotEmpty && networkFilters.first.length > 10000
+            ? [_truncateNetworkFilters(networkFilters.first)]
+            : networkFilters;
+
+    return [...limitedCssRules, ...limitedNetworkFilters];
+  }
+
+  // Helper method to truncate network filters
+  static String _truncateNetworkFilters(String filterRule) {
+    try {
+      final jsonStartIndex = filterRule.indexOf(':') + 1;
+      final jsonEndIndex = filterRule.lastIndexOf('*/');
+
+      if (jsonStartIndex > 0 && jsonEndIndex > jsonStartIndex) {
+        final jsonStr = filterRule.substring(jsonStartIndex, jsonEndIndex);
+        final filters = List<String>.from(json.decode(jsonStr));
+
+        // Limit to 1000 most important filters
+        final limitedFilters =
+            filters.length > 1000 ? filters.sublist(0, 1000) : filters;
+
+        return '/* NETWORK_FILTERS: ${json.encode(limitedFilters)} */';
+      }
+    } catch (e) {
+      print('Error truncating network filters: $e');
+    }
+
+    return filterRule;
+  }
+
+  // Generate a more compact script for large rule sets
+  static String _generateCompactScript(List<String> rules) {
+    // Extract network filters from special comments
+    final networkFilters = _extractNetworkFilters(rules);
+
+    // Limit the number of rules
+    List<String> cssRules =
+        rules.where((rule) => !rule.startsWith('/* NETWORK_FILTERS')).toList();
+    final limitedRules =
+        cssRules.length > 1000 ? cssRules.sublist(0, 1000) : cssRules;
+
+    final selectorsJson = json.encode(
+      limitedRules.map((r) => r.contains("'") ? "\"$r\"" : "'$r'").toList(),
+    );
+
+    return r'''
+      (function() {
+        // Store a reference to blockAds if already defined
+        const existingBlockAds = window.blockAds;
+        
+        // Network request blocking setup (compact)
+    ''' +
+        _generateCompactNetworkBlockingScript(networkFilters) +
+        r'''
+        
+        function blockAdsWithRules() {
+          const selectors = ''' +
+        selectorsJson +
+        r''';
+        
+          // Apply selectors in batches
+          for (let i = 0; i < selectors.length; i += 100) {
+            const batch = selectors.slice(i, i + 100);
+            try {
+              document.querySelectorAll(batch.join(', ')).forEach(el => el.remove());
+            } catch(e) {
+              // Try individually on error
+              batch.forEach(sel => {
+                try { document.querySelectorAll(sel).forEach(el => el.remove()); } catch(e) {}
+              });
+            }
+          }
+          
+          // Basic blocking
+    ''' +
+        _getBasicAdBlockScript() +
+        r'''
+        }
+
+        // Define global blockAds function
+        window.blockAds = function() {
+          blockAdsWithRules();
+          if (existingBlockAds && existingBlockAds !== window.blockAds) {
+            existingBlockAds();
+          }
+        };
+        
+        // Run immediately
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', window.blockAds);
+        } else {
+          window.blockAds();
+        }
+
+        // Set up observer
+        new MutationObserver(function() {
+          window.blockAds();
+        }).observe(document.body || document.documentElement, {
+          childList: true, subtree: true
+        });
+      })();
+    ''';
+  }
+
+  // Simplified network blocking script
+  static String _generateCompactNetworkBlockingScript(
+    List<String> networkFilters,
+  ) {
+    if (networkFilters.isEmpty) return '';
+
+    // Limit filters to 500 most important ones
+    final limitedFilters =
+        networkFilters.length > 500
+            ? networkFilters.sublist(0, 500)
+            : networkFilters;
+    final encodedFilters = json.encode(limitedFilters);
+
+    return r'''
+      (function() {
+        // Create a list of blocked patterns
+        var blockedPatterns = ''' +
+        encodedFilters +
+        r''';
+        
+        // Function to check if a URL matches any blocked pattern
+        function shouldBlockRequest(url) {
+          for (var i = 0; i < blockedPatterns.length; i++) {
+            var pattern = blockedPatterns[i];
+            if (url.indexOf(pattern.replace(/[\^$]/g, '')) !== -1) return true;
+          }
+          return false;
+        }
+        
+        // Create XHR proxy
+        var originalXHR = window.XMLHttpRequest;
+        window.XMLHttpRequest = function() {
+          var xhr = new originalXHR();
+          var originalOpen = xhr.open;
+          
+          xhr.open = function(method, url) {
+            if (shouldBlockRequest(url)) {
+              this.abort();
+              return;
+            }
+            return originalOpen.apply(this, arguments);
+          };
+          
+          return xhr;
+        };
+        
+        // Intercept fetch
+        if (window.fetch) {
+          var originalFetch = window.fetch;
+          window.fetch = function(resource) {
+            var url = typeof resource === 'string' ? resource : resource.url;
+            if (url && shouldBlockRequest(url)) {
+              return new Promise(function(resolve) {
+                resolve(new Response('', { status: 0 }));
+              });
+            }
+            return originalFetch.apply(this, arguments);
+          };
+        }
+      })();
     ''';
   }
 }

@@ -6,7 +6,7 @@ import '../services/adguard_service.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:android_intent_plus/android_intent.dart';
-import 'dart:io' show Platform;
+import 'dart:io' show Platform, File;
 import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:translator/translator.dart';
@@ -19,6 +19,7 @@ import '../modules/light_novel.dart';
 import '../services/preferences_recovery_service.dart';
 import '../screens/custom_toast.dart';
 import '../services/preferences_service.dart';
+import 'package:path_provider/path_provider.dart';
 
 class WebViewScreen extends StatefulWidget {
   final String url;
@@ -139,8 +140,35 @@ class _WebViewScreenState extends State<WebViewScreen> {
           debugPrint('Failed to verify preferences after WebView');
         }
       }
+
+      // Clean up the AdBlock cache file when we're done with it
+      await _cleanupAdBlockCache();
     } catch (e) {
       debugPrint('Error checking for preferences corruption: $e');
+    }
+  }
+
+  Future<void> _cleanupAdBlockCache() async {
+    try {
+      // We don't delete the cache file outright, but we can trim it if it's too large
+      final directory = await getApplicationDocumentsDirectory();
+      final cacheFile = File('${directory.path}/adblock_cache.js');
+
+      if (await cacheFile.exists()) {
+        final fileSize = await cacheFile.length();
+        debugPrint(
+          'AdBlock cache file size: ${(fileSize / 1024).toStringAsFixed(2)} KB',
+        );
+
+        // If the cache file is larger than 500KB, trim it to avoid excessive storage usage
+        if (fileSize > 500 * 1024) {
+          // Instead of deleting, we'll just store the basic version
+          await cacheFile.writeAsString(AdBlockService.getFallbackScript());
+          debugPrint('Trimmed AdBlock cache file to a smaller version');
+        }
+      }
+    } catch (e) {
+      debugPrint('Error cleaning up AdBlock cache: $e');
     }
   }
 
