@@ -73,6 +73,13 @@ class _CommentsScreenState extends State<CommentsScreen> {
 
       if (!mounted) return;
 
+      // Process comments to ensure replies are properly initialized
+      for (final commentJson in commentsList) {
+        if (commentJson['replies'] == null) {
+          commentJson['replies'] = <Map<String, dynamic>>[];
+        }
+      }
+
       final List<Comment> comments =
           commentsList.map((json) => Comment.fromJson(json)).toList();
 
@@ -134,6 +141,13 @@ class _CommentsScreenState extends State<CommentsScreen> {
       );
 
       if (!mounted) return;
+
+      // Process comments to ensure replies are properly initialized
+      for (final commentJson in commentsList) {
+        if (commentJson['replies'] == null) {
+          commentJson['replies'] = <Map<String, dynamic>>[];
+        }
+      }
 
       final List<Comment> comments =
           commentsList.map((json) => Comment.fromJson(json)).toList();
@@ -202,6 +216,13 @@ class _CommentsScreenState extends State<CommentsScreen> {
       );
 
       if (!mounted) return;
+
+      // Process comments to ensure replies are properly initialized
+      for (final commentJson in commentsList) {
+        if (commentJson['replies'] == null) {
+          commentJson['replies'] = <Map<String, dynamic>>[];
+        }
+      }
 
       final List<Comment> comments =
           commentsList.map((json) => Comment.fromJson(json)).toList();
@@ -910,6 +931,13 @@ class _CommentsScreenState extends State<CommentsScreen> {
           result['remaining'] is int
               ? result['remaining'] as int
               : int.tryParse(result['remaining']?.toString() ?? '0') ?? 0;
+
+      // Process replies to ensure they have the correct parentId
+      for (final replyJson in newRepliesJson) {
+        if (replyJson['parentId'] == null || replyJson['parentId'].isEmpty) {
+          replyJson['parentId'] = comment.id;
+        }
+      }
 
       // Convert JSON to Comment objects
       final newReplies =
