@@ -26,6 +26,7 @@ import 'package:file_picker/file_picker.dart';
 import '../services/auth_service.dart';
 import 'LoginScreen.dart';
 import 'SignupScreen.dart';
+import '../services/encrypted_db_service.dart';
 
 // GridPainter class at the top level
 class GridPainter extends CustomPainter {
@@ -3426,6 +3427,36 @@ class SettingsScreenState extends State<SettingsScreen>
           ),
         ),
 
+        // Manual sync button
+        FutureBuilder<DateTime?>(
+          future: _getLastSyncTime(),
+          builder: (context, snapshot) {
+            final lastSyncTime = snapshot.data;
+            return ListTile(
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 8,
+              ),
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.sync, color: Colors.blue),
+              ),
+              title: const Text('Sync Now'),
+              subtitle: Text(
+                lastSyncTime != null
+                    ? 'Last sync: ${_formatDateTime(lastSyncTime)}'
+                    : 'Manually sync your data with the cloud',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _performManualSync(),
+            );
+          },
+        ),
+
         // Logout
         ListTile(
           contentPadding: const EdgeInsets.symmetric(
@@ -3878,5 +3909,182 @@ class SettingsScreenState extends State<SettingsScreen>
       context,
       MaterialPageRoute(builder: (context) => const SignupScreen()),
     );
+  }
+
+  // Perform manual sync with Supabase
+  Future<void> _performManualSync() async {
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (context) => const Dialog(
+            backgroundColor: Colors.transparent,
+            child: Center(
+              child: Card(
+                child: Padding(
+                  padding: EdgeInsets.all(20.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text(
+                        'Syncing with cloud...',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 8),
+                      Text('This may take a moment'),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+    );
+
+    try {
+      // Get the encrypted database service instance
+      final encryptedDbService = EncryptedDbService();
+
+      // Force a sync and get detailed results
+      final results = await encryptedDbService.forceSyncNow();
+
+      // Hide loading indicator
+      if (mounted) Navigator.pop(context);
+
+      // Show detailed results
+      if (mounted) {
+        if (results['success'] == true) {
+          _showSyncResultsDialog(
+            success: true,
+            itemsUploaded: results['itemsUploaded'] as int,
+            itemsDownloaded: results['itemsDownloaded'] as int,
+            timestamp: results['timestamp'] as DateTime,
+          );
+        } else {
+          _showSyncResultsDialog(
+            success: false,
+            error: results['error'] as String?,
+          );
+        }
+      }
+    } catch (e) {
+      // Hide loading indicator
+      if (mounted) Navigator.pop(context);
+
+      // Show error dialog
+      if (mounted) {
+        _showSyncResultsDialog(success: false, error: e.toString());
+      }
+    }
+  }
+
+  // Show dialog with sync results
+  void _showSyncResultsDialog({
+    required bool success,
+    int? itemsUploaded,
+    int? itemsDownloaded,
+    DateTime? timestamp,
+    String? error,
+  }) {
+    final isDarkMode =
+        Provider.of<ThemeServices>(context, listen: false).themeMode ==
+        ThemeMode.dark;
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            icon: Icon(
+              success ? Icons.check_circle : Icons.error,
+              color: success ? Colors.green : Colors.red,
+              size: 48,
+            ),
+            title: Text(
+              success ? 'Sync Completed' : 'Sync Failed',
+              textAlign: TextAlign.center,
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (success) ...[
+                  RichText(
+                    textAlign: TextAlign.center,
+                    text: TextSpan(
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.white : Colors.black,
+                        fontSize: 16,
+                      ),
+                      children: [
+                        const TextSpan(text: 'Uploaded '),
+                        TextSpan(
+                          text: '$itemsUploaded',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue,
+                          ),
+                        ),
+                        const TextSpan(text: ' items\nDownloaded '),
+                        TextSpan(
+                          text: '$itemsDownloaded',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green,
+                          ),
+                        ),
+                        const TextSpan(text: ' items'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Last synced: ${_formatDateTime(timestamp!)}',
+                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                    textAlign: TextAlign.center,
+                  ),
+                ] else ...[
+                  Text(
+                    error ?? 'Unknown error occurred during sync',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.red[700]),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  // Format date time nicely
+  String _formatDateTime(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inSeconds < 60) {
+      return 'Just now';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes} minute${difference.inMinutes == 1 ? '' : 's'} ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours} hour${difference.inHours == 1 ? '' : 's'} ago';
+    } else {
+      return '${dateTime.year}-${_twoDigits(dateTime.month)}-${_twoDigits(dateTime.day)} '
+          '${_twoDigits(dateTime.hour)}:${_twoDigits(dateTime.minute)}';
+    }
+  }
+
+  // Ensure two digits for formatting
+  String _twoDigits(int n) => n.toString().padLeft(2, '0');
+
+  // Get the last sync time
+  Future<DateTime?> _getLastSyncTime() async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    return await authService.getLastSyncTimestamp();
   }
 }

@@ -75,6 +75,9 @@ class EncryptedDbService {
       onCreate: _createDb,
       onUpgrade: _upgradeDb,
     );
+
+    // Ensure tables exist even if database wasn't newly created
+    await _ensureTablesExist();
   }
 
   // Create database tables
@@ -304,6 +307,16 @@ class EncryptedDbService {
 
       debugPrint('Starting database sync with Supabase...');
 
+      // Check if the user_databases table exists
+      try {
+        await supabase.from(_supabaseTable).select().limit(1);
+      } catch (e) {
+        if (e.toString().contains('relation "user_databases" does not exist')) {
+          debugPrint('user_databases table does not exist in Supabase');
+          return;
+        }
+      }
+
       // Get the last sync timestamp
       final lastSync = await _getLastSyncTimestamp();
       final now = DateTime.now();
@@ -372,9 +385,14 @@ class EncryptedDbService {
         final batch = dataToUpload.sublist(i, end);
 
         // Use upsert to insert or update based on the composite key
-        await supabase
-            .from(_supabaseTable)
-            .upsert(batch, onConflict: 'user_id,data_key');
+        try {
+          await supabase
+              .from(_supabaseTable)
+              .upsert(batch, onConflict: 'user_id,data_key');
+        } catch (e) {
+          debugPrint('Error during upsert operation: $e');
+          // Continue trying other batches even if one fails
+        }
       }
 
       debugPrint('Successfully uploaded local changes to Supabase');
@@ -385,7 +403,7 @@ class EncryptedDbService {
   }
 
   // Download changes from Supabase
-  Future<void> _downloadChangesFromSupabase(
+  Future<int> _downloadChangesFromSupabase(
     String userId,
     DateTime? lastSync,
   ) async {
@@ -406,7 +424,7 @@ class EncryptedDbService {
 
       if (remoteData.isEmpty) {
         debugPrint('No remote changes to download');
-        return;
+        return 0;
       }
 
       debugPrint('Downloading ${remoteData.length} changes from Supabase');
@@ -432,6 +450,7 @@ class EncryptedDbService {
       });
 
       debugPrint('Successfully downloaded changes from Supabase');
+      return remoteData.length;
     } catch (e) {
       debugPrint('Error downloading changes from Supabase: $e');
       rethrow;
@@ -439,13 +458,108 @@ class EncryptedDbService {
   }
 
   // Force a sync immediately (for use when important data changes)
-  Future<void> forceSyncNow() async {
-    return _syncWithSupabase();
+  Future<Map<String, dynamic>> forceSyncNow() async {
+    // Prepare results object
+    final results = {
+      'success': false,
+      'error': null,
+      'itemsUploaded': 0,
+      'itemsDownloaded': 0,
+      'timestamp': DateTime.now(),
+    };
+
+    // Only sync if the user is logged in
+    if (!_authService.isAuthenticated) {
+      results['error'] = 'Not authenticated';
+      debugPrint('Not syncing - user not authenticated');
+      return results;
+    }
+
+    try {
+      final user = _authService.currentUser;
+      if (user == null) {
+        results['error'] = 'User is null';
+        return results;
+      }
+
+      debugPrint('Starting manual database sync with Supabase...');
+
+      // Check if the user_databases table exists
+      try {
+        await supabase.from(_supabaseTable).select().limit(1);
+      } catch (e) {
+        if (e.toString().contains('relation "user_databases" does not exist')) {
+          debugPrint('user_databases table does not exist in Supabase');
+          results['error'] = 'Database table does not exist';
+          return results;
+        }
+      }
+
+      // Get the last sync timestamp
+      final lastSync = await _getLastSyncTimestamp();
+      final now = DateTime.now();
+
+      // 1. First, count items that will be uploaded
+      final uploadQuery =
+          lastSync != null
+              ? 'SELECT COUNT(*) as count FROM encrypted_data WHERE updated_at > ?'
+              : 'SELECT COUNT(*) as count FROM encrypted_data';
+
+      final uploadArgs =
+          lastSync != null ? [lastSync.millisecondsSinceEpoch] : [];
+      final uploadCountResult = await _db?.rawQuery(uploadQuery, uploadArgs);
+      final itemsToUpload =
+          uploadCountResult != null && uploadCountResult.isNotEmpty
+              ? uploadCountResult.first['count'] as int
+              : 0;
+
+      // 2. Upload local changes to Supabase
+      await _uploadChangesToSupabase(user.id, lastSync);
+      results['itemsUploaded'] = itemsToUpload;
+
+      // 3. Download changes from Supabase
+      final downloadResult = await _downloadChangesFromSupabase(
+        user.id,
+        lastSync,
+      );
+      results['itemsDownloaded'] = downloadResult;
+
+      // Update the last sync timestamp
+      await _setLastSyncTimestamp(now);
+      results['timestamp'] = now;
+      results['success'] = true;
+
+      debugPrint('Manual database sync completed successfully');
+      return results;
+    } catch (e) {
+      debugPrint('Error syncing with Supabase: $e');
+      results['error'] = e.toString();
+      return results;
+    }
   }
 
   // Dispose resources
   void dispose() {
     _syncTimer?.cancel();
     _db?.close();
+  }
+
+  // Ensure required tables exist
+  Future<void> _ensureTablesExist() async {
+    try {
+      // Check if the encrypted_data table exists
+      final tables = await _db?.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='encrypted_data'",
+      );
+
+      if (tables == null || tables.isEmpty) {
+        debugPrint('Creating missing encrypted_data table');
+        await _createDb(_db!, 1);
+      }
+    } catch (e) {
+      debugPrint('Error ensuring tables exist: $e');
+      // Attempt to create tables if there was an error
+      await _createDb(_db!, 1);
+    }
   }
 }

@@ -21,15 +21,15 @@ class LanguageService extends ChangeNotifier {
   // List of supported languages
   static const List<Language> supportedLanguages = [
     Language('en', 'English', 'English', flag: '🇺🇸'),
-    Language('vi', 'Vietnamese', 'Tiếng Việt', flag: '🇻🇳'),
-    Language('ja', 'Japanese', '日本語', flag: '🇯🇵'),
-    Language('ko', 'Korean', '한국어', flag: '🇰🇷'),
-    Language('zh', 'Chinese', '中文', flag: '🇨🇳'),
-    Language('fr', 'French', 'Français', flag: '🇫🇷'),
-    Language('de', 'German', 'Deutsch', flag: '🇩🇪'),
-    Language('es', 'Spanish', 'Español', flag: '🇪🇸'),
-    Language('it', 'Italian', 'Italiano', flag: '🇮🇹'),
-    Language('ru', 'Russian', 'Русский', flag: '🇷🇺'),
+    // Language('vi', 'Vietnamese', 'Tiếng Việt', flag: '🇻🇳'),
+    // Language('ja', 'Japanese', '日本語', flag: '🇯🇵'),
+    // Language('ko', 'Korean', '한국어', flag: '🇰🇷'),
+    // Language('zh', 'Chinese', '中文', flag: '🇨🇳'),
+    // Language('fr', 'French', 'Français', flag: '🇫🇷'),
+    // Language('de', 'German', 'Deutsch', flag: '🇩🇪'),
+    // Language('es', 'Spanish', 'Español', flag: '🇪🇸'),
+    // Language('it', 'Italian', 'Italiano', flag: '🇮🇹'),
+    // Language('ru', 'Russian', 'Русский', flag: '🇷🇺'),
   ];
 
   Locale _currentLocale = const Locale('en');

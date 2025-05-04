@@ -60,3 +60,5 @@ app.*.map.json
 /android/app/release
 /android/app/.cxx
 data.html
+create_user_databases_table.sql
+fix_user_databases.sql
