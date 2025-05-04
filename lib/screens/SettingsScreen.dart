@@ -4038,6 +4038,40 @@ class SettingsScreenState extends State<SettingsScreen>
                     ),
                   ),
                   const SizedBox(height: 12),
+
+                  // Add data sources
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Data synced from:',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        _buildSyncSourceItem(
+                          'User preferences (theme, language, etc.)',
+                          Icons.settings,
+                        ),
+                        _buildSyncSourceItem(
+                          'App settings (proxy, DNS, servers)',
+                          Icons.tune,
+                        ),
+                        _buildSyncSourceItem(
+                          'Reading history and bookmarks',
+                          Icons.bookmark,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
                   Text(
                     'Last synced: ${_formatDateTime(timestamp!)}',
                     style: TextStyle(color: Colors.grey[600], fontSize: 14),
@@ -4049,6 +4083,42 @@ class SettingsScreenState extends State<SettingsScreen>
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.red[700]),
                   ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              color: Colors.amber,
+                              size: 16,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Troubleshooting',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.amber[800],
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Make sure you have an internet connection and Supabase is accessible.',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -4059,6 +4129,19 @@ class SettingsScreenState extends State<SettingsScreen>
               ),
             ],
           ),
+    );
+  }
+
+  Widget _buildSyncSourceItem(String text, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.blue),
+          SizedBox(width: 8),
+          Expanded(child: Text(text, style: TextStyle(fontSize: 13))),
+        ],
+      ),
     );
   }
 

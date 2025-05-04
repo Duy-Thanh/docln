@@ -342,37 +342,135 @@ class EncryptedDbService {
     DateTime? lastSync,
   ) async {
     try {
-      // Get all data from the local database
-      final query =
-          lastSync != null
-              ? 'SELECT * FROM encrypted_data WHERE updated_at > ?'
-              : 'SELECT * FROM encrypted_data';
+      debugPrint('==========================================');
+      debugPrint('SYNC: Starting data collection for upload');
+      debugPrint('==========================================');
 
-      final args = lastSync != null ? [lastSync.millisecondsSinceEpoch] : [];
+      // First, try to get all preferences data from the preferences database
+      int itemsToUpload = 0;
+      List<Map<String, dynamic>> preferencesData = [];
 
-      final localData = await _db?.rawQuery(query, args);
+      try {
+        // Get path to preferences database
+        final appDocDir = await getApplicationDocumentsDirectory();
+        final prefsDbPath = '${appDocDir.path}/preferences.db';
 
-      if (localData == null || localData.isEmpty) {
-        debugPrint('No local changes to upload');
+        if (File(prefsDbPath).existsSync()) {
+          debugPrint('SYNC: Found preferences database at: $prefsDbPath');
+          // Open preferences database
+          final prefsDb = await openDatabase(prefsDbPath);
+
+          try {
+            // Check if preferences table exists
+            final tables = await prefsDb.rawQuery(
+              "SELECT name FROM sqlite_master WHERE type='table' AND name='preferences'",
+            );
+
+            if (tables.isNotEmpty) {
+              // Get all preferences
+              final prefsList = await prefsDb.query('preferences');
+              debugPrint('SYNC: Found ${prefsList.length} preferences to sync');
+
+              if (prefsList.isNotEmpty) {
+                debugPrint(
+                  'SYNC: Sample preferences keys: ${prefsList.take(5).map((p) => p['key']).join(", ")}...',
+                );
+              }
+
+              // Convert each preference to encrypted data format
+              for (var pref in prefsList) {
+                final key = pref['key'] as String;
+                final value = pref['value'];
+                final timestamp = DateTime.now().millisecondsSinceEpoch;
+                final encryptionKey = _authService.getUserEncryptionKey();
+                final encryptedValue = _encrypt(
+                  value.toString(),
+                  encryptionKey,
+                );
+                final type = _getTypeString(value);
+
+                // Add to sqlite encrypted_data table
+                await _db?.execute(
+                  'INSERT OR REPLACE INTO encrypted_data (key, value, type, updated_at) VALUES (?, ?, ?, ?)',
+                  [key, encryptedValue, type, timestamp],
+                );
+
+                preferencesData.add({
+                  'user_id': userId,
+                  'data_key': key,
+                  'encrypted_value': encryptedValue,
+                  'data_type': type,
+                  'updated_at':
+                      DateTime.fromMillisecondsSinceEpoch(
+                        timestamp,
+                      ).toIso8601String(),
+                });
+              }
+
+              itemsToUpload += prefsList.length;
+            } else {
+              debugPrint('SYNC: No preferences table found in database');
+            }
+          } finally {
+            await prefsDb.close();
+          }
+        } else {
+          debugPrint(
+            'SYNC: Preferences database file not found at path: $prefsDbPath',
+          );
+        }
+      } catch (e) {
+        debugPrint('SYNC: Error fetching preferences data: $e');
+        // Continue with normal encrypted_data sync if preferences sync fails
+      }
+
+      // Now get data from the encrypted_data table
+      final query = 'SELECT * FROM encrypted_data';
+      final localData = await _db?.rawQuery(query);
+
+      if (localData != null && localData.isNotEmpty) {
+        debugPrint(
+          'SYNC: Found ${localData.length} entries in encrypted_data table',
+        );
+        if (localData.isNotEmpty) {
+          debugPrint(
+            'SYNC: Sample encrypted_data keys: ${localData.take(5).map((item) => item['key']).join(", ")}...',
+          );
+        }
+      } else {
+        debugPrint('SYNC: No data found in encrypted_data table');
+      }
+
+      if ((localData == null || localData.isEmpty) && preferencesData.isEmpty) {
+        debugPrint('SYNC: No local changes to upload');
         return;
       }
 
-      debugPrint('Uploading ${localData.length} local changes to Supabase');
+      // Add encrypted_data items to the upload
+      final dataToUpload = [
+        ...preferencesData,
+        ...localData?.map((item) {
+              return {
+                'user_id': userId,
+                'data_key': item['key'],
+                'encrypted_value': item['value'],
+                'data_type': item['type'],
+                'updated_at':
+                    DateTime.fromMillisecondsSinceEpoch(
+                      item['updated_at'] as int,
+                    ).toIso8601String(),
+              };
+            }) ??
+            [],
+      ];
 
-      // Prepare the data for upload
-      final dataToUpload =
-          localData.map((item) {
-            return {
-              'user_id': userId,
-              'data_key': item['key'],
-              'encrypted_value': item['value'],
-              'data_type': item['type'],
-              'updated_at':
-                  DateTime.fromMillisecondsSinceEpoch(
-                    item['updated_at'] as int,
-                  ).toIso8601String(),
-            };
-          }).toList();
+      itemsToUpload += localData?.length ?? 0;
+      debugPrint(
+        'SYNC: Uploading ${dataToUpload.length} total items to Supabase',
+      );
+      debugPrint(
+        'SYNC: Breakdown - ${preferencesData.length} from preferences, ${localData?.length ?? 0} from encrypted_data',
+      );
 
       // Upload in batches to avoid hitting Supabase limits
       const batchSize = 25;
@@ -383,21 +481,25 @@ class EncryptedDbService {
                 : dataToUpload.length;
 
         final batch = dataToUpload.sublist(i, end);
+        debugPrint(
+          'SYNC: Uploading batch ${i ~/ batchSize + 1} of ${(dataToUpload.length / batchSize).ceil()} (${batch.length} items)',
+        );
 
         // Use upsert to insert or update based on the composite key
         try {
           await supabase
               .from(_supabaseTable)
               .upsert(batch, onConflict: 'user_id,data_key');
+          debugPrint('SYNC: Batch upload successful');
         } catch (e) {
-          debugPrint('Error during upsert operation: $e');
+          debugPrint('SYNC: Error during upsert operation: $e');
           // Continue trying other batches even if one fails
         }
       }
 
-      debugPrint('Successfully uploaded local changes to Supabase');
+      debugPrint('SYNC: Successfully uploaded all local changes to Supabase');
     } catch (e) {
-      debugPrint('Error uploading changes to Supabase: $e');
+      debugPrint('SYNC: Error uploading changes to Supabase: $e');
       rethrow;
     }
   }
@@ -408,11 +510,24 @@ class EncryptedDbService {
     DateTime? lastSync,
   ) async {
     try {
+      debugPrint('==========================================');
+      debugPrint('SYNC: Starting download from Supabase');
+      debugPrint('==========================================');
+
       // Query for remote changes
       final query = supabase
           .from(_supabaseTable)
           .select()
           .eq('user_id', userId);
+
+      debugPrint('SYNC: Fetching data for user ID: $userId');
+      if (lastSync != null) {
+        debugPrint(
+          'SYNC: Filtering for changes since: ${lastSync.toIso8601String()}',
+        );
+      } else {
+        debugPrint('SYNC: No timestamp filter - getting all data');
+      }
 
       // Add timestamp filter if we have a last sync time
       final remoteData =
@@ -423,14 +538,25 @@ class EncryptedDbService {
               : await query.order('updated_at');
 
       if (remoteData.isEmpty) {
-        debugPrint('No remote changes to download');
+        debugPrint('SYNC: No remote changes to download');
         return 0;
       }
 
-      debugPrint('Downloading ${remoteData.length} changes from Supabase');
+      debugPrint(
+        'SYNC: Downloading ${remoteData.length} changes from Supabase',
+      );
+      if (remoteData.isNotEmpty) {
+        final sampleKeys = remoteData
+            .take(5)
+            .map((item) => item['data_key'])
+            .join(", ");
+        debugPrint('SYNC: Sample keys from download: $sampleKeys...');
+      }
 
       // Begin transaction
+      debugPrint('SYNC: Starting transaction for database updates');
       await _db?.transaction((txn) async {
+        int processed = 0;
         for (final item in remoteData) {
           final key = item['data_key'];
           final encryptedValue = item['encrypted_value'];
@@ -446,13 +572,22 @@ class EncryptedDbService {
             'INSERT OR REPLACE INTO encrypted_data (key, value, type, updated_at) VALUES (?, ?, ?, ?)',
             [key, encryptedValue, type, updatedAt],
           );
+
+          processed++;
+          if (processed % 50 == 0) {
+            debugPrint(
+              'SYNC: Processed $processed/${remoteData.length} downloaded items',
+            );
+          }
         }
       });
 
-      debugPrint('Successfully downloaded changes from Supabase');
+      debugPrint(
+        'SYNC: Successfully downloaded and stored all changes from Supabase',
+      );
       return remoteData.length;
     } catch (e) {
-      debugPrint('Error downloading changes from Supabase: $e');
+      debugPrint('SYNC: Error downloading changes from Supabase: $e');
       rethrow;
     }
   }
@@ -499,25 +634,65 @@ class EncryptedDbService {
       final lastSync = await _getLastSyncTimestamp();
       final now = DateTime.now();
 
-      // 1. First, count items that will be uploaded
-      final uploadQuery =
-          lastSync != null
-              ? 'SELECT COUNT(*) as count FROM encrypted_data WHERE updated_at > ?'
-              : 'SELECT COUNT(*) as count FROM encrypted_data';
+      // Count the total items in encrypted_data and preferences tables to be synced
+      int totalItemsToUpload = 0;
 
-      final uploadArgs =
-          lastSync != null ? [lastSync.millisecondsSinceEpoch] : [];
-      final uploadCountResult = await _db?.rawQuery(uploadQuery, uploadArgs);
-      final itemsToUpload =
-          uploadCountResult != null && uploadCountResult.isNotEmpty
-              ? uploadCountResult.first['count'] as int
-              : 0;
+      // Check encrypted_data table
+      final encryptedDataCount = Completer<int>();
+      _db
+          ?.rawQuery('SELECT COUNT(*) as count FROM encrypted_data')
+          .then((result) {
+            if (result.isNotEmpty) {
+              encryptedDataCount.complete(result.first['count'] as int);
+            } else {
+              encryptedDataCount.complete(0);
+            }
+          })
+          .catchError((e) {
+            debugPrint('Error counting encrypted data: $e');
+            encryptedDataCount.complete(0);
+          });
 
-      // 2. Upload local changes to Supabase
-      await _uploadChangesToSupabase(user.id, lastSync);
-      results['itemsUploaded'] = itemsToUpload;
+      // Check preferences database
+      int prefsCount = 0;
+      try {
+        final appDocDir = await getApplicationDocumentsDirectory();
+        final prefsDbPath = '${appDocDir.path}/preferences.db';
 
-      // 3. Download changes from Supabase
+        if (File(prefsDbPath).existsSync()) {
+          final prefsDb = await openDatabase(prefsDbPath);
+          try {
+            final tables = await prefsDb.rawQuery(
+              "SELECT name FROM sqlite_master WHERE type='table' AND name='preferences'",
+            );
+
+            if (tables.isNotEmpty) {
+              final countResult = await prefsDb.rawQuery(
+                'SELECT COUNT(*) as count FROM preferences',
+              );
+              if (countResult.isNotEmpty) {
+                prefsCount = countResult.first['count'] as int;
+              }
+            }
+          } finally {
+            await prefsDb.close();
+          }
+        }
+      } catch (e) {
+        debugPrint('Error counting preferences: $e');
+      }
+
+      // Get total count
+      totalItemsToUpload = await encryptedDataCount.future + prefsCount;
+
+      // Upload local changes to Supabase
+      await _uploadChangesToSupabase(
+        user.id,
+        null,
+      ); // Pass null to get all data
+      results['itemsUploaded'] = totalItemsToUpload;
+
+      // Download changes from Supabase
       final downloadResult = await _downloadChangesFromSupabase(
         user.id,
         lastSync,
