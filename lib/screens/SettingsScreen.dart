@@ -3457,6 +3457,46 @@ class SettingsScreenState extends State<SettingsScreen>
           },
         ),
 
+        // Backup data
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 8,
+          ),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.backup, color: Colors.green),
+          ),
+          title: const Text('Backup Data'),
+          subtitle: const Text('Overwrite cloud data with your local data'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _showBackupConfirmation(),
+        ),
+
+        // Restore data
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 8,
+          ),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.restore, color: Colors.orange),
+          ),
+          title: const Text('Restore Data'),
+          subtitle: const Text('Replace local data with cloud backup'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _showRestoreConfirmation(),
+        ),
+
         // Logout
         ListTile(
           contentPadding: const EdgeInsets.symmetric(
@@ -4169,5 +4209,517 @@ class SettingsScreenState extends State<SettingsScreen>
   Future<DateTime?> _getLastSyncTime() async {
     final authService = Provider.of<AuthService>(context, listen: false);
     return await authService.getLastSyncTimestamp();
+  }
+
+  // Show backup confirmation dialog
+  void _showBackupConfirmation() {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.backup, color: Colors.green),
+                SizedBox(width: 8),
+                Text('Backup Data'),
+              ],
+            ),
+            content: const Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'This will overwrite ALL data in the cloud with your local data.',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 12),
+                Text(
+                  'Warning: Any data that exists only in the cloud will be lost and replaced with your local data.',
+                  style: TextStyle(color: Colors.red),
+                ),
+                SizedBox(height: 12),
+                Text(
+                  'This operation cannot be undone. Are you sure you want to proceed?',
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('CANCEL'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _performBackup();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('BACKUP'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  // Show restore confirmation dialog
+  void _showRestoreConfirmation() {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.restore, color: Colors.orange),
+                SizedBox(width: 8),
+                Text('Restore Data'),
+              ],
+            ),
+            content: const Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'This will replace ALL your local data with data from the cloud.',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 12),
+                Text(
+                  'Warning: Any data that exists only on this device will be lost.',
+                  style: TextStyle(color: Colors.red),
+                ),
+                SizedBox(height: 12),
+                Text(
+                  'This operation cannot be undone. Are you sure you want to proceed?',
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('CANCEL'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _performRestore();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('RESTORE'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  // Perform backup operation
+  Future<void> _performBackup() async {
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (context) => const Dialog(
+            backgroundColor: Colors.transparent,
+            child: Center(
+              child: Card(
+                child: Padding(
+                  padding: EdgeInsets.all(20.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+                      ),
+                      SizedBox(height: 16),
+                      Text(
+                        'Backing up data to cloud...',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 8),
+                      Text('This may take a moment'),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+    );
+
+    try {
+      // Get the encrypted database service instance
+      final encryptedDbService = EncryptedDbService();
+
+      // Execute the backup
+      final results = await encryptedDbService.backupAllDataToSupabase();
+
+      // Hide loading indicator
+      if (mounted) Navigator.pop(context);
+
+      // Show detailed results
+      if (mounted) {
+        if (results['success'] == true) {
+          _showBackupResultsDialog(
+            success: true,
+            itemsUploaded: results['itemsUploaded'] as int,
+            timestamp: results['timestamp'] as DateTime,
+          );
+        } else {
+          _showBackupResultsDialog(
+            success: false,
+            error: results['error'] as String?,
+          );
+        }
+      }
+    } catch (e) {
+      // Hide loading indicator
+      if (mounted) Navigator.pop(context);
+
+      // Show error dialog
+      if (mounted) {
+        _showBackupResultsDialog(success: false, error: e.toString());
+      }
+    }
+  }
+
+  // Perform restore operation
+  Future<void> _performRestore() async {
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (context) => const Dialog(
+            backgroundColor: Colors.transparent,
+            child: Center(
+              child: Card(
+                child: Padding(
+                  padding: EdgeInsets.all(20.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Colors.orange,
+                        ),
+                      ),
+                      SizedBox(height: 16),
+                      Text(
+                        'Restoring data from cloud...',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 8),
+                      Text('This may take a moment'),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+    );
+
+    try {
+      // Get the encrypted database service instance
+      final encryptedDbService = EncryptedDbService();
+
+      // Execute the restore
+      final results = await encryptedDbService.restoreAllDataFromSupabase();
+
+      // Hide loading indicator
+      if (mounted) Navigator.pop(context);
+
+      // Show detailed results
+      if (mounted) {
+        if (results['success'] == true) {
+          _showRestoreResultsDialog(
+            success: true,
+            itemsRestored: results['itemsRestored'] as int,
+            timestamp: results['timestamp'] as DateTime,
+          );
+        } else {
+          _showRestoreResultsDialog(
+            success: false,
+            error: results['error'] as String?,
+          );
+        }
+      }
+    } catch (e) {
+      // Hide loading indicator
+      if (mounted) Navigator.pop(context);
+
+      // Show error dialog
+      if (mounted) {
+        _showRestoreResultsDialog(success: false, error: e.toString());
+      }
+    }
+  }
+
+  // Show dialog with backup results
+  void _showBackupResultsDialog({
+    required bool success,
+    int? itemsUploaded,
+    DateTime? timestamp,
+    String? error,
+  }) {
+    final isDarkMode =
+        Provider.of<ThemeServices>(context, listen: false).themeMode ==
+        ThemeMode.dark;
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            icon: Icon(
+              success ? Icons.check_circle : Icons.error,
+              color: success ? Colors.green : Colors.red,
+              size: 48,
+            ),
+            title: Text(
+              success ? 'Backup Completed' : 'Backup Failed',
+              textAlign: TextAlign.center,
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (success) ...[
+                  RichText(
+                    textAlign: TextAlign.center,
+                    text: TextSpan(
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.white : Colors.black,
+                        fontSize: 16,
+                      ),
+                      children: [
+                        const TextSpan(text: 'Backed up '),
+                        TextSpan(
+                          text: '$itemsUploaded',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green,
+                          ),
+                        ),
+                        const TextSpan(text: ' items to the cloud'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.green.withOpacity(0.3)),
+                    ),
+                    child: const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Backup Summary:',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Your local data has been encrypted and backed up to the cloud. This backup replaces any previous data in the cloud.',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Backup completed: ${_formatDateTime(timestamp!)}',
+                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                    textAlign: TextAlign.center,
+                  ),
+                ] else ...[
+                  Text(
+                    error ?? 'Unknown error occurred during backup',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.red[700]),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                    ),
+                    child: const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              color: Colors.amber,
+                              size: 16,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Troubleshooting',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.amber,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Make sure you have an internet connection and Supabase is accessible.',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  // Show dialog with restore results
+  void _showRestoreResultsDialog({
+    required bool success,
+    int? itemsRestored,
+    DateTime? timestamp,
+    String? error,
+  }) {
+    final isDarkMode =
+        Provider.of<ThemeServices>(context, listen: false).themeMode ==
+        ThemeMode.dark;
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            icon: Icon(
+              success ? Icons.check_circle : Icons.error,
+              color: success ? Colors.orange : Colors.red,
+              size: 48,
+            ),
+            title: Text(
+              success ? 'Restore Completed' : 'Restore Failed',
+              textAlign: TextAlign.center,
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (success) ...[
+                  RichText(
+                    textAlign: TextAlign.center,
+                    text: TextSpan(
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.white : Colors.black,
+                        fontSize: 16,
+                      ),
+                      children: [
+                        const TextSpan(text: 'Restored '),
+                        TextSpan(
+                          text: '$itemsRestored',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange,
+                          ),
+                        ),
+                        const TextSpan(text: ' items from the cloud'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                    ),
+                    child: const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Restore Summary:',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Your local data has been replaced with data from the cloud. Your previous local data has been overwritten.',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Restore completed: ${_formatDateTime(timestamp!)}',
+                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                    textAlign: TextAlign.center,
+                  ),
+                ] else ...[
+                  Text(
+                    error ?? 'Unknown error occurred during restore',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.red[700]),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                    ),
+                    child: const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              color: Colors.amber,
+                              size: 16,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Troubleshooting',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.amber,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Make sure you have an internet connection and Supabase is accessible.',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+    );
   }
 }
