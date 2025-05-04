@@ -374,7 +374,7 @@ class _WireGuardSettingsScreenState extends State<WireGuardSettingsScreen> {
             ),
             const SizedBox(height: 12),
             const Text(
-              'WireGuard creates an encrypted tunnel for your app traffic, '
+              'WireGuard creates an encrypted tunnel for the app traffic, '
               'helping bypass network restrictions while maintaining security.',
               style: TextStyle(fontSize: 14),
             ),
