@@ -211,6 +211,11 @@ class EncryptedDbService {
   // Encrypt a string
   String _encrypt(String value, String key) {
     try {
+      // Handle potentially problematic values
+      if (value.isEmpty) {
+        return ""; // Return empty string for empty input
+      }
+
       // Generate a key from the string
       final keyBytes = sha256.convert(utf8.encode(key)).bytes;
       final encryptKey = encrypt.Key(Uint8List.fromList(keyBytes));
@@ -231,7 +236,13 @@ class EncryptedDbService {
     } catch (e) {
       debugPrint('Encryption error: $e');
       // Fallback to base64 encoding if encryption fails
-      return base64.encode(utf8.encode(value));
+      try {
+        return base64.encode(utf8.encode(value));
+      } catch (encodeError) {
+        debugPrint('Base64 encoding also failed: $encodeError');
+        // Last resort: Return a safe representation of the value
+        return 'encrypted_fallback:${value.hashCode}';
+      }
     }
   }
 
@@ -341,6 +352,7 @@ class EncryptedDbService {
     String userId,
     DateTime? lastSync,
   ) async {
+    Database? prefsDb;
     try {
       debugPrint('==========================================');
       debugPrint('SYNC: Starting data collection for upload');
@@ -358,7 +370,7 @@ class EncryptedDbService {
         if (File(prefsDbPath).existsSync()) {
           debugPrint('SYNC: Found preferences database at: $prefsDbPath');
           // Open preferences database
-          final prefsDb = await openDatabase(prefsDbPath);
+          prefsDb = await openDatabase(prefsDbPath);
 
           try {
             // Check if preferences table exists
@@ -379,32 +391,55 @@ class EncryptedDbService {
 
               // Convert each preference to encrypted data format
               for (var pref in prefsList) {
-                final key = pref['key'] as String;
-                final value = pref['value'];
-                final timestamp = DateTime.now().millisecondsSinceEpoch;
-                final encryptionKey = _authService.getUserEncryptionKey();
-                final encryptedValue = _encrypt(
-                  value.toString(),
-                  encryptionKey,
-                );
-                final type = _getTypeString(value);
+                try {
+                  final key = pref['key'] as String;
+                  final value = pref['value'];
+                  final timestamp = DateTime.now().millisecondsSinceEpoch;
+                  final encryptionKey = _authService.getUserEncryptionKey();
 
-                // Add to sqlite encrypted_data table
-                await _db?.execute(
-                  'INSERT OR REPLACE INTO encrypted_data (key, value, type, updated_at) VALUES (?, ?, ?, ?)',
-                  [key, encryptedValue, type, timestamp],
-                );
+                  // Convert value to string safely
+                  String stringValue;
+                  if (value == null) {
+                    stringValue = "";
+                  } else if (value is String) {
+                    stringValue = value;
+                  } else {
+                    stringValue = value.toString();
+                  }
 
-                preferencesData.add({
-                  'user_id': userId,
-                  'data_key': key,
-                  'encrypted_value': encryptedValue,
-                  'data_type': type,
-                  'updated_at':
-                      DateTime.fromMillisecondsSinceEpoch(
-                        timestamp,
-                      ).toIso8601String(),
-                });
+                  final encryptedValue = _encrypt(stringValue, encryptionKey);
+                  final type = _getTypeString(value);
+
+                  // Check if the database is still open
+                  if (_db == null || !_db!.isOpen) {
+                    debugPrint('SYNC: Main database is closed, reopening it');
+                    await _openDatabase();
+
+                    if (_db == null || !_db!.isOpen) {
+                      throw Exception('Failed to reopen main database');
+                    }
+                  }
+
+                  // Add to sqlite encrypted_data table
+                  await _db?.execute(
+                    'INSERT OR REPLACE INTO encrypted_data (key, value, type, updated_at) VALUES (?, ?, ?, ?)',
+                    [key, encryptedValue, type, timestamp],
+                  );
+
+                  preferencesData.add({
+                    'user_id': userId,
+                    'data_key': key,
+                    'encrypted_value': encryptedValue,
+                    'data_type': type,
+                    'updated_at':
+                        DateTime.fromMillisecondsSinceEpoch(
+                          timestamp,
+                        ).toIso8601String(),
+                  });
+                } catch (e) {
+                  debugPrint('SYNC: Error processing preference item: $e');
+                  // Continue with next item
+                }
               }
 
               itemsToUpload += prefsList.length;
@@ -412,7 +447,11 @@ class EncryptedDbService {
               debugPrint('SYNC: No preferences table found in database');
             }
           } finally {
-            await prefsDb.close();
+            // Close the preferences database
+            if (prefsDb != null && prefsDb.isOpen) {
+              await prefsDb.close();
+              prefsDb = null;
+            }
           }
         } else {
           debugPrint(
@@ -421,7 +460,22 @@ class EncryptedDbService {
         }
       } catch (e) {
         debugPrint('SYNC: Error fetching preferences data: $e');
+        // Close the preferences database if it's still open
+        if (prefsDb != null && prefsDb.isOpen) {
+          await prefsDb.close();
+          prefsDb = null;
+        }
         // Continue with normal encrypted_data sync if preferences sync fails
+      }
+
+      // Check if the database is still open
+      if (_db == null || !_db!.isOpen) {
+        debugPrint('SYNC: Main database is closed, reopening it');
+        await _openDatabase();
+
+        if (_db == null || !_db!.isOpen) {
+          throw Exception('Failed to reopen main database');
+        }
       }
 
       // Now get data from the encrypted_data table
@@ -447,22 +501,30 @@ class EncryptedDbService {
       }
 
       // Add encrypted_data items to the upload
-      final dataToUpload = [
-        ...preferencesData,
-        ...localData?.map((item) {
-              return {
-                'user_id': userId,
-                'data_key': item['key'],
-                'encrypted_value': item['value'],
-                'data_type': item['type'],
-                'updated_at':
-                    DateTime.fromMillisecondsSinceEpoch(
-                      item['updated_at'] as int,
-                    ).toIso8601String(),
-              };
-            }) ??
-            [],
-      ];
+      final List<Map<String, dynamic>> dataToUpload = [...preferencesData];
+
+      // Add encrypted_data items, handling potential errors
+      if (localData != null) {
+        for (var item in localData) {
+          try {
+            dataToUpload.add({
+              'user_id': userId,
+              'data_key': item['key'] as String,
+              'encrypted_value': item['value'] as String,
+              'data_type': item['type'] as String,
+              'updated_at':
+                  DateTime.fromMillisecondsSinceEpoch(
+                    item['updated_at'] as int,
+                  ).toIso8601String(),
+            });
+          } catch (e) {
+            debugPrint(
+              'SYNC: Error adding encrypted_data item to upload batch: $e',
+            );
+            // Continue with next item
+          }
+        }
+      }
 
       itemsToUpload += localData?.length ?? 0;
       debugPrint(
@@ -500,6 +562,10 @@ class EncryptedDbService {
       debugPrint('SYNC: Successfully uploaded all local changes to Supabase');
     } catch (e) {
       debugPrint('SYNC: Error uploading changes to Supabase: $e');
+      // Close the preferences database if it's still open
+      if (prefsDb != null && prefsDb.isOpen) {
+        await prefsDb.close();
+      }
       rethrow;
     }
   }
