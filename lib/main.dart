@@ -201,29 +201,11 @@ class MainApp extends StatelessWidget {
             return const SplashScreen();
           }
 
-          // After splash screen, decide whether to show login or home screen
-          Widget nextScreen;
-          if (authService.isAuthenticated) {
-            nextScreen = HomeScreen();
-          } else {
-            // Check if this is the first time or the user has explicitly logged out
-            final hasLoggedOutBefore = Provider.of<PreferencesService>(
-              context,
-              listen: false,
-            ).getBool('has_logged_out_before', defaultValue: false);
-
-            if (hasLoggedOutBefore) {
-              nextScreen = const LoginScreen();
-            } else {
-              // For first time users, let them use the app before requiring login
-              nextScreen = HomeScreen();
-            }
-          }
-
-          // Create an animation controller manually for the transition
+          // After splash screen, always go to home screen (login is optional)
+          // The user can choose to login from the home screen if they want
           return AnimatedSwitcher(
             duration: const Duration(milliseconds: 800),
-            child: nextScreen,
+            child: HomeScreen(),
             transitionBuilder: (Widget child, Animation<double> animation) {
               final curvedAnimation = CurvedAnimation(
                 parent: animation,

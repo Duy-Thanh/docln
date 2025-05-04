@@ -1214,7 +1214,7 @@ class CrawlerService {
   // Process content in chunks to prevent UI blocking
   Future<String> _processContentChunks(String contentHtml) async {
     // Break content into manageable chunks
-    const int chunkSize = 50000; // 50KB chunks
+    const int chunkSize = 15000; // 15KB chunks
     List<String> results = [];
 
     if (contentHtml.length <= chunkSize) {
