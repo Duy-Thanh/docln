@@ -300,65 +300,6 @@ class _SplashScreenState extends State<SplashScreen>
       }
     });
 
-    // Navigate to HomeScreen after 4.5 seconds with a beautiful transition
-    Timer(const Duration(milliseconds: 4500), () {
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder:
-                (context, animation, secondaryAnimation) => HomeScreen(),
-            transitionsBuilder: (
-              context,
-              animation,
-              secondaryAnimation,
-              child,
-            ) {
-              var curved = CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutBack,
-              );
-
-              return Stack(
-                children: [
-                  FadeTransition(
-                    opacity: Tween<double>(begin: 1, end: 0).animate(
-                      CurvedAnimation(
-                        parent: animation,
-                        curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
-                      ),
-                    ),
-                    child: this.build(context),
-                  ),
-                  Transform(
-                    alignment: Alignment.center,
-                    transform:
-                        Matrix4.identity()
-                          ..setEntry(3, 2, 0.002)
-                          ..rotateX(0.01 * (1 - curved.value) * pi)
-                          ..scale(0.5 + (0.5 * curved.value)),
-                    child: FadeTransition(
-                      opacity: Tween<double>(begin: 0, end: 1).animate(
-                        CurvedAnimation(
-                          parent: animation,
-                          curve: const Interval(
-                            0.5,
-                            1.0,
-                            curve: Curves.easeOut,
-                          ),
-                        ),
-                      ),
-                      child: child,
-                    ),
-                  ),
-                ],
-              );
-            },
-            transitionDuration: const Duration(milliseconds: 1300),
-          ),
-        );
-      }
-    });
-
     // Create dynamic color gradient animation
     _gradientAnimation = ColorTween(
       begin: Colors.blue.shade700,

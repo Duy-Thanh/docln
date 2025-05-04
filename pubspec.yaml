@@ -11,6 +11,7 @@ dependencies:
     sdk: flutter
   flutter:
     sdk: flutter
+  supabase_flutter: ^2.9.0
   sqflite: ^2.4.2
   http: ^1.3.0
   html: ^0.15.6
@@ -54,6 +55,15 @@ dependencies:
   path_provider: ^2.1.5
   wireguard_flutter: ^0.1.3
   file_picker: ^8.0.0+1 # For importing/exporting preferences
+  # Encryption libraries
+  encrypt: ^5.0.3
+  crypto: ^3.0.3
+  flutter_secure_storage: ^9.0.0
+  # SQLite encryption
+  sqlcipher_flutter_libs: ^0.6.6
+  # State management with BLoC pattern
+  flutter_bloc: ^8.1.3
+  equatable: ^2.0.5
 
 dev_dependencies:
   flutter_test:

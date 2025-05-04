@@ -18,12 +18,16 @@ import 'screens/HomeScreen.dart';
 import 'services/crawler_service.dart';
 import 'services/preferences_service.dart';
 import 'services/preferences_recovery_service.dart';
+import 'services/auth_service.dart';
+import 'services/encrypted_db_service.dart';
+import 'screens/LoginScreen.dart';
 
 // Firebase
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Dart libs
 import 'dart:ui';
@@ -63,6 +67,13 @@ Future<void> migratePreferences() async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await Supabase.initialize(
+    url: 'https://cajmqxovsmtcybsezibu.supabase.co',
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNham1xeG92c210Y3lic2V6aWJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYzMTYzMDIsImV4cCI6MjA2MTg5MjMwMn0.mt7uv4_MOAJzCHBGuGw_c_OB7HXTvqmNvKzHlZqPed0',
+    debug: true,
+  );
+
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   FlutterError.onError = (errorDetails) {
@@ -97,6 +108,8 @@ void main() async {
   final dnsService = DnsService();
   final crawlerService = CrawlerService();
   final preferencesService = PreferencesService();
+  final authService = AuthService();
+  final encryptedDbService = EncryptedDbService();
 
   await Future.wait([
     preferencesService.initialize(),
@@ -109,6 +122,8 @@ void main() async {
     httpClient.initialize(),
     dnsService.initialize(),
     crawlerService.initialize(),
+    authService.initialize(),
+    encryptedDbService.initialize(),
   ]);
 
   // Set initial system UI styling
@@ -139,11 +154,15 @@ void main() async {
         ),
         ChangeNotifierProvider<BookmarkService>.value(value: bookmarkService),
         ChangeNotifierProvider<HistoryService>.value(value: historyService),
+        ChangeNotifierProvider<AuthService>.value(value: authService),
       ],
       child: const MainApp(),
     ),
   );
 }
+
+// It's handy to then extract the Supabase client in a variable for later uses
+final supabase = Supabase.instance.client;
 
 class MainApp extends StatelessWidget {
   const MainApp({super.key});
@@ -155,54 +174,81 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer2<ThemeServices, LanguageService>(
-      builder: (context, themeService, languageService, child) {
-        return AnimatedSystemUIHandler(
-          child: MaterialApp(
-            debugShowCheckedModeBanner: false,
-            themeMode: themeService.themeMode,
-            theme: themeService.getLightTheme(),
-            darkTheme: themeService.getDarkTheme(),
-            locale: languageService.currentLocale,
-            navigatorObservers: [observer],
-            localizationsDelegates: const [
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            supportedLocales: const [Locale('en', ''), Locale('vi', '')],
-            builder: (context, child) {
-              // Ensure proper MediaQuery inheritance
-              final mediaQuery = MediaQuery.of(context);
-              return MediaQuery(
-                // Prevent text scaling from affecting layout
-                data: mediaQuery.copyWith(
-                  textScaler: themeService.textScaler,
-                  // Ensure proper padding for system UI
-                  padding: mediaQuery.padding,
-                  viewPadding: mediaQuery.viewPadding,
-                  viewInsets: mediaQuery.viewInsets,
-                ),
-                child: ScrollConfiguration(
-                  // Enable scrolling everywhere
-                  behavior: const MaterialScrollBehavior().copyWith(
-                    physics: const ClampingScrollPhysics(),
-                    // Enable drag scrolling on all platforms
-                    dragDevices: {
-                      PointerDeviceKind.touch,
-                      PointerDeviceKind.mouse,
-                      PointerDeviceKind.stylus,
-                      PointerDeviceKind.trackpad,
-                    },
+    final themeService = Provider.of<ThemeServices>(context);
+    final languageService = Provider.of<LanguageService>(context);
+    final authService = Provider.of<AuthService>(context);
+
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'DocLN',
+      theme: themeService.getLightTheme(),
+      darkTheme: themeService.getDarkTheme(),
+      themeMode: themeService.themeMode,
+      navigatorObservers: [observer],
+      locale: languageService.currentLocale,
+      supportedLocales: const [Locale('en', ''), Locale('vi', '')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      home: FutureBuilder(
+        // This future checks if the splash screen has been shown and if auth is initialized
+        future: Future.delayed(const Duration(seconds: 5), () => true),
+        builder: (context, snapshot) {
+          // While waiting, show splash screen
+          if (!snapshot.hasData) {
+            return const SplashScreen();
+          }
+
+          // After splash screen, decide whether to show login or home screen
+          Widget nextScreen;
+          if (authService.isAuthenticated) {
+            nextScreen = HomeScreen();
+          } else {
+            // Check if this is the first time or the user has explicitly logged out
+            final hasLoggedOutBefore = Provider.of<PreferencesService>(
+              context,
+              listen: false,
+            ).getBool('has_logged_out_before', defaultValue: false);
+
+            if (hasLoggedOutBefore) {
+              nextScreen = const LoginScreen();
+            } else {
+              // For first time users, let them use the app before requiring login
+              nextScreen = HomeScreen();
+            }
+          }
+
+          // Create an animation controller manually for the transition
+          return AnimatedSwitcher(
+            duration: const Duration(milliseconds: 800),
+            child: nextScreen,
+            transitionBuilder: (Widget child, Animation<double> animation) {
+              final curvedAnimation = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutBack,
+              );
+
+              return FadeTransition(
+                opacity: Tween<double>(begin: 0.0, end: 1.0).animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
                   ),
-                  child: child!,
+                ),
+                child: ScaleTransition(
+                  scale: Tween<double>(
+                    begin: 0.7,
+                    end: 1.0,
+                  ).animate(curvedAnimation),
+                  child: child,
                 ),
               );
             },
-            home: const SplashScreen(),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }

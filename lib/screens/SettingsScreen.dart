@@ -23,6 +23,9 @@ import '../screens/widgets/update_dialog.dart';
 import '../screens/WireGuardSettingsScreen.dart';
 import '../services/preferences_recovery_service.dart';
 import 'package:file_picker/file_picker.dart';
+import '../services/auth_service.dart';
+import 'LoginScreen.dart';
+import 'SignupScreen.dart';
 
 // GridPainter class at the top level
 class GridPainter extends CustomPainter {
@@ -3236,6 +3239,7 @@ class SettingsScreenState extends State<SettingsScreen>
             ),
             SliverList(
               delegate: SliverChildListDelegate([
+                _buildAccountSection(),
                 _buildSection('Appearance', [
                   _buildModernSwitchTile(
                     'Dark Mode',
@@ -3321,6 +3325,558 @@ class SettingsScreenState extends State<SettingsScreen>
                 )
                 : null,
       ),
+    );
+  }
+
+  // Build the account section
+  Widget _buildAccountSection() {
+    final authService = Provider.of<AuthService>(context);
+    final isDarkMode =
+        Provider.of<ThemeServices>(context).themeMode == ThemeMode.dark;
+
+    return _buildSection('Account', [
+      if (authService.isAuthenticated && authService.currentUser != null) ...[
+        // User is authenticated, show user info
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 10,
+          ),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.person, color: Colors.blue),
+          ),
+          title: Text(
+            authService.currentUser?.userMetadata?['username'] ??
+                authService.currentUser?.email?.split('@')[0] ??
+                'User',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          subtitle: Text(
+            authService.currentUser?.email ?? '',
+            style: TextStyle(color: Colors.grey[600]),
+          ),
+        ),
+
+        // Profile settings
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 8,
+          ),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.edit, color: Colors.green),
+          ),
+          title: const Text('Edit Profile'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _showEditProfileDialog(),
+        ),
+
+        // Change password
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 8,
+          ),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.amber.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.lock, color: Colors.amber),
+          ),
+          title: const Text('Change Password'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _showChangePasswordDialog(),
+        ),
+
+        // Cloud sync settings
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 8,
+          ),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.purple.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.cloud_sync, color: Colors.purple),
+          ),
+          title: const Text('Cloud Sync'),
+          trailing: Switch(
+            value: true, // Always on when logged in
+            onChanged: null,
+            activeTrackColor: Colors.green[200],
+            activeColor: Colors.green,
+          ),
+          subtitle: const Text(
+            'Your data is automatically encrypted and synced',
+          ),
+        ),
+
+        // Logout
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 8,
+          ),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.red.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.logout, color: Colors.red),
+          ),
+          title: const Text(
+            'Logout',
+            style: TextStyle(fontWeight: FontWeight.w500),
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _showLogoutConfirmation(),
+        ),
+      ] else ...[
+        // User is not authenticated, show login/signup options
+        _buildUnauthenticatedView(isDarkMode),
+      ],
+    ]);
+  }
+
+  // Build UI for unauthenticated users
+  Widget _buildUnauthenticatedView(bool isDarkMode) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDarkMode ? Colors.grey[850] : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.cloud_sync, color: Colors.blue[700], size: 28),
+              const SizedBox(width: 12),
+              const Text(
+                'Sync Across Devices',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Create an account to securely sync your reading history, preferences, and bookmarks across all your devices.',
+            style: TextStyle(
+              fontSize: 14,
+              color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Your data is fully encrypted for security.',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: isDarkMode ? Colors.grey[300] : Colors.grey[800],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _navigateToLoginScreen(),
+                  icon: const Icon(Icons.login),
+                  label: const Text('LOGIN'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[700],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _navigateToSignupScreen(),
+                  icon: const Icon(Icons.person_add),
+                  label: const Text('SIGN UP'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    side: BorderSide(color: Colors.blue[700]!),
+                    foregroundColor: Colors.blue[700],
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Show edit profile dialog
+  void _showEditProfileDialog() {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final currentUsername =
+        authService.currentUser?.userMetadata?['username'] ??
+        authService.currentUser?.email?.split('@')[0] ??
+        '';
+
+    final usernameController = TextEditingController(text: currentUsername);
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.edit, color: Colors.blue),
+                SizedBox(width: 8),
+                Text('Edit Profile'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: usernameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Username',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('CANCEL'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+
+                  if (usernameController.text.isEmpty ||
+                      usernameController.text == currentUsername) {
+                    return;
+                  }
+
+                  final success = await authService.updateProfile(
+                    username: usernameController.text.trim(),
+                  );
+
+                  if (success && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Profile updated successfully'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  } else if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          authService.error ?? 'Failed to update profile',
+                        ),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                },
+                child: const Text('SAVE'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  // Show change password dialog
+  void _showChangePasswordDialog() {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final currentPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+
+    bool obscureCurrentPassword = true;
+    bool obscureNewPassword = true;
+    bool obscureConfirmPassword = true;
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder:
+                (context, setState) => AlertDialog(
+                  title: const Row(
+                    children: [
+                      Icon(Icons.lock, color: Colors.amber),
+                      SizedBox(width: 8),
+                      Text('Change Password'),
+                    ],
+                  ),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: currentPasswordController,
+                        obscureText: obscureCurrentPassword,
+                        decoration: InputDecoration(
+                          labelText: 'Current Password',
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              obscureCurrentPassword
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                obscureCurrentPassword =
+                                    !obscureCurrentPassword;
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: newPasswordController,
+                        obscureText: obscureNewPassword,
+                        decoration: InputDecoration(
+                          labelText: 'New Password',
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              obscureNewPassword
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                obscureNewPassword = !obscureNewPassword;
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: confirmPasswordController,
+                        obscureText: obscureConfirmPassword,
+                        decoration: InputDecoration(
+                          labelText: 'Confirm New Password',
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              obscureConfirmPassword
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                obscureConfirmPassword =
+                                    !obscureConfirmPassword;
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('CANCEL'),
+                    ),
+                    FilledButton(
+                      onPressed: () async {
+                        // Validate passwords
+                        if (currentPasswordController.text.isEmpty ||
+                            newPasswordController.text.isEmpty ||
+                            confirmPasswordController.text.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Please fill in all fields'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          return;
+                        }
+
+                        if (newPasswordController.text !=
+                            confirmPasswordController.text) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('New passwords do not match'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          return;
+                        }
+
+                        Navigator.pop(context);
+
+                        // Show loading indicator
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder:
+                              (context) => const Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                        );
+
+                        final success = await authService.changePassword(
+                          currentPasswordController.text,
+                          newPasswordController.text,
+                        );
+
+                        // Hide loading indicator
+                        if (mounted) Navigator.pop(context);
+
+                        if (success && mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Password changed successfully'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        } else if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                authService.error ??
+                                    'Failed to change password',
+                              ),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      },
+                      child: const Text('CHANGE PASSWORD'),
+                    ),
+                  ],
+                ),
+          ),
+    );
+  }
+
+  // Show logout confirmation
+  void _showLogoutConfirmation() {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.logout, color: Colors.red),
+                SizedBox(width: 8),
+                Text('Logout'),
+              ],
+            ),
+            content: const Text(
+              'Are you sure you want to logout? Your local data will be preserved, but you won\'t be able to sync across devices until you log back in.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('CANCEL'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+
+                  // Show loading indicator
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder:
+                        (context) =>
+                            const Center(child: CircularProgressIndicator()),
+                  );
+
+                  final authService = Provider.of<AuthService>(
+                    context,
+                    listen: false,
+                  );
+                  final prefsService = Provider.of<PreferencesService>(
+                    context,
+                    listen: false,
+                  );
+
+                  final success = await authService.signOut();
+
+                  // Mark that the user has explicitly logged out
+                  await prefsService.setBool('has_logged_out_before', true);
+
+                  // Hide loading indicator
+                  if (mounted) Navigator.pop(context);
+
+                  if (success && mounted) {
+                    // Navigate to login screen
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const LoginScreen(),
+                      ),
+                    );
+                  } else if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(authService.error ?? 'Failed to logout'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                },
+                style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                child: const Text('LOGOUT'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  // Navigate to login screen
+  void _navigateToLoginScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+    );
+  }
+
+  // Navigate to signup screen
+  void _navigateToSignupScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const SignupScreen()),
     );
   }
 }
