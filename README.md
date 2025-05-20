@@ -8,7 +8,7 @@ iOS build officially released in release: **release_2025.05.01_02-32**! Check it
 
 The app is now in a **stable for daily use** state, so the update cycle will change.
 
-Previously, because the app was in a heavy development state, the number of builds released in a day could be up to 5 releases in a day. However, because the app is in a stable state, the update and source code release cycle, from 05/20/2025, will be 2 weeks one release.
+Previously, because the app was in a heavy development state, the number of builds released in a day could be up to 5 releases in a day. However, because the app is in a stable state, the update and source code release cycle, from 05/20/2025, will be **2 weeks one release**.
 
 # Bugs about corrupted preference file
 
