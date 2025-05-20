@@ -6,7 +6,9 @@ iOS build officially released in release: **release_2025.05.01_02-32**! Check it
 
 # Bugs about corrupted preference file
 
-On iOS build, when you open the WebView screen (press to item in Annoucement section),
+**UPDATE**: This issues have addressed. Please make sure that you have updated to the latest version
+
+**Details problem:** _On iOS build, when you open the WebView screen (press to item in Annoucement section),
 no matter the WebView loaded the website succeeded or not, when restart application, 
 the preference are corrupted.
 
@@ -16,7 +18,7 @@ Android and iOS. To use this feature, make sure you have latest version.
 The backup preferences will be triggered every 6 hours, but remember to backup preferences
 **regularly**. If your preferences broken, you can easily restore your preferences.
 
-Remember to restart application after restore preferences to take effect!
+Remember to restart application after restore preferences to take effect!_
 
 ## IMPORTANT NOTICE:
 
