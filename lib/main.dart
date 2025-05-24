@@ -23,10 +23,12 @@ import 'services/encrypted_db_service.dart';
 import 'screens/LoginScreen.dart';
 
 // Firebase
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
-import 'package:firebase_crashlytics/firebase_crashlytics.dart';
-import 'package:firebase_analytics/firebase_analytics.dart';
+// import 'package:firebase_core/firebase_core.dart';
+// import 'firebase_options.dart';
+// import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+// import 'package:firebase_analytics/firebase_analytics.dart';
+
+// Supabase for Database
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Dart libs
@@ -74,23 +76,23 @@ void main() async {
     debug: true,
   );
 
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  FlutterError.onError = (errorDetails) {
-    FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
-  };
+  // FlutterError.onError = (errorDetails) {
+  //   FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
+  // };
 
-  // Pass all uncaught asynchronous errors that aren't handled by the Flutter framework to Crashlytics
-  PlatformDispatcher.instance.onError = (error, stack) {
-    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-    return true;
-  };
+  // // Pass all uncaught asynchronous errors that aren't handled by the Flutter framework to Crashlytics
+  // PlatformDispatcher.instance.onError = (error, stack) {
+  //   FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+  //   return true;
+  // };
 
-  // Add this test event
-  await FirebaseAnalytics.instance.logEvent(
-    name: 'app_opened',
-    parameters: {'time': DateTime.now().toString()},
-  );
+  // // Add this test event
+  // await FirebaseAnalytics.instance.logEvent(
+  //   name: 'app_opened',
+  //   parameters: {'time': DateTime.now().toString()},
+  // );
 
   // Initialize and repair SQLite preferences if needed (before initializing other services)
   await PreferencesService.repairIfNeeded();
@@ -167,10 +169,10 @@ final supabase = Supabase.instance.client;
 class MainApp extends StatelessWidget {
   const MainApp({super.key});
 
-  static FirebaseAnalytics analytics = FirebaseAnalytics.instance;
-  static FirebaseAnalyticsObserver observer = FirebaseAnalyticsObserver(
-    analytics: analytics,
-  );
+  // static FirebaseAnalytics analytics = FirebaseAnalytics.instance;
+  // static FirebaseAnalyticsObserver observer = FirebaseAnalyticsObserver(
+  //   analytics: analytics,
+  // );
 
   @override
   Widget build(BuildContext context) {
@@ -184,7 +186,6 @@ class MainApp extends StatelessWidget {
       theme: themeService.getLightTheme(),
       darkTheme: themeService.getDarkTheme(),
       themeMode: themeService.themeMode,
-      navigatorObservers: [observer],
       locale: languageService.currentLocale,
       supportedLocales: const [Locale('en', ''), Locale('vi', '')],
       localizationsDelegates: const [

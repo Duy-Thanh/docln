@@ -66,3 +66,7 @@
 
 # Remove kotlin metadata annotations (Safe - reduces size)
 -dontwarn kotlin.reflect.jvm.internal.**
+
+# Firebase Performance (ignore missing classes)
+-dontwarn com.google.firebase.perf.**
+-dontwarn com.google.firebase.perf.network.FirebasePerfUrlConnection
