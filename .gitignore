@@ -15,7 +15,7 @@ datas/
 
 # Completely removed iOS and macOS supported
 # ios/
-macos/
+# macos/
 
 # IntelliJ related
 *.iml
@@ -47,6 +47,7 @@ rel.txt
 .pub-cache/
 .pub/
 /build/
+unused/*
 
 # Symbolication related
 app.*.symbols
