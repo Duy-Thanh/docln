@@ -36,10 +36,8 @@ dependencies:
   dio_cache_interceptor: ^3.5.0
   # Persistent cache storage
   cached_network_image: ^3.4.1
-  # Performance monitoring
-  # firebase_performance: ^0.10.1+5
   # Error tracking
-  sentry_flutter: ^8.14.2
+  # sentry_flutter: ^8.14.2
   # Efficient image loading and caching
   flutter_cache_manager: ^3.4.1
   # Image compression
@@ -49,8 +47,6 @@ dependencies:
   dio: ^5.7.0
   open_file: ^3.5.10
   shimmer: ^3.0.0
-  # firebase_analytics: ^11.4.5
-  # firebase_crashlytics: ^4.3.5
   timeago: ^3.7.0
   path_provider: ^2.1.5
   wireguard_flutter: ^0.1.3
