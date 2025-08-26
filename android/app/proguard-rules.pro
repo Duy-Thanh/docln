@@ -70,3 +70,26 @@
 # Firebase Performance (ignore missing classes)
 -dontwarn com.google.firebase.perf.**
 -dontwarn com.google.firebase.perf.network.FirebasePerfUrlConnection
+
+# XML handling (fix for R8 missing classes)
+-dontwarn javax.xml.stream.**
+-dontwarn org.apache.tika.**
+-dontwarn java.beans.**
+-dontwarn javax.xml.**
+-keep class javax.xml.stream.** { *; }
+
+# WebView and related classes
+-keep class android.webkit.** { *; }
+-keep class androidx.webkit.** { *; }
+
+# Sentry flutter
+-keep class io.sentry.** { *; }
+-dontwarn io.sentry.**
+
+# Wireguard flutter
+-keep class billion.group.wireguard_flutter.** { *; }
+
+# Keep all classes that might be referenced via reflection
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">docln.sbs</domain>
+        <domain includeSubdomains="true">docln.net</domain>
+        <domain includeSubdomains="true">ln.hako.vn</domain>
+        <domain includeSubdomains="true">i.docln.net</domain>
+        <domain includeSubdomains="true">i.hako.vn</domain>
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+    </domain-config>
+    
+    <!-- Allow user-added CAs -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system"/>
+            <certificates src="user"/>
+        </trust-anchors>
+    </base-config>
+</network-security-config>

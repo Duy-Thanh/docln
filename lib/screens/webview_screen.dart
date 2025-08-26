@@ -47,6 +47,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   final List<String> _allowedDomains = [
     'ln.hako.vn',
     'docln.net',
+    'docln.sbs',
     'i.docln.net',
     'i.hako.vn',
   ];
@@ -321,9 +322,19 @@ class _WebViewScreenState extends State<WebViewScreen> {
               },
             ),
           )
-          // Add console message handling
+          // Add console message handling with filtering
           ..setOnConsoleMessage((JavaScriptConsoleMessage message) {
-            debugPrint('WebView Console: ${message.message}');
+            final msg = message.message;
+            // Filter out known harmless WebView errors
+            if (msg.contains('Cannot read properties of null') ||
+                msg.contains('Cannot read properties of undefined') ||
+                msg.contains('Push notifications are not supported') ||
+                msg.contains('Alpine Expression Error') ||
+                msg.contains('net::ERR_CONNECTION_REFUSED')) {
+              // Suppress these common WebView errors
+              return;
+            }
+            debugPrint('WebView Console: $msg');
           });
 
     controller.loadRequest(Uri.parse(fullUrl));
@@ -466,6 +477,68 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
       // Inject navbar removal script
       await _controller!.runJavaScript(_navbarRemovalScript);
+
+      // Inject error prevention and handling scripts
+      await _controller!.runJavaScript('''
+        // Error prevention for common WebView issues
+        (function() {
+          // Prevent Alpine.js errors by providing fallback store
+          if (typeof window.\$store === 'undefined') {
+            window.\$store = {
+              toast: {
+                on: false,
+                message: '',
+                show: function() {},
+                hide: function() {}
+              }
+            };
+          }
+
+          // Prevent null element access errors
+          const originalQuerySelector = document.querySelector;
+          const originalQuerySelectorAll = document.querySelectorAll;
+          
+          document.querySelector = function(selector) {
+            try {
+              return originalQuerySelector.call(document, selector);
+            } catch (e) {
+              console.warn('querySelector error prevented:', e);
+              return null;
+            }
+          };
+
+          document.querySelectorAll = function(selector) {
+            try {
+              return originalQuerySelectorAll.call(document, selector);
+            } catch (e) {
+              console.warn('querySelectorAll error prevented:', e);
+              return [];
+            }
+          };
+
+          // Suppress push notification errors
+          if (!('Notification' in window)) {
+            window.Notification = {
+              requestPermission: function() { return Promise.resolve('denied'); },
+              permission: 'denied'
+            };
+          }
+
+          // Override console.error to reduce noise
+          const originalError = console.error;
+          console.error = function(...args) {
+            const message = args.join(' ');
+            if (message.includes('Cannot read properties of null') ||
+                message.includes('Cannot read properties of undefined') ||
+                message.includes('Push notifications are not supported') ||
+                message.includes('Alpine Expression Error')) {
+              // Suppress these common WebView errors
+              return;
+            }
+            originalError.apply(console, args);
+          };
+        })();
+      ''');
 
       // Additional cleanup for reader experience
       await _controller!.runJavaScript('''

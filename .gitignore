@@ -63,3 +63,4 @@ app.*.map.json
 data.html
 create_user_databases_table.sql
 fix_user_databases.sql
+output.txt
