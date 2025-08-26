@@ -2,7 +2,15 @@
 
 Light Novel Reader written in Flutter (for Android, Windows and Linux)
 
-iOS build officially released in release: **release_2025.05.01_02-32**! Check it out! 
+iOS build officially released in release: **release_2025.05.01_02-32**! Check it out!
+
+**_DCL1 End of Life Announcement, Preparing to Move to New DCL2 Application Architecture:_**
+
+_The 2025.08.26 release (to be released on 26/08/2025) will be the FINAL release of the current application architecture family (codenamed DCL1). This application will use the new application architecture family codenamed DCL2 after the 2025.08.26 release
+
+The 2025.08.26 release is released AS A FINAL SECURITY UPDATE for the DCL1 application architecture and is a PREPARATION release for the DCL2 application architecture.
+
+That said, the 2025.08.26 release will NOT FIX ANY BUG, ​​it will only update security and prepare for the new application architecture._
 
 # App Update Policy (Updated 05/20/2025):
 
