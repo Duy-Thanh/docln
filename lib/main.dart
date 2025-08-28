@@ -22,6 +22,10 @@ import 'services/auth_service.dart';
 import 'services/encrypted_db_service.dart';
 import 'screens/LoginScreen.dart';
 
+// DCL2 Architecture Components
+import 'dcl2/core/di/injection_container.dart' as dcl2_di;
+import 'dcl2/core/utils/feature_flag_service.dart';
+
 // Firebase
 // import 'package:firebase_core/firebase_core.dart';
 // import 'firebase_options.dart';
@@ -99,6 +103,9 @@ void main() async {
 
   // Migrate from old preferences to new SQLite-based preferences
   await migratePreferences();
+
+  // Initialize DCL2 dependency injection alongside DCL1
+  await dcl2_di.initializeDcl2Dependencies();
 
   final themeService = ThemeServices();
   final languageService = LanguageService();
