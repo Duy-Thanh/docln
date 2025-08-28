@@ -6,6 +6,7 @@ export 'core/errors/failures.dart';
 export 'core/errors/exceptions.dart';
 export 'core/utils/use_case.dart';
 export 'core/utils/feature_flag_service.dart';
+export 'core/utils/migration_helper.dart';
 export 'core/network/network_client.dart';
 export 'core/di/injection_container.dart';
 
@@ -21,3 +22,4 @@ export 'features/bookmarks/data/repositories/bookmark_repository_impl.dart';
 export 'features/bookmarks/presentation/blocs/bookmark_bloc.dart';
 export 'features/bookmarks/presentation/blocs/bookmark_event.dart';
 export 'features/bookmarks/presentation/blocs/bookmark_state.dart';
+export 'features/bookmarks/presentation/widgets/hybrid_bookmark_button.dart';

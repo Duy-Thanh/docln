@@ -78,6 +78,8 @@ dev_dependencies:
   json_serializable: ^6.8.0
   # Code generation for dependency injection
   injectable_generator: ^2.6.2
+  # Testing
+  mockito: ^5.4.4
 
 flutter:
   uses-material-design: true

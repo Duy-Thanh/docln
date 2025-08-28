@@ -12,6 +12,26 @@ _The 2025.08.26 release is released AS A FINAL SECURITY UPDATE for the DCL1 appl
 
 _That said, the 2025.08.26 release will NOT FIX ANY BUG, ​​it will only update security and prepare for the new application architecture._
 
+## DCL2 Migration Progress
+
+✅ **Foundation Complete**: DCL2 architecture foundation implemented with Clean Architecture principles  
+✅ **Bookmarks Feature**: Complete DCL2 implementation with migration support  
+🔄 **Feature Flags**: Gradual migration system with runtime feature toggles  
+📊 **Migration Status**: DCL1 and DCL2 running side-by-side  
+
+### Current DCL2 Features Available:
+- **Bookmarks**: Full DCL2 implementation with BLoC state management
+- **Migration Tools**: Automated data migration from DCL1 to DCL2
+- **Feature Flags**: Runtime toggling between DCL1 and DCL2 implementations
+- **Developer Tools**: Migration scripts and status monitoring
+
+### How to Enable DCL2 Features:
+1. **Runtime Control**: Access migration settings in the app
+2. **Developer Script**: Use `./scripts/dcl2_migration.sh enable bookmarks`  
+3. **Constants**: Modify `lib/dcl2/core/constants/constants.dart`
+
+For detailed migration information, see [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)
+
 # App Update Policy (Updated 05/20/2025):
 
 The app is now in a **stable for daily use** state, so the update cycle will change.

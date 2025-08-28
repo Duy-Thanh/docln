@@ -1,0 +1,8 @@
+targets:
+  $default:
+    builders:
+      injectable_generator:injectable_config_builder:
+        enabled: true
+        options:
+          auto_register: true
+          class_name: configureDependencies
