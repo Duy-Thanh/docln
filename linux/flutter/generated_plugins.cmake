@@ -3,6 +3,8 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  dynamic_color
+  file_selector_linux
   flutter_secure_storage_linux
   open_file_linux
   sentry_flutter

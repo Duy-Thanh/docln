@@ -11,28 +11,31 @@ dependencies:
     sdk: flutter
   flutter:
     sdk: flutter
+  dynamic_color: ^1.7.0
+  palette_generator: ^0.3.3+4
+  image_picker: ^1.1.2
   sqflite: ^2.4.2
   http: ^1.5.0
   html: ^0.15.6
   shared_preferences: ^2.5.3
-  fluttertoast: ^8.2.12
+  fluttertoast: ^9.0.0
   webview_flutter: ^4.13.0
   provider: ^6.1.5+1
-  flutter_local_notifications: ^19.4.1
+  flutter_local_notifications: ^19.4.2
   permission_handler: ^12.0.1
   app_settings: 5.1.1 # fix
   flutter_launcher_icons: ^0.14.4
-  share_plus: ^11.1.0
+  share_plus: ^12.0.0
   url_launcher: ^6.3.2
-  android_intent_plus: ^5.3.1
-  package_info_plus: ^8.3.1
-  intl: ^0.20.0
-  translator: ^1.0.3+1
+  android_intent_plus: ^6.0.0
+  package_info_plus: ^9.0.0
+  intl: ^0.20.2
+  translator: ^1.0.4+1
   hive_flutter: ^1.1.0
   # Fast, lightweight key-value storage
   hive: ^2.2.3
   # Cache network requests
-  dio_cache_interceptor: ^4.0.3
+  dio_cache_interceptor: ^4.0.5
   # Persistent cache storage
   cached_network_image: ^3.4.1
   # Error tracking
@@ -51,7 +54,7 @@ dependencies:
   timeago: ^3.7.1
   path_provider: ^2.1.5
   wireguard_flutter: ^0.1.3
-  file_picker: ^10.3.2 # For importing/exporting preferences
+  file_picker: ^10.3.3 # For importing/exporting preferences
   # Encryption libraries
   encrypt: ^5.0.3
   crypto: ^3.0.6

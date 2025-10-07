@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:dynamic_color/dynamic_color.dart';
 import 'preferences_service.dart';
 
 class ThemeServices extends ChangeNotifier {
@@ -15,6 +15,9 @@ class ThemeServices extends ChangeNotifier {
   late ThemeMode _themeMode;
   double _textScaleFactor = 1.0;
   double _textSize = 16.0;
+  bool _useDynamicColor = true;
+  ColorScheme? _lightDynamicColorScheme;
+  ColorScheme? _darkDynamicColorScheme;
 
   // Preferences service instance
   final PreferencesService _prefsService = PreferencesService();
@@ -23,6 +26,9 @@ class ThemeServices extends ChangeNotifier {
   // New getter for textScaler
   TextScaler get textScaler => TextScaler.linear(_textSize / 16.0);
   double get textSize => _textSize;
+  bool get useDynamicColor => _useDynamicColor;
+  ColorScheme? get lightDynamicColorScheme => _lightDynamicColorScheme;
+  ColorScheme? get darkDynamicColorScheme => _darkDynamicColorScheme;
 
   Future<void> init() async {
     try {
@@ -36,7 +42,13 @@ class ThemeServices extends ChangeNotifier {
         'textSize',
         defaultValue: 16.0,
       )).clamp(12.0, 24.0);
+      _useDynamicColor = _prefsService.getBool('useDynamicColor', defaultValue: true);
+      
+      // Load dynamic colors from system (Material You)
+      await _loadDynamicColors();
+      
       print('🔤 Initialized text size: $_textSize');
+      print('🎨 Dynamic colors enabled: $_useDynamicColor');
       notifyListeners();
     } catch (e) {
       print('Error initializing ThemeServices: $e');
@@ -49,6 +61,31 @@ class ThemeServices extends ChangeNotifier {
   Future<void> setThemeMode(bool isDark) async {
     await _prefsService.setBool('darkMode', isDark);
     _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+    notifyListeners();
+  }
+
+  // Load dynamic colors from system
+  Future<void> _loadDynamicColors() async {
+    try {
+      final corePalette = await DynamicColorPlugin.getCorePalette();
+      if (corePalette != null) {
+        _lightDynamicColorScheme = corePalette.toColorScheme(brightness: Brightness.light);
+        _darkDynamicColorScheme = corePalette.toColorScheme(brightness: Brightness.dark);
+        print('🎨 Loaded dynamic colors from system');
+      } else {
+        print('🎨 Dynamic colors not available on this device');
+      }
+    } catch (e) {
+      print('🎨 Error loading dynamic colors: $e');
+    }
+  }
+
+  Future<void> setDynamicColor(bool useDynamic) async {
+    await _prefsService.setBool('useDynamicColor', useDynamic);
+    _useDynamicColor = useDynamic;
+    if (useDynamic) {
+      await _loadDynamicColors();
+    }
     notifyListeners();
   }
 
@@ -93,24 +130,26 @@ class ThemeServices extends ChangeNotifier {
       'bodySmall': 12.0,
     };
 
-    const primaryColor = Color(0xFF4361EE);
-    const secondaryColor = Color(0xFFFF6B6B);
+    // Use dynamic colors if available and enabled, otherwise fallback to custom colors
+    ColorScheme colorScheme;
+    if (_useDynamicColor && _lightDynamicColorScheme != null) {
+      colorScheme = _lightDynamicColorScheme!;
+      print('🎨 Using dynamic light color scheme');
+    } else {
+      // Fallback Material You inspired color scheme
+      const primaryColor = Color(0xFF4361EE);
+      colorScheme = ColorScheme.fromSeed(
+        seedColor: primaryColor,
+        brightness: Brightness.light,
+      );
+      print('🎨 Using static light color scheme');
+    }
 
     // Apply scale factor to all sizes
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      primaryColor: primaryColor,
-      colorScheme: ColorScheme.light(
-        primary: primaryColor,
-        secondary: secondaryColor,
-        tertiary: const Color(0xFF4CC9F0),
-        surface: Colors.white,
-        background: const Color(0xFFF8F9FA),
-        surfaceVariant: const Color(0xFFEEF2FF),
-        primaryContainer: const Color(0xFFD8E2FF),
-        secondaryContainer: const Color(0xFFFFE8E8),
-      ),
+      colorScheme: colorScheme,
       textTheme: TextTheme(
         displayLarge: TextStyle(
           fontSize: baseSizes['displayLarge']! * _textScaleFactor,
@@ -168,22 +207,22 @@ class ThemeServices extends ChangeNotifier {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         clipBehavior: Clip.antiAlias,
       ),
-      appBarTheme: const AppBarTheme(
+      appBarTheme: AppBarTheme(
         elevation: 0,
         centerTitle: false,
-        backgroundColor: Colors.white,
-        foregroundColor: primaryColor,
+        backgroundColor: colorScheme.surface,
+        foregroundColor: colorScheme.primary,
         titleTextStyle: TextStyle(
-          color: Colors.black87,
+          color: colorScheme.onSurface,
           fontSize: 18,
           fontWeight: FontWeight.bold,
         ),
-        iconTheme: IconThemeData(color: primaryColor),
+        iconTheme: IconThemeData(color: colorScheme.primary),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          foregroundColor: Colors.white,
-          backgroundColor: primaryColor,
+          foregroundColor: colorScheme.onPrimary,
+          backgroundColor: colorScheme.primary,
           elevation: 2,
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           shape: RoundedRectangleBorder(
@@ -193,7 +232,7 @@ class ThemeServices extends ChangeNotifier {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: primaryColor,
+          foregroundColor: colorScheme.primary,
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -201,32 +240,32 @@ class ThemeServices extends ChangeNotifier {
         ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(foregroundColor: primaryColor),
+        style: TextButton.styleFrom(foregroundColor: colorScheme.primary),
       ),
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
         elevation: 8,
         backgroundColor: Colors.white,
-        selectedItemColor: primaryColor,
+        selectedItemColor: colorScheme.primary,
         unselectedItemColor: Colors.grey,
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: primaryColor.withOpacity(0.1),
+        backgroundColor: colorScheme.primary.withOpacity(0.1),
         labelStyle: TextStyle(
-          color: primaryColor,
+          color: colorScheme.primary,
           fontSize: 12 * _textScaleFactor,
         ),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
       tabBarTheme: TabBarThemeData(
-        labelColor: primaryColor,
+        labelColor: colorScheme.primary,
         unselectedLabelColor: Colors.grey,
         indicator: BoxDecoration(
-          border: Border(bottom: BorderSide(color: primaryColor, width: 2)),
+          border: Border(bottom: BorderSide(color: colorScheme.primary, width: 2)),
         ),
       ),
     );
-  }
+  } // End of getLightTheme
 
   ThemeData getDarkTheme() {
     // Reuse the same base sizes
@@ -245,23 +284,25 @@ class ThemeServices extends ChangeNotifier {
       'bodySmall': 12.0,
     };
 
-    const primaryColor = Color(0xFF4CC9F0);
-    const secondaryColor = Color(0xFFFF6B6B);
+    // Use dynamic colors if available and enabled, otherwise fallback to custom colors
+    ColorScheme colorScheme;
+    if (_useDynamicColor && _darkDynamicColorScheme != null) {
+      colorScheme = _darkDynamicColorScheme!;
+      print('🎨 Using dynamic dark color scheme');
+    } else {
+      // Fallback Material You inspired color scheme
+      const primaryColor = Color(0xFF4CC9F0);
+      colorScheme = ColorScheme.fromSeed(
+        seedColor: primaryColor,
+        brightness: Brightness.dark,
+      );
+      print('🎨 Using static dark color scheme');
+    }
 
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
-      primaryColor: primaryColor,
-      colorScheme: ColorScheme.dark(
-        primary: primaryColor,
-        secondary: secondaryColor,
-        tertiary: const Color(0xFF4361EE),
-        surface: const Color(0xFF1E1E1E),
-        background: const Color(0xFF121212),
-        surfaceVariant: const Color(0xFF2A2A2A),
-        primaryContainer: const Color(0xFF20385B),
-        secondaryContainer: const Color(0xFF662B2B),
-      ),
+      colorScheme: colorScheme,
       textTheme: TextTheme(
         displayLarge: TextStyle(
           fontSize: baseSizes['displayLarge']! * _textScaleFactor,
@@ -332,21 +373,21 @@ class ThemeServices extends ChangeNotifier {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         clipBehavior: Clip.antiAlias,
       ),
-      appBarTheme: const AppBarTheme(
+      appBarTheme: AppBarTheme(
         elevation: 0,
         centerTitle: false,
-        backgroundColor: Color(0xFF121212),
-        titleTextStyle: TextStyle(
+        backgroundColor: const Color(0xFF121212),
+        titleTextStyle: const TextStyle(
           color: Colors.white,
           fontSize: 18,
           fontWeight: FontWeight.bold,
         ),
-        iconTheme: IconThemeData(color: primaryColor),
+        iconTheme: IconThemeData(color: colorScheme.primary),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           foregroundColor: Colors.white,
-          backgroundColor: primaryColor,
+          backgroundColor: colorScheme.primary,
           elevation: 3,
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           shape: RoundedRectangleBorder(
@@ -356,7 +397,7 @@ class ThemeServices extends ChangeNotifier {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: primaryColor,
+          foregroundColor: colorScheme.primary,
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -364,28 +405,28 @@ class ThemeServices extends ChangeNotifier {
         ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(foregroundColor: primaryColor),
+        style: TextButton.styleFrom(foregroundColor: colorScheme.primary),
       ),
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
         elevation: 8,
-        backgroundColor: Color(0xFF1E1E1E),
-        selectedItemColor: primaryColor,
+        backgroundColor: const Color(0xFF1E1E1E),
+        selectedItemColor: colorScheme.primary,
         unselectedItemColor: Colors.grey,
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: primaryColor.withOpacity(0.2),
+        backgroundColor: colorScheme.primary.withOpacity(0.2),
         labelStyle: TextStyle(
-          color: primaryColor,
+          color: colorScheme.primary,
           fontSize: 12 * _textScaleFactor,
         ),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
       tabBarTheme: TabBarThemeData(
-        labelColor: primaryColor,
+        labelColor: colorScheme.primary,
         unselectedLabelColor: Colors.grey,
         indicator: BoxDecoration(
-          border: Border(bottom: BorderSide(color: primaryColor, width: 2)),
+          border: Border(bottom: BorderSide(color: colorScheme.primary, width: 2)),
         ),
       ),
     );
