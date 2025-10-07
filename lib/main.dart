@@ -18,9 +18,7 @@ import 'screens/HomeScreen.dart';
 import 'services/crawler_service.dart';
 import 'services/preferences_service.dart';
 import 'services/preferences_recovery_service.dart';
-import 'services/auth_service.dart';
-import 'services/encrypted_db_service.dart';
-import 'screens/LoginScreen.dart';
+
 
 // Firebase
 // import 'package:firebase_core/firebase_core.dart';
@@ -28,8 +26,7 @@ import 'screens/LoginScreen.dart';
 // import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 // import 'package:firebase_analytics/firebase_analytics.dart';
 
-// Supabase for Database
-import 'package:supabase_flutter/supabase_flutter.dart';
+
 
 // Dart libs
 import 'dart:ui';
@@ -69,13 +66,6 @@ Future<void> migratePreferences() async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Supabase.initialize(
-    url: 'https://cajmqxovsmtcybsezibu.supabase.co',
-    anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNham1xeG92c210Y3lic2V6aWJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYzMTYzMDIsImV4cCI6MjA2MTg5MjMwMn0.mt7uv4_MOAJzCHBGuGw_c_OB7HXTvqmNvKzHlZqPed0',
-    debug: true,
-  );
-
   // await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   // FlutterError.onError = (errorDetails) {
@@ -110,8 +100,7 @@ void main() async {
   final dnsService = DnsService();
   final crawlerService = CrawlerService();
   final preferencesService = PreferencesService();
-  final authService = AuthService();
-  final encryptedDbService = EncryptedDbService();
+
 
   await Future.wait([
     preferencesService.initialize(),
@@ -124,8 +113,7 @@ void main() async {
     httpClient.initialize(),
     dnsService.initialize(),
     crawlerService.initialize(),
-    authService.initialize(),
-    encryptedDbService.initialize(),
+
   ]);
 
   // Set initial system UI styling
@@ -156,15 +144,14 @@ void main() async {
         ),
         ChangeNotifierProvider<BookmarkService>.value(value: bookmarkService),
         ChangeNotifierProvider<HistoryService>.value(value: historyService),
-        ChangeNotifierProvider<AuthService>.value(value: authService),
+
       ],
       child: const MainApp(),
     ),
   );
 }
 
-// It's handy to then extract the Supabase client in a variable for later uses
-final supabase = Supabase.instance.client;
+
 
 class MainApp extends StatelessWidget {
   const MainApp({super.key});
@@ -178,7 +165,6 @@ class MainApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final themeService = Provider.of<ThemeServices>(context);
     final languageService = Provider.of<LanguageService>(context);
-    final authService = Provider.of<AuthService>(context);
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,

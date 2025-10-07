@@ -5,7 +5,6 @@
 import FlutterMacOS
 import Foundation
 
-import app_links
 import file_picker
 import flutter_image_compress_macos
 import flutter_local_notifications
@@ -23,7 +22,6 @@ import webview_flutter_wkwebview
 import wireguard_flutter
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
-  AppLinksMacosPlugin.register(with: registry.registrar(forPlugin: "AppLinksMacosPlugin"))
   FilePickerPlugin.register(with: registry.registrar(forPlugin: "FilePickerPlugin"))
   FlutterImageCompressMacosPlugin.register(with: registry.registrar(forPlugin: "FlutterImageCompressMacosPlugin"))
   FlutterLocalNotificationsPlugin.register(with: registry.registrar(forPlugin: "FlutterLocalNotificationsPlugin"))
