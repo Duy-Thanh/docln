@@ -465,11 +465,14 @@ class SettingsScreenState extends State<SettingsScreen>
       final bool? proceed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Row(
+          title: Row(
             children: [
-              Icon(Icons.notifications_active, color: Colors.blue),
-              SizedBox(width: 8),
-              Text('Enable Notifications'),
+              Icon(
+                Icons.notifications_active,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              const Text('Enable Notifications'),
             ],
           ),
           content: Column(
@@ -601,7 +604,11 @@ class SettingsScreenState extends State<SettingsScreen>
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: Colors.blue),
+          Icon(
+            icon,
+            size: 20,
+            color: Theme.of(context).colorScheme.primary,
+          ),
           const SizedBox(width: 12),
           Expanded(child: Text(text)),
         ],
@@ -765,13 +772,13 @@ class SettingsScreenState extends State<SettingsScreen>
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
+                  color: Theme.of(context).colorScheme.primaryContainer,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.menu_book_rounded,
                   size: 64,
-                  color: Colors.blue,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
               ),
               const SizedBox(height: 24),
@@ -870,29 +877,31 @@ class SettingsScreenState extends State<SettingsScreen>
   }
 
   Widget _buildServerListItem(String server, bool isSelected) {
+    final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: isSelected
-              ? Colors.blue.withOpacity(0.1)
-              : Colors.grey.withOpacity(0.1),
+              ? colorScheme.primaryContainer
+              : colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(
           Icons.dns_rounded,
-          color: isSelected ? Colors.blue : Colors.grey,
+          color: isSelected ? colorScheme.primary : colorScheme.outline,
         ),
       ),
       title: Text(
         server,
         style: TextStyle(
           fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-          color: isSelected ? Colors.blue : null,
+          color: isSelected ? colorScheme.primary : null,
         ),
       ),
-      trailing: isSelected ? const Icon(Icons.check, color: Colors.blue) : null,
+      trailing:
+          isSelected ? Icon(Icons.check, color: colorScheme.primary) : null,
       onTap: () async {
         Navigator.pop(context);
         await _changeServer(server);
@@ -984,13 +993,16 @@ class SettingsScreenState extends State<SettingsScreen>
 
   Widget _buildServerOption(String server) {
     final isSelected = currentServer == server;
+    final colorScheme = Theme.of(context).colorScheme;
     return Card(
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 4),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: isSelected ? Colors.blue : Colors.grey.withOpacity(0.2),
+          color: isSelected
+              ? colorScheme.primary
+              : colorScheme.surfaceContainerHighest,
           width: isSelected ? 2 : 1,
         ),
       ),
@@ -1009,7 +1021,7 @@ class SettingsScreenState extends State<SettingsScreen>
           server,
           style: TextStyle(
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-            color: isSelected ? Colors.blue : null,
+            color: isSelected ? colorScheme.primary : null,
           ),
         ),
         onTap: () async {
@@ -1056,14 +1068,20 @@ class SettingsScreenState extends State<SettingsScreen>
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Colors.blue.shade400, Colors.blue.shade600],
+                      colors: [
+                        Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                        Theme.of(context).colorScheme.primary,
+                      ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.blue.withOpacity(0.3),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .primary
+                            .withOpacity(0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 4),
                       ),
@@ -1094,6 +1112,7 @@ class SettingsScreenState extends State<SettingsScreen>
   }
 
   Widget _buildSection(String title, List<Widget> children) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1105,7 +1124,7 @@ class SettingsScreenState extends State<SettingsScreen>
                 width: 4,
                 height: 24,
                 decoration: BoxDecoration(
-                  color: Colors.blue.shade600,
+                  color: colorScheme.primary,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -1116,7 +1135,7 @@ class SettingsScreenState extends State<SettingsScreen>
                   fontSize: 20,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.5,
-                  color: Colors.blue.shade800,
+                  color: colorScheme.primary,
                 ),
               ),
             ],
@@ -1142,22 +1161,23 @@ class SettingsScreenState extends State<SettingsScreen>
     bool value,
     Function(bool) onChanged,
   ) {
+    final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.blue.withOpacity(0.1),
+          color: colorScheme.primaryContainer,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icon, color: Colors.blue),
+        child: Icon(icon, color: colorScheme.primary),
       ),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
       subtitle: Text(subtitle),
       trailing: Switch.adaptive(
         value: value,
         onChanged: onChanged,
-        activeColor: Colors.blue,
+        activeColor: colorScheme.primary,
       ),
     );
   }
@@ -1175,15 +1195,16 @@ class SettingsScreenState extends State<SettingsScreen>
     double value,
     ValueChanged<double> onChanged,
   ) {
+    final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.blue.withOpacity(0.1),
+          color: colorScheme.primaryContainer,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icon, color: Colors.blue),
+        child: Icon(icon, color: colorScheme.primary),
       ),
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1239,6 +1260,7 @@ class SettingsScreenState extends State<SettingsScreen>
 
   Widget _buildWallpaperThemeSettings() {
     final themeService = Provider.of<ThemeServices>(context, listen: false);
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Column(
       children: [
@@ -1250,10 +1272,10 @@ class SettingsScreenState extends State<SettingsScreen>
           leading: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.1),
+              color: colorScheme.primaryContainer,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.palette_rounded, color: Colors.blue),
+            child: Icon(Icons.palette_rounded, color: colorScheme.primary),
           ),
           title: const Text(
             'Material You from Wallpaper',
@@ -1279,7 +1301,7 @@ class SettingsScreenState extends State<SettingsScreen>
                     });
                   }
                 : null,
-            activeColor: Colors.blue,
+            activeColor: Theme.of(context).colorScheme.primary,
           ),
         ),
         Padding(
@@ -1366,8 +1388,8 @@ class SettingsScreenState extends State<SettingsScreen>
                   icon: const Icon(Icons.clear),
                   tooltip: 'Clear wallpaper colors',
                   style: IconButton.styleFrom(
-                    backgroundColor: Colors.red.withOpacity(0.1),
-                    foregroundColor: Colors.red,
+                    backgroundColor: Theme.of(context).colorScheme.errorContainer,
+                    foregroundColor: Theme.of(context).colorScheme.error,
                   ),
                 ),
               ],
@@ -1429,15 +1451,16 @@ class SettingsScreenState extends State<SettingsScreen>
   }
 
   Widget _buildServerTile() {
+    final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.blue.withOpacity(0.1),
+          color: colorScheme.primaryContainer,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Icon(Icons.dns_rounded, color: Colors.blue),
+        child: Icon(Icons.dns_rounded, color: colorScheme.primary),
       ),
       title: const Text(
         'Current Server',
@@ -1450,15 +1473,16 @@ class SettingsScreenState extends State<SettingsScreen>
   }
 
   Widget _buildLanguageTile() {
+    final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.blue.withOpacity(0.1),
+          color: colorScheme.primaryContainer,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Icon(Icons.language_rounded, color: Colors.blue),
+        child: Icon(Icons.language_rounded, color: colorScheme.primary),
       ),
       title: const Text(
         'Language',
@@ -1595,15 +1619,16 @@ class SettingsScreenState extends State<SettingsScreen>
   }
 
   Widget _buildProxyTypeTile() {
+    final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.blue.withOpacity(0.1),
+          color: colorScheme.primaryContainer,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Icon(Icons.dns_rounded, color: Colors.blue),
+        child: Icon(Icons.dns_rounded, color: colorScheme.primary),
       ),
       title: const Text(
         'Proxy Type',
@@ -1617,16 +1642,17 @@ class SettingsScreenState extends State<SettingsScreen>
 
   Widget _buildProxyConfigurationTile() {
     bool isCustom = proxyType == 'Custom';
+    final colorScheme = Theme.of(context).colorScheme;
 
     return ExpansionTile(
       tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.blue.withOpacity(0.1),
+          color: colorScheme.primaryContainer,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Icon(Icons.settings_rounded, color: Colors.blue),
+        child: Icon(Icons.settings_rounded, color: colorScheme.primary),
       ),
       title: const Text(
         'Proxy Configuration',
@@ -1691,8 +1717,8 @@ class SettingsScreenState extends State<SettingsScreen>
                 icon: const Icon(Icons.network_check),
                 label: const Text('Test Connection'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 ),
               ),
             ],
@@ -1864,26 +1890,27 @@ class SettingsScreenState extends State<SettingsScreen>
 
   // Add a helper widget to display proxy information
   Widget _buildProxyInfoBanner() {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.blue.withOpacity(0.1),
+        color: colorScheme.primaryContainer,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+        border: Border.all(color: colorScheme.primary.withOpacity(0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.info_outline, color: Colors.blue, size: 18),
+              Icon(Icons.info_outline, color: colorScheme.primary, size: 18),
               SizedBox(width: 8),
               Text(
                 'About Proxies',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
-                  color: Colors.blue,
+                  color: colorScheme.primary,
                 ),
               ),
             ],
@@ -1926,16 +1953,17 @@ class SettingsScreenState extends State<SettingsScreen>
 
   // Add WireGuard settings section
   Widget _buildWireGuardSection() {
+    final colorScheme = Theme.of(context).colorScheme;
     return _buildSection('WireGuard VPN', [
       ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.purple.withOpacity(0.1),
+            color: colorScheme.secondaryContainer,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: const Icon(Icons.vpn_lock, color: Colors.purple),
+          child: Icon(Icons.vpn_lock, color: colorScheme.secondary),
         ),
         title: const Text(
           'WireGuard Settings',
@@ -1956,22 +1984,22 @@ class SettingsScreenState extends State<SettingsScreen>
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.purple.withOpacity(0.05),
+          color: colorScheme.secondaryContainer,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.purple.withOpacity(0.2)),
+          border: Border.all(color: colorScheme.secondary.withOpacity(0.3)),
         ),
-        child: const Column(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(Icons.info_outline, color: Colors.purple, size: 18),
+                Icon(Icons.info_outline, color: colorScheme.secondary, size: 18),
                 SizedBox(width: 8),
                 Text(
                   'About WireGuard',
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
-                    color: Colors.purple,
+                    color: colorScheme.secondary,
                   ),
                 ),
               ],
@@ -2019,10 +2047,11 @@ class SettingsScreenState extends State<SettingsScreen>
             leading: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
+                color: Theme.of(context).colorScheme.tertiaryContainer,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.settings_rounded, color: Colors.green),
+              child: Icon(Icons.settings_rounded, 
+                color: Theme.of(context).colorScheme.tertiary),
             ),
             title: const Text(
               'DNS Configuration',
@@ -2056,8 +2085,8 @@ class SettingsScreenState extends State<SettingsScreen>
                       icon: const Icon(Icons.help_outline),
                       label: const Text('How to Configure DNS'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
+                        backgroundColor: Theme.of(context).colorScheme.tertiary,
+                        foregroundColor: Theme.of(context).colorScheme.onTertiary,
                       ),
                     ),
                   ],
@@ -2073,10 +2102,11 @@ class SettingsScreenState extends State<SettingsScreen>
             leading: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
+                color: Theme.of(context).colorScheme.tertiaryContainer,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.settings_rounded, color: Colors.green),
+              child: Icon(Icons.settings_rounded, 
+                color: Theme.of(context).colorScheme.tertiary),
             ),
             title: const Text(
               'DNS Configuration',
@@ -2088,8 +2118,8 @@ class SettingsScreenState extends State<SettingsScreen>
               icon: const Icon(Icons.help_outline, size: 18),
               label: const Text('How to Configure'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
+                backgroundColor: Theme.of(context).colorScheme.tertiary,
+                foregroundColor: Theme.of(context).colorScheme.onTertiary,
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
                 minimumSize: const Size(120, 36),
               ),
@@ -3496,7 +3526,7 @@ class SettingsScreenState extends State<SettingsScreen>
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.blue.withOpacity(0.3),
+                      color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
                       blurRadius: 12,
                       offset: const Offset(0, 6),
                     ),
@@ -3505,12 +3535,13 @@ class SettingsScreenState extends State<SettingsScreen>
                 child: FloatingActionButton.extended(
                   onPressed: _saveSettings,
                   elevation: 0,
-                  backgroundColor: Colors.blue.shade600,
-                  icon: const Icon(Icons.save_rounded, color: Colors.white),
-                  label: const Text(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  icon: Icon(Icons.save_rounded, 
+                    color: Theme.of(context).colorScheme.onPrimary),
+                  label: Text(
                     'Save Changes',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.onPrimary,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0.5,
                     ),
