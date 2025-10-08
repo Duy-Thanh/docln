@@ -1528,8 +1528,40 @@ class SettingsScreenState extends State<SettingsScreen>
                   child: LicensePage(
                     applicationName: 'Light Novel Reader',
                     applicationVersion: _appVersion,
+                    applicationIcon: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Theme.of(context).colorScheme.primary,
+                              Theme.of(context).colorScheme.secondary,
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primary.withOpacity(0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.menu_book_rounded,
+                          size: 36,
+                          color: Theme.of(context).colorScheme.onPrimary,
+                        ),
+                      ),
+                    ),
                     applicationLegalese:
-                        '© 2025 Nekkochan\n\n'
+                        '© 2025 Duy-Thanh\n\n'
                         'This application is built with Flutter and uses '
                         'various open source libraries. We are grateful to '
                         'the open source community for their contributions.',
