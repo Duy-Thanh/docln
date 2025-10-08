@@ -21,9 +21,12 @@ import '../services/performance_service.dart';
 import '../services/update_service.dart';
 import '../screens/widgets/update_dialog.dart';
 import '../screens/WireGuardSettingsScreen.dart';
+import '../screens/WarpSettingsScreen.dart';
 import '../services/preferences_recovery_service.dart';
 import 'package:file_picker/file_picker.dart';
 import '../screens/wallpaper_colors_screen.dart';
+import '../screens/ServerDiagnosticScreen.dart';
+import '../services/server_management_service.dart';
 
 // GridPainter class at the top level
 class GridPainter extends CustomPainter {
@@ -312,6 +315,10 @@ class SettingsScreenState extends State<SettingsScreen>
       );
       final proxyService = ProxyService();
       final dnsService = DnsService();
+      final serverManagement = Provider.of<ServerManagementService>(
+        context,
+        listen: false,
+      );
 
       // Save all settings
       await Future.wait([
@@ -321,6 +328,7 @@ class SettingsScreenState extends State<SettingsScreen>
         notificationService.setNotificationEnabled(isNotificationsEnabled),
         prefsService.setString('language', selectedLanguage ?? 'English'),
         prefsService.setBool('dataSaver', isDataSaverEnabled),
+        serverManagement.setServer(currentServer ?? 'https://ln.hako.vn'),
         _settingsService.saveCurrentServer(currentServer ?? ''),
 
         // Save proxy settings
@@ -604,11 +612,7 @@ class SettingsScreenState extends State<SettingsScreen>
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          Icon(
-            icon,
-            size: 20,
-            color: Theme.of(context).colorScheme.primary,
-          ),
+          Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
           const SizedBox(width: 12),
           Expanded(child: Text(text)),
         ],
@@ -900,8 +904,9 @@ class SettingsScreenState extends State<SettingsScreen>
           color: isSelected ? colorScheme.primary : null,
         ),
       ),
-      trailing:
-          isSelected ? Icon(Icons.check, color: colorScheme.primary) : null,
+      trailing: isSelected
+          ? Icon(Icons.check, color: colorScheme.primary)
+          : null,
       onTap: () async {
         Navigator.pop(context);
         await _changeServer(server);
@@ -1012,7 +1017,13 @@ class SettingsScreenState extends State<SettingsScreen>
           value: server,
           groupValue: currentServer,
           onChanged: (String? value) async {
-            await _settingsService.saveCurrentServer(value!);
+            // Update both services to keep them in sync
+            final serverManagement = Provider.of<ServerManagementService>(
+              context,
+              listen: false,
+            );
+            await serverManagement.setServer(value!);
+            await _settingsService.saveCurrentServer(value);
             _onSettingChanged(() => _loadCurrentServer());
             Navigator.pop(context);
           },
@@ -1025,10 +1036,16 @@ class SettingsScreenState extends State<SettingsScreen>
           ),
         ),
         onTap: () async {
+          // Update both services to keep them in sync
+          final serverManagement = Provider.of<ServerManagementService>(
+            context,
+            listen: false,
+          );
+          await serverManagement.setServer(server);
           await _settingsService.saveCurrentServer(server);
           _onSettingChanged(
             () => _loadCurrentServer(),
-          ); // This is causing the issue
+          );
           Navigator.pop(context);
         },
       ),
@@ -1078,10 +1095,9 @@ class SettingsScreenState extends State<SettingsScreen>
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .primary
-                            .withOpacity(0.3),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.primary.withOpacity(0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 4),
                       ),
@@ -1388,7 +1404,9 @@ class SettingsScreenState extends State<SettingsScreen>
                   icon: const Icon(Icons.clear),
                   tooltip: 'Clear wallpaper colors',
                   style: IconButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.errorContainer,
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.errorContainer,
                     foregroundColor: Theme.of(context).colorScheme.error,
                   ),
                 ),
@@ -1469,6 +1487,27 @@ class SettingsScreenState extends State<SettingsScreen>
       subtitle: Text(currentServer ?? 'No server selected'),
       trailing: const Icon(Icons.chevron_right_rounded),
       onTap: () => _showServerBottomSheet(),
+    );
+  }
+
+  Widget _buildServerDiagnosticButton() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: OutlinedButton.icon(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ServerDiagnosticScreen(),
+            ),
+          );
+        },
+        icon: const Icon(Icons.healing, size: 18),
+        label: const Text('Fix Server Issues'),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        ),
+      ),
     );
   }
 
@@ -1993,7 +2032,11 @@ class SettingsScreenState extends State<SettingsScreen>
           children: [
             Row(
               children: [
-                Icon(Icons.info_outline, color: colorScheme.secondary, size: 18),
+                Icon(
+                  Icons.info_outline,
+                  color: colorScheme.secondary,
+                  size: 18,
+                ),
                 SizedBox(width: 8),
                 Text(
                   'About WireGuard',
@@ -2008,6 +2051,70 @@ class SettingsScreenState extends State<SettingsScreen>
             Text(
               'WireGuard creates an encrypted VPN tunnel specifically for app traffic. '
               'It provides stronger protection than proxies and can bypass most network restrictions.',
+              style: TextStyle(fontSize: 14),
+            ),
+          ],
+        ),
+      ),
+    ]);
+  }
+
+  // Add Cloudflare WARP settings section
+  Widget _buildWarpSection() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return _buildSection('Cloudflare WARP', [
+      ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: colorScheme.tertiaryContainer,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(Icons.shield, color: colorScheme.tertiary),
+        ),
+        title: const Text(
+          'WARP Settings',
+          style: TextStyle(fontWeight: FontWeight.w500),
+        ),
+        subtitle: const Text('Route ALL app traffic through Cloudflare WARP'),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const WarpSettingsScreen()),
+          );
+        },
+      ),
+      Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: colorScheme.tertiaryContainer,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: colorScheme.tertiary.withOpacity(0.3)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.info_outline, color: colorScheme.tertiary, size: 18),
+                SizedBox(width: 8),
+                Text(
+                  'About Cloudflare WARP',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.tertiary,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 8),
+            const Text(
+              'WARP routes ALL app traffic through Cloudflare\'s global network using WireGuard protocol. '
+              'It\'s faster, more reliable, and perfect for bypassing website restrictions. '
+              'When website blocks your app, use WARP to restore access!',
               style: TextStyle(fontSize: 14),
             ),
           ],
@@ -2050,8 +2157,10 @@ class SettingsScreenState extends State<SettingsScreen>
                 color: Theme.of(context).colorScheme.tertiaryContainer,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(Icons.settings_rounded, 
-                color: Theme.of(context).colorScheme.tertiary),
+              child: Icon(
+                Icons.settings_rounded,
+                color: Theme.of(context).colorScheme.tertiary,
+              ),
             ),
             title: const Text(
               'DNS Configuration',
@@ -2086,7 +2195,9 @@ class SettingsScreenState extends State<SettingsScreen>
                       label: const Text('How to Configure DNS'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Theme.of(context).colorScheme.tertiary,
-                        foregroundColor: Theme.of(context).colorScheme.onTertiary,
+                        foregroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onTertiary,
                       ),
                     ),
                   ],
@@ -2105,8 +2216,10 @@ class SettingsScreenState extends State<SettingsScreen>
                 color: Theme.of(context).colorScheme.tertiaryContainer,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(Icons.settings_rounded, 
-                color: Theme.of(context).colorScheme.tertiary),
+              child: Icon(
+                Icons.settings_rounded,
+                color: Theme.of(context).colorScheme.tertiary,
+              ),
             ),
             title: const Text(
               'DNS Configuration',
@@ -3489,6 +3602,7 @@ class SettingsScreenState extends State<SettingsScreen>
                 ]),
                 _buildSection('Server Settings', [
                   _buildServerTile(),
+                  _buildServerDiagnosticButton(),
                   _buildModernSwitchTile(
                     'Data Saver',
                     'Reduce data usage when loading content',
@@ -3501,6 +3615,7 @@ class SettingsScreenState extends State<SettingsScreen>
                 ]),
                 _buildProxySection(),
                 _buildWireGuardSection(),
+                _buildWarpSection(),
                 _buildDnsSection(),
                 _buildBackupSection(),
                 _buildSection('Notifications', [
@@ -3526,7 +3641,9 @@ class SettingsScreenState extends State<SettingsScreen>
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withOpacity(0.3),
                       blurRadius: 12,
                       offset: const Offset(0, 6),
                     ),
@@ -3536,8 +3653,10 @@ class SettingsScreenState extends State<SettingsScreen>
                   onPressed: _saveSettings,
                   elevation: 0,
                   backgroundColor: Theme.of(context).colorScheme.primary,
-                  icon: Icon(Icons.save_rounded, 
-                    color: Theme.of(context).colorScheme.onPrimary),
+                  icon: Icon(
+                    Icons.save_rounded,
+                    color: Theme.of(context).colorScheme.onPrimary,
+                  ),
                   label: Text(
                     'Save Changes',
                     style: TextStyle(

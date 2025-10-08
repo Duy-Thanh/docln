@@ -10,11 +10,15 @@ import '../modules/chapter.dart';
 import '../services/http_client.dart';
 import '../services/dns_service.dart';
 import '../services/settings_services.dart';
+import '../services/server_management_service.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
 class CrawlerService {
+  // Server management service
+  final ServerManagementService _serverManagement = ServerManagementService();
+  
   // Primary server domains
   static const List<String> servers = [
     'https://docln.sbs',
@@ -105,7 +109,26 @@ class CrawlerService {
   }
 
   Future<String?> _getWorkingServer() async {
-    // Try primary servers first
+    // CRITICAL FIX: Use user's selected server FIRST
+    // This prevents data corruption when users change servers
+    try {
+      await _serverManagement.initialize();
+      final userServer = _serverManagement.currentServer;
+      
+      debugPrint('🔧 Using user-selected server: $userServer');
+      
+      // Try user's server first
+      final response = await _tryServers([userServer]);
+      if (response != null) {
+        return response;
+      }
+      
+      debugPrint('⚠️ User server failed, trying alternatives...');
+    } catch (e) {
+      debugPrint('❌ Error using user server: $e');
+    }
+    
+    // Fallback to original logic only if user's server fails
     String? workingServer = await _tryServers(servers);
 
     // If primary servers don't work, try alternatives

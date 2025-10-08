@@ -12,6 +12,8 @@ import 'services/bookmark_service.dart';
 import 'services/proxy_service.dart';
 import 'services/http_client.dart';
 import 'services/dns_service.dart';
+import 'services/server_management_service.dart';
+import 'services/novel_url_migration_service.dart';
 import 'screens/HistoryScreen.dart';
 import 'handler/system_ui_handler.dart';
 import 'screens/HomeScreen.dart';
@@ -90,6 +92,12 @@ void main() async {
   // Migrate from old preferences to new SQLite-based preferences
   await migratePreferences();
 
+  // Initialize server management and migrate novel URLs
+  final serverManagement = ServerManagementService();
+  final urlMigration = NovelUrlMigrationService();
+  await serverManagement.initialize();
+  await urlMigration.migrateNovelUrls();
+
   final themeService = ThemeServices();
   final languageService = LanguageService();
   final notificationService = NotificationService();
@@ -144,7 +152,9 @@ void main() async {
         ),
         ChangeNotifierProvider<BookmarkService>.value(value: bookmarkService),
         ChangeNotifierProvider<HistoryService>.value(value: historyService),
-
+        ChangeNotifierProvider<ServerManagementService>.value(
+          value: serverManagement,
+        ),
       ],
       child: const MainApp(),
     ),
