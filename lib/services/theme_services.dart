@@ -72,6 +72,11 @@ class ThemeServices extends ChangeNotifier {
       // Load dynamic colors from system (Material You)
       await _loadDynamicColors();
 
+      // Load saved wallpaper colors from storage
+      if (_useWallpaperColors) {
+        await _wallpaperThemeService.extractor.loadSavedColors();
+      }
+
       // Sync wallpaper theme service setting
       _wallpaperThemeService.setUseWallpaperColors(_useWallpaperColors);
 

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:palette_generator/palette_generator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dynamic_color/dynamic_color.dart';
+import 'preferences_service.dart';
 
 class WallpaperColorExtractor extends ChangeNotifier {
   static final WallpaperColorExtractor _instance =
@@ -23,6 +24,7 @@ class WallpaperColorExtractor extends ChangeNotifier {
   String? _lastImageHash;
   bool _isUsingSystemWallpaper = false;
   final ImagePicker _imagePicker = ImagePicker();
+  final PreferencesService _prefsService = PreferencesService();
 
   // Getters
   ColorScheme? get lightColorScheme => _lightColorScheme;
@@ -77,6 +79,9 @@ class WallpaperColorExtractor extends ChangeNotifier {
         print('   Primary: ${_lightColorScheme!.primary}');
         print('   Secondary: ${_lightColorScheme!.secondary}');
         print('   Tertiary: ${_lightColorScheme!.tertiary}');
+
+        // Save the extracted colors to persistent storage
+        await _saveExtractedColors();
 
         return true;
       } else {
@@ -250,9 +255,100 @@ class WallpaperColorExtractor extends ChangeNotifier {
       );
       print('   Dark scheme primary: ${_darkColorScheme!.primary.toString()}');
       print('   Extracted ${_extractedColors.length} total colors');
+
+      // Save the extracted colors to persistent storage
+      await _saveExtractedColors();
     } catch (e) {
       print('Error processing extracted colors: $e');
       rethrow;
+    }
+  }
+
+  /// Save extracted color schemes to persistent storage
+  Future<void> _saveExtractedColors() async {
+    try {
+      if (_lightColorScheme == null || _darkColorScheme == null) return;
+
+      // Save the seed color (primary) to reconstruct color schemes
+      await _prefsService.setInt(
+        'wallpaper_seed_color',
+        _lightColorScheme!.primary.value,
+      );
+
+      // Save additional extracted colors for preview
+      List<String> colorValues = _extractedColors
+          .map((c) => c.value.toString())
+          .toList();
+      await _prefsService.setString(
+        'wallpaper_extracted_colors',
+        colorValues.join(','),
+      );
+
+      // Save whether using system wallpaper
+      await _prefsService.setBool(
+        'wallpaper_is_system',
+        _isUsingSystemWallpaper,
+      );
+
+      print('💾 Saved wallpaper colors to storage');
+    } catch (e) {
+      print('❌ Error saving wallpaper colors: $e');
+    }
+  }
+
+  /// Load previously extracted color schemes from storage
+  Future<bool> loadSavedColors() async {
+    try {
+      await _prefsService.initialize();
+
+      final seedColorValue = _prefsService.getInt(
+        'wallpaper_seed_color',
+        defaultValue: 0,
+      );
+      if (seedColorValue == 0) {
+        print('📂 No saved wallpaper colors found');
+        return false;
+      }
+
+      // Reconstruct color schemes from seed color
+      final seedColor = Color(seedColorValue);
+      _lightColorScheme = ColorScheme.fromSeed(
+        seedColor: seedColor,
+        brightness: Brightness.light,
+      );
+      _darkColorScheme = ColorScheme.fromSeed(
+        seedColor: seedColor,
+        brightness: Brightness.dark,
+      );
+      _dominantColor = seedColor;
+
+      // Load extracted colors for preview
+      final extractedColorsStr = _prefsService.getString(
+        'wallpaper_extracted_colors',
+        defaultValue: '',
+      );
+      if (extractedColorsStr.isNotEmpty) {
+        _extractedColors = extractedColorsStr
+            .split(',')
+            .map((colorStr) => Color(int.parse(colorStr)))
+            .toList();
+      }
+
+      // Load system wallpaper flag
+      _isUsingSystemWallpaper = _prefsService.getBool(
+        'wallpaper_is_system',
+        defaultValue: false,
+      );
+
+      print('✅ Loaded saved wallpaper colors from storage');
+      print('   Seed color: ${seedColor.toString()}');
+      print('   Extracted colors: ${_extractedColors.length}');
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      print('❌ Error loading saved wallpaper colors: $e');
+      return false;
     }
   }
 
@@ -264,6 +360,12 @@ class WallpaperColorExtractor extends ChangeNotifier {
     _extractedColors.clear();
     _lastImageHash = null;
     _isUsingSystemWallpaper = false;
+
+    // Clear from persistent storage
+    _prefsService.remove('wallpaper_seed_color');
+    _prefsService.remove('wallpaper_extracted_colors');
+    _prefsService.remove('wallpaper_is_system');
+
     notifyListeners();
     print('🗑️ Cleared wallpaper color cache');
   }
