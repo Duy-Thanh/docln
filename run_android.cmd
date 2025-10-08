@@ -15,7 +15,7 @@ SET ANDROID_PLATFORM_TOOLS=%ANDROID_HOME%\platform-tools
 
 echo Starting Android Emulator with cold boot...
 :: The -no-snapshot-load flag forces a cold boot
-start "" "%ANDROID_SDK_ROOT%\emulator\emulator.exe" -avd Medium_Phone -no-snapshot-load -no-snapshot-save
+start "" "%ANDROID_SDK_ROOT%\emulator\emulator.exe" -avd Medium_Phone -no-snapshot-load -no-snapshot-save -dns-server 8.8.8.8
 
 :: Wait for the emulator to fully boot
 echo Waiting for emulator to boot...
