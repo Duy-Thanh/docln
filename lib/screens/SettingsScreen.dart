@@ -23,7 +23,7 @@ import '../screens/widgets/update_dialog.dart';
 import '../screens/WireGuardSettingsScreen.dart';
 import '../services/preferences_recovery_service.dart';
 import 'package:file_picker/file_picker.dart';
-
+import '../screens/wallpaper_colors_screen.dart';
 
 // GridPainter class at the top level
 class GridPainter extends CustomPainter {
@@ -33,10 +33,9 @@ class GridPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint =
-        Paint()
-          ..color = color
-          ..strokeWidth = 1;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1;
 
     const spacing = 30.0;
 
@@ -465,49 +464,48 @@ class SettingsScreenState extends State<SettingsScreen>
       // Show explanation dialog before requesting permission
       final bool? proceed = await showDialog<bool>(
         context: context,
-        builder:
-            (context) => AlertDialog(
-              title: const Row(
-                children: [
-                  Icon(Icons.notifications_active, color: Colors.blue),
-                  SizedBox(width: 8),
-                  Text('Enable Notifications'),
-                ],
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.notifications_active, color: Colors.blue),
+              SizedBox(width: 8),
+              Text('Enable Notifications'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Would you like to receive notifications for:',
+                style: TextStyle(fontWeight: FontWeight.w500),
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Would you like to receive notifications for:',
-                    style: TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildNotificationBenefit(
-                    icon: Icons.new_releases,
-                    text: 'New chapter releases',
-                  ),
-                  _buildNotificationBenefit(
-                    icon: Icons.campaign,
-                    text: 'Important announcements',
-                  ),
-                  _buildNotificationBenefit(
-                    icon: Icons.update,
-                    text: 'App updates',
-                  ),
-                ],
+              const SizedBox(height: 16),
+              _buildNotificationBenefit(
+                icon: Icons.new_releases,
+                text: 'New chapter releases',
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Not Now'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Enable'),
-                ),
-              ],
+              _buildNotificationBenefit(
+                icon: Icons.campaign,
+                text: 'Important announcements',
+              ),
+              _buildNotificationBenefit(
+                icon: Icons.update,
+                text: 'App updates',
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Not Now'),
             ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Enable'),
+            ),
+          ],
+        ),
       );
 
       if (proceed != true) {
@@ -526,66 +524,64 @@ class SettingsScreenState extends State<SettingsScreen>
         // Show settings guidance dialog if permission denied
         await showDialog(
           context: context,
-          builder:
-              (context) => AlertDialog(
-                title: const Row(
-                  children: [
-                    Icon(Icons.notifications_off, color: Colors.grey),
-                    SizedBox(width: 8),
-                    Text('Permission Required'),
-                  ],
+          builder: (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.notifications_off, color: Colors.grey),
+                SizedBox(width: 8),
+                Text('Permission Required'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.notifications_off_outlined,
+                  size: 48,
+                  color: Colors.grey,
                 ),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.notifications_off_outlined,
-                      size: 48,
-                      color: Colors.grey,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'To receive notifications, you need to enable them in your device settings.',
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'You can change this anytime in your device settings.',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+                const SizedBox(height: 16),
+                const Text(
+                  'To receive notifications, you need to enable them in your device settings.',
+                  textAlign: TextAlign.center,
                 ),
-                actions: [
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      // Update the switch to reflect the actual state
-                      _onSettingChanged(
-                        () => setState(() => isNotificationsEnabled = false),
-                      );
-                    },
-                    child: const Text('Maybe Later'),
-                  ),
-                  FilledButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      // Update the switch to reflect the actual state
-                      _onSettingChanged(
-                        () => setState(() => isNotificationsEnabled = false),
-                      );
-                      // Open device settings
-                      final notificationService =
-                          Provider.of<NotificationService>(
-                            context,
-                            listen: false,
-                          );
-                      notificationService.openSettings();
-                    },
-                    child: const Text('Open Settings'),
-                  ),
-                ],
+                const SizedBox(height: 8),
+                Text(
+                  'You can change this anytime in your device settings.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  // Update the switch to reflect the actual state
+                  _onSettingChanged(
+                    () => setState(() => isNotificationsEnabled = false),
+                  );
+                },
+                child: const Text('Maybe Later'),
               ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  // Update the switch to reflect the actual state
+                  _onSettingChanged(
+                    () => setState(() => isNotificationsEnabled = false),
+                  );
+                  // Open device settings
+                  final notificationService = Provider.of<NotificationService>(
+                    context,
+                    listen: false,
+                  );
+                  notificationService.openSettings();
+                },
+                child: const Text('Open Settings'),
+              ),
+            ],
+          ),
         );
         return;
       }
@@ -618,70 +614,61 @@ class SettingsScreenState extends State<SettingsScreen>
 
     showDialog(
       context: context,
-      builder:
-          (context) => StatefulBuilder(
-            builder:
-                (context, setDialogState) => AlertDialog(
-                  title: const Text('Text Size'),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('A', style: TextStyle(fontSize: 12)),
-                          Expanded(
-                            child: Slider(
-                              value: tempSize,
-                              min: 12.0,
-                              max: 24.0,
-                              divisions: 12,
-                              label: tempSize.round().toString(),
-                              onChanged: (value) {
-                                setDialogState(() => tempSize = value);
-                                final themeService = Provider.of<ThemeServices>(
-                                  context,
-                                  listen: false,
-                                );
-                                themeService.setTextSize(
-                                  value,
-                                ); // Pass the actual size
-                              },
-                            ),
-                          ),
-                          const Text('A', style: TextStyle(fontSize: 24)),
-                        ],
-                      ),
-                      Text(
-                        'Preview Text',
-                        style: TextStyle(fontSize: tempSize),
-                      ),
-                    ],
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () {
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Text Size'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('A', style: TextStyle(fontSize: 12)),
+                  Expanded(
+                    child: Slider(
+                      value: tempSize,
+                      min: 12.0,
+                      max: 24.0,
+                      divisions: 12,
+                      label: tempSize.round().toString(),
+                      onChanged: (value) {
+                        setDialogState(() => tempSize = value);
                         final themeService = Provider.of<ThemeServices>(
                           context,
                           listen: false,
                         );
-                        themeService.setTextSize(_initialTextSize);
-                        Navigator.pop(context);
+                        themeService.setTextSize(value); // Pass the actual size
                       },
-                      child: const Text('Cancel'),
                     ),
-                    TextButton(
-                      onPressed: () {
-                        _onSettingChanged(
-                          () => setState(() => textSize = tempSize),
-                        );
-                        Navigator.pop(context);
-                      },
-                      child: const Text('Apply'),
-                    ),
-                  ],
-                ),
+                  ),
+                  const Text('A', style: TextStyle(fontSize: 24)),
+                ],
+              ),
+              Text('Preview Text', style: TextStyle(fontSize: tempSize)),
+            ],
           ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                final themeService = Provider.of<ThemeServices>(
+                  context,
+                  listen: false,
+                );
+                themeService.setTextSize(_initialTextSize);
+                Navigator.pop(context);
+              },
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                _onSettingChanged(() => setState(() => textSize = tempSize));
+                Navigator.pop(context);
+              },
+              child: const Text('Apply'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -708,136 +695,128 @@ class SettingsScreenState extends State<SettingsScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder:
-          (context) => DraggableScrollableSheet(
-            initialChildSize: 0.7,
-            minChildSize: 0.5,
-            maxChildSize: 0.9,
-            expand: false,
-            builder:
-                (context, controller) => Column(
-                  children: [
-                    Container(
-                      margin: const EdgeInsets.symmetric(vertical: 8),
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, controller) => Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Select Language',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                controller: controller,
+                itemCount: languages.length,
+                itemBuilder: (context, index) {
+                  final language = languages[index];
+                  return ListTile(
+                    leading: Radio<String>(
+                      value: language,
+                      groupValue: selectedLanguage,
+                      onChanged: (value) async {
+                        if (value != null) {
+                          Navigator.pop(context);
+                          await _changeLanguage(value);
+                        }
+                      },
                     ),
-                    const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text(
-                        'Select Language',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: ListView.builder(
-                        controller: controller,
-                        itemCount: languages.length,
-                        itemBuilder: (context, index) {
-                          final language = languages[index];
-                          return ListTile(
-                            leading: Radio<String>(
-                              value: language,
-                              groupValue: selectedLanguage,
-                              onChanged: (value) async {
-                                if (value != null) {
-                                  Navigator.pop(context);
-                                  await _changeLanguage(value);
-                                }
-                              },
-                            ),
-                            title: Text(language),
-                            onTap: () async {
-                              Navigator.pop(context);
-                              await _changeLanguage(language);
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-          ),
+                    title: Text(language),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await _changeLanguage(language);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   void _showAboutDialog() {
     showDialog(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            title: const Text(
-              'About Light Novel Reader',
-              textAlign: TextAlign.center,
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.menu_book_rounded,
-                      size: 64,
-                      color: Colors.blue,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    _appVersion,
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '© 2024 - 2025 CyberDay Studios',
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Developed by nekkochan',
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Light Novel Reader is a free and open-source light novel reader app that allows you to read light novels online for free',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 14),
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    'This app is not affiliated with any of the websites it links to.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'This application is under heavy development. That means the application may contain bugs and errors. Please report any issues to the developer.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  ),
-                ],
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'About Light Novel Reader',
+          textAlign: TextAlign.center,
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.menu_book_rounded,
+                  size: 64,
+                  color: Colors.blue,
+                ),
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
+              const SizedBox(height: 24),
+              const Text(
+                _appVersion,
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '© 2024 - 2025 CyberDay Studios',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Developed by nekkochan',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Light Novel Reader is a free and open-source light novel reader app that allows you to read light novels online for free',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'This app is not affiliated with any of the websites it links to.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'This application is under heavy development. That means the application may contain bugs and errors. Please report any issues to the developer.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
             ],
           ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -850,48 +829,43 @@ class SettingsScreenState extends State<SettingsScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder:
-          (context) => DraggableScrollableSheet(
-            initialChildSize: 0.4,
-            minChildSize: 0.3,
-            maxChildSize: 0.6,
-            expand: false,
-            builder:
-                (context, controller) => Column(
-                  children: [
-                    Container(
-                      margin: const EdgeInsets.symmetric(vertical: 8),
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text(
-                        'Select Server',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: ListView.builder(
-                        controller: controller,
-                        itemCount: servers.length,
-                        itemBuilder: (context, index) {
-                          final server = servers[index];
-                          final isSelected = server == currentServer;
-                          return _buildServerListItem(server, isSelected);
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-          ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.4,
+        minChildSize: 0.3,
+        maxChildSize: 0.6,
+        expand: false,
+        builder: (context, controller) => Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Select Server',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                controller: controller,
+                itemCount: servers.length,
+                itemBuilder: (context, index) {
+                  final server = servers[index];
+                  final isSelected = server == currentServer;
+                  return _buildServerListItem(server, isSelected);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -901,10 +875,9 @@ class SettingsScreenState extends State<SettingsScreen>
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color:
-              isSelected
-                  ? Colors.blue.withOpacity(0.1)
-                  : Colors.grey.withOpacity(0.1),
+          color: isSelected
+              ? Colors.blue.withOpacity(0.1)
+              : Colors.grey.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(
@@ -982,8 +955,8 @@ class SettingsScreenState extends State<SettingsScreen>
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder:
-              (context) => const Center(child: CircularProgressIndicator()),
+          builder: (context) =>
+              const Center(child: CircularProgressIndicator()),
         );
 
         try {
@@ -1264,6 +1237,197 @@ class SettingsScreenState extends State<SettingsScreen>
     );
   }
 
+  Widget _buildWallpaperThemeSettings() {
+    final themeService = Provider.of<ThemeServices>(context, listen: false);
+
+    return Column(
+      children: [
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 8,
+          ),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.palette_rounded, color: Colors.blue),
+          ),
+          title: const Text(
+            'Material You from Wallpaper',
+            style: TextStyle(fontWeight: FontWeight.w500),
+          ),
+          subtitle: Text(
+            themeService.hasWallpaperColors
+                ? (themeService
+                          .wallpaperThemeService
+                          .extractor
+                          .isUsingSystemWallpaper
+                      ? 'Using system wallpaper colors'
+                      : 'Using custom image colors')
+                : 'Extract colors from wallpaper',
+          ),
+          trailing: Switch.adaptive(
+            value: themeService.useWallpaperColors,
+            onChanged: themeService.hasWallpaperColors
+                ? (value) {
+                    _onSettingChanged(() async {
+                      await themeService.setUseWallpaperColors(value);
+                      setState(() {});
+                    });
+                  }
+                : null,
+            activeColor: Colors.blue,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    CustomToast.show(
+                      context,
+                      'Extracting from system wallpaper...',
+                    );
+                    final result = await themeService
+                        .updateWallpaperColorsFromSystem();
+                    if (result) {
+                      CustomToast.show(
+                        context,
+                        'System wallpaper colors extracted!',
+                      );
+                      setState(() {});
+                    } else {
+                      CustomToast.show(
+                        context,
+                        'System wallpaper not supported on this device',
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.wallpaper, size: 18),
+                  label: const Text('System', style: TextStyle(fontSize: 13)),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    CustomToast.show(context, 'Selecting wallpaper...');
+                    final result = await themeService.updateWallpaperColors();
+                    if (result) {
+                      CustomToast.show(
+                        context,
+                        'Colors extracted successfully!',
+                      );
+                      setState(() {});
+                    } else {
+                      CustomToast.show(context, 'Failed to extract colors');
+                    }
+                  },
+                  icon: const Icon(Icons.image, size: 18),
+                  label: const Text(
+                    'Pick Image',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              if (themeService.hasWallpaperColors) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: () {
+                    _onSettingChanged(() {
+                      themeService.clearWallpaperColors();
+                      setState(() {});
+                    });
+                    CustomToast.show(context, 'Wallpaper colors cleared');
+                  },
+                  icon: const Icon(Icons.clear),
+                  tooltip: 'Clear wallpaper colors',
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.red.withOpacity(0.1),
+                    foregroundColor: Colors.red,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (themeService.hasWallpaperColors)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Container(
+              height: 60,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: themeService.getWallpaperColorPreview().map((color) {
+                  return Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: BorderRadius.horizontal(
+                          left:
+                              color ==
+                                  themeService.getWallpaperColorPreview().first
+                              ? const Radius.circular(12)
+                              : Radius.zero,
+                          right:
+                              color ==
+                                  themeService.getWallpaperColorPreview().last
+                              ? const Radius.circular(12)
+                              : Radius.zero,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        if (themeService.hasWallpaperColors)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+            child: TextButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const WallpaperColorsScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.preview, size: 18),
+              label: const Text('View Color Details'),
+            ),
+          ),
+      ],
+    );
+  }
+
   Widget _buildServerTile() {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -1474,62 +1638,57 @@ class SettingsScreenState extends State<SettingsScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder:
-          (context) => DraggableScrollableSheet(
-            initialChildSize: 0.4,
-            minChildSize: 0.3,
-            maxChildSize: 0.6,
-            expand: false,
-            builder:
-                (context, controller) => Column(
-                  children: [
-                    Container(
-                      margin: const EdgeInsets.symmetric(vertical: 8),
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.4,
+        minChildSize: 0.3,
+        maxChildSize: 0.6,
+        expand: false,
+        builder: (context, controller) => Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Select Proxy Type',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                controller: controller,
+                itemCount: presets.length,
+                itemBuilder: (context, index) {
+                  final preset = presets[index];
+                  return ListTile(
+                    leading: Radio<String>(
+                      value: preset,
+                      groupValue: proxyType,
+                      onChanged: (value) {
+                        Navigator.pop(context);
+                        _updateProxyType(value!);
+                      },
                     ),
-                    const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text(
-                        'Select Proxy Type',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: ListView.builder(
-                        controller: controller,
-                        itemCount: presets.length,
-                        itemBuilder: (context, index) {
-                          final preset = presets[index];
-                          return ListTile(
-                            leading: Radio<String>(
-                              value: preset,
-                              groupValue: proxyType,
-                              onChanged: (value) {
-                                Navigator.pop(context);
-                                _updateProxyType(value!);
-                              },
-                            ),
-                            title: Text(preset),
-                            subtitle: _getProxyDescription(preset),
-                            onTap: () {
-                              Navigator.pop(context);
-                              _updateProxyType(preset);
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-          ),
+                    title: Text(preset),
+                    subtitle: _getProxyDescription(preset),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _updateProxyType(preset);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1780,83 +1939,89 @@ class SettingsScreenState extends State<SettingsScreen>
   Widget _buildDnsConfigurationTile() {
     return dnsProvider == 'Custom'
         ? ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          leading: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 8,
             ),
-            child: const Icon(Icons.settings_rounded, color: Colors.green),
-          ),
-          title: const Text(
-            'DNS Configuration',
-            style: TextStyle(fontWeight: FontWeight.w500),
-          ),
-          subtitle: Text(
-            customDnsController.text.isEmpty
-                ? 'No custom DNS set'
-                : customDnsController.text,
-          ),
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              child: Column(
-                children: [
-                  TextField(
-                    controller: customDnsController,
-                    decoration: const InputDecoration(
-                      labelText: 'Custom DNS',
-                      hintText: 'Enter DNS server (e.g., 1.1.1.1)',
-                      border: OutlineInputBorder(),
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.settings_rounded, color: Colors.green),
+            ),
+            title: const Text(
+              'DNS Configuration',
+              style: TextStyle(fontWeight: FontWeight.w500),
+            ),
+            subtitle: Text(
+              customDnsController.text.isEmpty
+                  ? 'No custom DNS set'
+                  : customDnsController.text,
+            ),
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 8,
+                ),
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: customDnsController,
+                      decoration: const InputDecoration(
+                        labelText: 'Custom DNS',
+                        hintText: 'Enter DNS server (e.g., 1.1.1.1)',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (_) => _onSettingChanged(() {}),
                     ),
-                    onChanged: (_) => _onSettingChanged(() {}),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: _showDnsInstructions,
-                    icon: const Icon(Icons.help_outline),
-                    label: const Text('How to Configure DNS'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: _showDnsInstructions,
+                      icon: const Icon(Icons.help_outline),
+                      label: const Text('How to Configure DNS'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
+              ),
+            ],
+          )
+        : ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 8,
+            ),
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.settings_rounded, color: Colors.green),
+            ),
+            title: const Text(
+              'DNS Configuration',
+              style: TextStyle(fontWeight: FontWeight.w500),
+            ),
+            subtitle: Text(_getDnsServerForProvider()),
+            trailing: ElevatedButton.icon(
+              onPressed: _showDnsInstructions,
+              icon: const Icon(Icons.help_outline, size: 18),
+              label: const Text('How to Configure'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                minimumSize: const Size(120, 36),
               ),
             ),
-          ],
-        )
-        : ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 8,
-          ),
-          leading: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.settings_rounded, color: Colors.green),
-          ),
-          title: const Text(
-            'DNS Configuration',
-            style: TextStyle(fontWeight: FontWeight.w500),
-          ),
-          subtitle: Text(_getDnsServerForProvider()),
-          trailing: ElevatedButton.icon(
-            onPressed: _showDnsInstructions,
-            icon: const Icon(Icons.help_outline, size: 18),
-            label: const Text('How to Configure'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-              minimumSize: const Size(120, 36),
-            ),
-          ),
-        );
+          );
   }
 
   String _getDnsServerForProvider() {
@@ -1880,63 +2045,58 @@ class SettingsScreenState extends State<SettingsScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder:
-          (context) => DraggableScrollableSheet(
-            initialChildSize: 0.6,
-            minChildSize: 0.4,
-            maxChildSize: 0.8,
-            expand: false,
-            builder:
-                (context, controller) => Column(
-                  children: [
-                    Container(
-                      margin: const EdgeInsets.symmetric(vertical: 8),
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.8,
+        expand: false,
+        builder: (context, controller) => Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Select DNS Provider',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                controller: controller,
+                itemCount: providers.length,
+                itemBuilder: (context, index) {
+                  final provider = providers[index];
+                  return ListTile(
+                    leading: Radio<String>(
+                      value: provider,
+                      groupValue: dnsProvider,
+                      activeColor: Colors.green,
+                      onChanged: (value) {
+                        Navigator.pop(context);
+                        _updateDnsProvider(value!);
+                      },
                     ),
-                    const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text(
-                        'Select DNS Provider',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: ListView.builder(
-                        controller: controller,
-                        itemCount: providers.length,
-                        itemBuilder: (context, index) {
-                          final provider = providers[index];
-                          return ListTile(
-                            leading: Radio<String>(
-                              value: provider,
-                              groupValue: dnsProvider,
-                              activeColor: Colors.green,
-                              onChanged: (value) {
-                                Navigator.pop(context);
-                                _updateDnsProvider(value!);
-                              },
-                            ),
-                            title: Text(provider),
-                            subtitle: _getDnsDescription(provider),
-                            onTap: () {
-                              Navigator.pop(context);
-                              _updateDnsProvider(provider);
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-          ),
+                    title: Text(provider),
+                    subtitle: _getDnsDescription(provider),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _updateDnsProvider(provider);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1979,43 +2139,42 @@ class SettingsScreenState extends State<SettingsScreen>
 
     showDialog(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.help_outline, color: Colors.green),
-                SizedBox(width: 8),
-                Text('DNS Configuration Instructions'),
-              ],
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(instructions),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Note: The app cannot change system DNS settings directly. '
-                    'You need to configure DNS in your device settings.',
-                    style: TextStyle(fontStyle: FontStyle.italic),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'After changing DNS settings in your device, come back to the app and enable DNS usage here '
-                    'to help the app use fallback servers optimized for your DNS settings.',
-                    style: TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                ],
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.help_outline, color: Colors.green),
+            SizedBox(width: 8),
+            Text('DNS Configuration Instructions'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(instructions),
+              const SizedBox(height: 16),
+              const Text(
+                'Note: The app cannot change system DNS settings directly. '
+                'You need to configure DNS in your device settings.',
+                style: TextStyle(fontStyle: FontStyle.italic),
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
+              const SizedBox(height: 16),
+              const Text(
+                'After changing DNS settings in your device, come back to the app and enable DNS usage here '
+                'to help the app use fallback servers optimized for your DNS settings.',
+                style: TextStyle(fontWeight: FontWeight.w500),
               ),
             ],
           ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2225,53 +2384,49 @@ class SettingsScreenState extends State<SettingsScreen>
       if (success) {
         showDialog(
           context: context,
-          builder:
-              (context) => AlertDialog(
-                title: Row(
-                  children: [
-                    Icon(Icons.check_circle, color: Colors.green),
-                    SizedBox(width: 8),
-                    Text('Backup Successful'),
-                  ],
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green),
+                SizedBox(width: 8),
+                Text('Backup Successful'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Your preferences have been successfully backed up.'),
+                SizedBox(height: 16),
+                Text(
+                  'The backup includes:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
                 ),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Your preferences have been successfully backed up.'),
-                    SizedBox(height: 16),
-                    Text(
-                      'The backup includes:',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    SizedBox(height: 8),
-                    _buildBackupInfoItem(
-                      'Theme and appearance settings',
-                      Icons.color_lens,
-                    ),
-                    _buildBackupInfoItem(
-                      'Language preferences',
-                      Icons.language,
-                    ),
-                    _buildBackupInfoItem(
-                      'Network and proxy settings',
-                      Icons.router,
-                    ),
-                    _buildBackupInfoItem(
-                      'All other app configurations',
-                      Icons.settings,
-                    ),
-                  ],
+                SizedBox(height: 8),
+                _buildBackupInfoItem(
+                  'Theme and appearance settings',
+                  Icons.color_lens,
                 ),
-                actions: [
-                  FilledButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    child: Text('OK'),
-                  ),
-                ],
+                _buildBackupInfoItem('Language preferences', Icons.language),
+                _buildBackupInfoItem(
+                  'Network and proxy settings',
+                  Icons.router,
+                ),
+                _buildBackupInfoItem(
+                  'All other app configurations',
+                  Icons.settings,
+                ),
+              ],
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                child: Text('OK'),
               ),
+            ],
+          ),
         );
       } else {
         CustomToast.show(
@@ -2342,103 +2497,98 @@ class SettingsScreenState extends State<SettingsScreen>
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        builder:
-            (context) => DraggableScrollableSheet(
-              initialChildSize: 0.7,
-              minChildSize: 0.5,
-              maxChildSize: 0.9,
-              expand: false,
-              builder:
-                  (context, scrollController) => Column(
-                    children: [
-                      Container(
-                        margin: const EdgeInsets.symmetric(vertical: 8),
-                        width: 40,
-                        height: 4,
+        builder: (context) => DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.5,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (context, scrollController) => Column(
+            children: [
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Select Backup to Restore',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'Choose a backup from the list below. Backups are ordered from newest to oldest.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ),
+              SizedBox(height: 16),
+              Expanded(
+                child: ListView.builder(
+                  controller: scrollController,
+                  itemCount: backups.length,
+                  itemBuilder: (context, index) {
+                    final backup = backups[index];
+                    final timestamp = DateTime.parse(
+                      backup['timestamp'] as String,
+                    );
+                    final formattedDate =
+                        '${timestamp.year}-${timestamp.month.toString().padLeft(2, '0')}-${timestamp.day.toString().padLeft(2, '0')} ${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
+
+                    final type = backup['type'] as String;
+                    final format = backup['format'] as String;
+
+                    IconData backupIcon;
+                    Color backupColor;
+
+                    if (format == 'SQLite') {
+                      backupIcon = Icons.storage;
+                      backupColor = Colors.purple;
+                    } else if (type == 'sqlite') {
+                      backupIcon = Icons.backup;
+                      backupColor = Colors.blue;
+                    } else {
+                      backupIcon = Icons.restore;
+                      backupColor = Colors.amber;
+                    }
+
+                    return ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.grey[300],
-                          borderRadius: BorderRadius.circular(2),
+                          color: backupColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
                         ),
+                        child: Icon(backupIcon, color: backupColor),
                       ),
-                      const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Text(
-                          'Select Backup to Restore',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                      title: Text(
+                        'Backup from $formattedDate',
+                        style: TextStyle(fontWeight: FontWeight.w500),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          'Choose a backup from the list below. Backups are ordered from newest to oldest.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.grey[600]),
-                        ),
+                      subtitle: Text(
+                        'Type: ${format} ${type == "legacy" ? "(Legacy)" : ""} • Size: ${(backup['size'] as int) ~/ 1024} KB',
+                        style: TextStyle(fontSize: 12),
                       ),
-                      SizedBox(height: 16),
-                      Expanded(
-                        child: ListView.builder(
-                          controller: scrollController,
-                          itemCount: backups.length,
-                          itemBuilder: (context, index) {
-                            final backup = backups[index];
-                            final timestamp = DateTime.parse(
-                              backup['timestamp'] as String,
-                            );
-                            final formattedDate =
-                                '${timestamp.year}-${timestamp.month.toString().padLeft(2, '0')}-${timestamp.day.toString().padLeft(2, '0')} ${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
-
-                            final type = backup['type'] as String;
-                            final format = backup['format'] as String;
-
-                            IconData backupIcon;
-                            Color backupColor;
-
-                            if (format == 'SQLite') {
-                              backupIcon = Icons.storage;
-                              backupColor = Colors.purple;
-                            } else if (type == 'sqlite') {
-                              backupIcon = Icons.backup;
-                              backupColor = Colors.blue;
-                            } else {
-                              backupIcon = Icons.restore;
-                              backupColor = Colors.amber;
-                            }
-
-                            return ListTile(
-                              leading: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: backupColor.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Icon(backupIcon, color: backupColor),
-                              ),
-                              title: Text(
-                                'Backup from $formattedDate',
-                                style: TextStyle(fontWeight: FontWeight.w500),
-                              ),
-                              subtitle: Text(
-                                'Type: ${format} ${type == "legacy" ? "(Legacy)" : ""} • Size: ${(backup['size'] as int) ~/ 1024} KB',
-                                style: TextStyle(fontSize: 12),
-                              ),
-                              onTap: () {
-                                Navigator.pop(context);
-                                _confirmAndRestoreBackup(
-                                  backup['path'] as String,
-                                  format,
-                                );
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-            ),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _confirmAndRestoreBackup(
+                          backup['path'] as String,
+                          format,
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     } catch (e) {
       // Dismiss loading indicator if showing
@@ -2458,48 +2608,47 @@ class SettingsScreenState extends State<SettingsScreen>
   void _confirmAndRestoreBackup(String backupPath, String backupFormat) {
     showDialog(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: Row(
-              children: [
-                Icon(Icons.warning_amber_rounded, color: Colors.amber),
-                SizedBox(width: 8),
-                Text('Restore Backup'),
-              ],
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.amber),
+            SizedBox(width: 8),
+            Text('Restore Backup'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This will replace all your current settings with the selected backup.',
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'This will replace all your current settings with the selected backup.',
-                ),
-                SizedBox(height: 12),
-                Text(
-                  'Backup Type: $backupFormat',
-                  style: TextStyle(fontWeight: FontWeight.w500),
-                ),
-                SizedBox(height: 16),
-                Text(
-                  'Are you sure you want to continue?',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ],
+            SizedBox(height: 12),
+            Text(
+              'Backup Type: $backupFormat',
+              style: TextStyle(fontWeight: FontWeight.w500),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _restoreBackup(backupPath);
-                },
-                child: const Text('Restore'),
-              ),
-            ],
+            SizedBox(height: 16),
+            Text(
+              'Are you sure you want to continue?',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
           ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _restoreBackup(backupPath);
+            },
+            child: const Text('Restore'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2510,24 +2659,23 @@ class SettingsScreenState extends State<SettingsScreen>
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder:
-            (context) => AlertDialog(
-              title: Text('Restoring Backup'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Please wait while your settings are being restored...'),
-                  SizedBox(height: 8),
-                  Text(
-                    'This may take a moment. Do not close the app.',
-                    style: TextStyle(fontSize: 12),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
+        builder: (context) => AlertDialog(
+          title: Text('Restoring Backup'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Please wait while your settings are being restored...'),
+              SizedBox(height: 8),
+              Text(
+                'This may take a moment. Do not close the app.',
+                style: TextStyle(fontSize: 12),
+                textAlign: TextAlign.center,
               ),
-            ),
+            ],
+          ),
+        ),
       );
 
       final recoveryService = PreferencesRecoveryService();
@@ -2548,63 +2696,56 @@ class SettingsScreenState extends State<SettingsScreen>
         // Show success dialog
         showDialog(
           context: context,
-          builder:
-              (context) => AlertDialog(
-                title: Row(
-                  children: [
-                    Icon(Icons.check_circle, color: Colors.green),
-                    SizedBox(width: 8),
-                    Text('Restore Successful'),
-                  ],
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green),
+                SizedBox(width: 8),
+                Text('Restore Successful'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Your preferences have been successfully restored from backup.',
                 ),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Your preferences have been successfully restored from backup.',
-                    ),
-                    SizedBox(height: 12),
-                    Text(
-                      'The following settings have been restored:',
-                      style: TextStyle(fontWeight: FontWeight.w500),
-                    ),
-                    SizedBox(height: 8),
-                    _buildBackupInfoItem(
-                      'Theme and appearance settings',
-                      Icons.color_lens,
-                    ),
-                    _buildBackupInfoItem(
-                      'Language preferences',
-                      Icons.language,
-                    ),
-                    _buildBackupInfoItem(
-                      'Network and proxy settings',
-                      Icons.router,
-                    ),
-                    _buildBackupInfoItem(
-                      'All other app configurations',
-                      Icons.settings,
-                    ),
-                    SizedBox(height: 12),
-                    Text(
-                      'It\'s recommended to restart the app for all changes to take full effect.',
-                      style: TextStyle(
-                        fontStyle: FontStyle.italic,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
+                SizedBox(height: 12),
+                Text(
+                  'The following settings have been restored:',
+                  style: TextStyle(fontWeight: FontWeight.w500),
                 ),
-                actions: [
-                  FilledButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    child: Text('OK'),
-                  ),
-                ],
+                SizedBox(height: 8),
+                _buildBackupInfoItem(
+                  'Theme and appearance settings',
+                  Icons.color_lens,
+                ),
+                _buildBackupInfoItem('Language preferences', Icons.language),
+                _buildBackupInfoItem(
+                  'Network and proxy settings',
+                  Icons.router,
+                ),
+                _buildBackupInfoItem(
+                  'All other app configurations',
+                  Icons.settings,
+                ),
+                SizedBox(height: 12),
+                Text(
+                  'It\'s recommended to restart the app for all changes to take full effect.',
+                  style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12),
+                ),
+              ],
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                child: Text('OK'),
               ),
+            ],
+          ),
         );
       }
     } catch (e) {
@@ -2645,57 +2786,56 @@ class SettingsScreenState extends State<SettingsScreen>
         // Show success dialog with export details
         showDialog(
           context: context,
-          builder:
-              (context) => AlertDialog(
-                title: Row(
-                  children: [
-                    Icon(Icons.check_circle, color: Colors.green),
-                    SizedBox(width: 8),
-                    Text('Export Successful'),
-                  ],
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green),
+                SizedBox(width: 8),
+                Text('Export Successful'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Your preferences have been successfully exported.'),
+                SizedBox(height: 12),
+                Text(
+                  'File location:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
                 ),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Your preferences have been successfully exported.'),
-                    SizedBox(height: 12),
-                    Text(
-                      'File location:',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      exportPath,
-                      style: TextStyle(fontSize: 12),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    SizedBox(height: 12),
-                    Text('Would you like to share this file?'),
-                  ],
+                Text(
+                  exportPath,
+                  style: TextStyle(fontSize: 12),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                actions: [
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    child: Text('Close'),
-                  ),
-                  FilledButton.icon(
-                    onPressed: () async {
-                      Navigator.pop(context);
-                      // Share the file
-                      await Share.shareXFiles(
-                        [XFile(exportPath)],
-                        subject: 'DocLN Preferences Export',
-                        text: 'DocLN Preferences Export',
-                      );
-                    },
-                    icon: Icon(Icons.share),
-                    label: Text('Share'),
-                  ),
-                ],
+                SizedBox(height: 12),
+                Text('Would you like to share this file?'),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                child: Text('Close'),
               ),
+              FilledButton.icon(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  // Share the file
+                  await Share.shareXFiles(
+                    [XFile(exportPath)],
+                    subject: 'DocLN Preferences Export',
+                    text: 'DocLN Preferences Export',
+                  );
+                },
+                icon: Icon(Icons.share),
+                label: Text('Share'),
+              ),
+            ],
+          ),
         );
       } else {
         CustomToast.show(
@@ -2724,44 +2864,43 @@ class SettingsScreenState extends State<SettingsScreen>
       // Show info dialog first
       bool? shouldProceed = await showDialog<bool>(
         context: context,
-        builder:
-            (context) => AlertDialog(
-              title: Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.blue),
-                  SizedBox(width: 8),
-                  Text('Import Preferences'),
-                ],
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.info_outline, color: Colors.blue),
+              SizedBox(width: 8),
+              Text('Import Preferences'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'You can import preferences that were previously exported from this app.',
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'You can import preferences that were previously exported from this app.',
-                  ),
-                  SizedBox(height: 12),
-                  Text(
-                    'This will replace all your current settings with the imported file.',
-                  ),
-                  SizedBox(height: 12),
-                  Text(
-                    'Make sure the file is a valid preferences export file.',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ],
+              SizedBox(height: 12),
+              Text(
+                'This will replace all your current settings with the imported file.',
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: Text('Continue'),
-                ),
-              ],
+              SizedBox(height: 12),
+              Text(
+                'Make sure the file is a valid preferences export file.',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text('Cancel'),
             ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text('Continue'),
+            ),
+          ],
+        ),
       );
 
       if (shouldProceed != true) return;
@@ -2783,47 +2922,43 @@ class SettingsScreenState extends State<SettingsScreen>
 
       final bool? confirmed = await showDialog<bool>(
         context: context,
-        builder:
-            (context) => AlertDialog(
-              title: Row(
-                children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.amber),
-                  SizedBox(width: 8),
-                  Text('Confirm Import'),
-                ],
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.amber),
+              SizedBox(width: 8),
+              Text('Confirm Import'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Selected file:',
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Selected file:',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    filePath.split('/').last,
-                    style: TextStyle(fontSize: 14),
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'This will replace ALL your current settings with the imported file. This cannot be undone.',
-                    style: TextStyle(color: Colors.red),
-                  ),
-                  SizedBox(height: 12),
-                  Text('Are you sure you want to continue?'),
-                ],
+              Text(filePath.split('/').last, style: TextStyle(fontSize: 14)),
+              SizedBox(height: 16),
+              Text(
+                'This will replace ALL your current settings with the imported file. This cannot be undone.',
+                style: TextStyle(color: Colors.red),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Import'),
-                ),
-              ],
+              SizedBox(height: 12),
+              Text('Are you sure you want to continue?'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
             ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Import'),
+            ),
+          ],
+        ),
       );
 
       if (confirmed != true || !mounted) return;
@@ -2850,36 +2985,35 @@ class SettingsScreenState extends State<SettingsScreen>
         // Show success dialog
         showDialog(
           context: context,
-          builder:
-              (context) => AlertDialog(
-                title: Row(
-                  children: [
-                    Icon(Icons.check_circle, color: Colors.green),
-                    SizedBox(width: 8),
-                    Text('Import Successful'),
-                  ],
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green),
+                SizedBox(width: 8),
+                Text('Import Successful'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Your preferences have been successfully imported.'),
+                SizedBox(height: 12),
+                Text(
+                  'It\'s recommended to restart the app for all changes to take full effect.',
+                  style: TextStyle(fontStyle: FontStyle.italic),
                 ),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Your preferences have been successfully imported.'),
-                    SizedBox(height: 12),
-                    Text(
-                      'It\'s recommended to restart the app for all changes to take full effect.',
-                      style: TextStyle(fontStyle: FontStyle.italic),
-                    ),
-                  ],
-                ),
-                actions: [
-                  FilledButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    child: Text('OK'),
-                  ),
-                ],
+              ],
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                child: Text('OK'),
               ),
+            ],
+          ),
         );
       }
     } catch (e) {
@@ -2902,128 +3036,121 @@ class SettingsScreenState extends State<SettingsScreen>
   void _repairPreferences() {
     showDialog(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: Row(
-              children: [
-                Icon(Icons.healing, color: Colors.red),
-                SizedBox(width: 8),
-                Text('Repair Preferences'),
-              ],
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.healing, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Repair Preferences'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This will attempt to repair corrupted preferences. Use this if you\'re experiencing:',
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'This will attempt to repair corrupted preferences. Use this if you\'re experiencing:',
-                ),
-                SizedBox(height: 12),
-                _buildRepairInfoItem('Crash after opening webview'),
-                _buildRepairInfoItem('Settings not saving properly'),
-                _buildRepairInfoItem('App freezing or showing blank screens'),
-                _buildRepairInfoItem('Other unexpected behavior'),
-                SizedBox(height: 16),
-                Text(
-                  'Note: A backup will be created before attempting repair.',
-                  style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Continue with repair?',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ],
+            SizedBox(height: 12),
+            _buildRepairInfoItem('Crash after opening webview'),
+            _buildRepairInfoItem('Settings not saving properly'),
+            _buildRepairInfoItem('App freezing or showing blank screens'),
+            _buildRepairInfoItem('Other unexpected behavior'),
+            SizedBox(height: 16),
+            Text(
+              'Note: A backup will be created before attempting repair.',
+              style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () async {
-                  Navigator.pop(context);
-
-                  // Show loading indicator
-                  showDialog(
-                    context: context,
-                    barrierDismissible: false,
-                    builder:
-                        (context) => AlertDialog(
-                          title: Text('Repairing Preferences'),
-                          content: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              CircularProgressIndicator(),
-                              SizedBox(height: 16),
-                              Text('Please wait...'),
-                              SizedBox(height: 8),
-                              Text(
-                                'We\'re checking for issues and attempting to fix them.',
-                                style: TextStyle(fontSize: 12),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        ),
-                  );
-
-                  final recoveryService = PreferencesRecoveryService();
-                  final success = await recoveryService.recoverPreferences(
-                    context,
-                  );
-
-                  // Dismiss loading indicator
-                  if (mounted) Navigator.pop(context);
-
-                  if (!mounted) return;
-
-                  if (success) {
-                    // Reload settings
-                    await _loadSettings();
-
-                    // Show success message
-                    showDialog(
-                      context: context,
-                      builder:
-                          (context) => AlertDialog(
-                            title: Row(
-                              children: [
-                                Icon(Icons.check_circle, color: Colors.green),
-                                SizedBox(width: 8),
-                                Text('Repair Successful'),
-                              ],
-                            ),
-                            content: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Preferences repair completed successfully.',
-                                ),
-                                SizedBox(height: 12),
-                                Text(
-                                  'It\'s recommended to restart the app for all changes to take full effect.',
-                                  style: TextStyle(fontStyle: FontStyle.italic),
-                                ),
-                              ],
-                            ),
-                            actions: [
-                              FilledButton(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                },
-                                child: Text('OK'),
-                              ),
-                            ],
-                          ),
-                    );
-                  }
-                },
-                child: const Text('Repair'),
-              ),
-            ],
+            SizedBox(height: 4),
+            Text(
+              'Continue with repair?',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
           ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(context);
+
+              // Show loading indicator
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => AlertDialog(
+                  title: Text('Repairing Preferences'),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text('Please wait...'),
+                      SizedBox(height: 8),
+                      Text(
+                        'We\'re checking for issues and attempting to fix them.',
+                        style: TextStyle(fontSize: 12),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+
+              final recoveryService = PreferencesRecoveryService();
+              final success = await recoveryService.recoverPreferences(context);
+
+              // Dismiss loading indicator
+              if (mounted) Navigator.pop(context);
+
+              if (!mounted) return;
+
+              if (success) {
+                // Reload settings
+                await _loadSettings();
+
+                // Show success message
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: Row(
+                      children: [
+                        Icon(Icons.check_circle, color: Colors.green),
+                        SizedBox(width: 8),
+                        Text('Repair Successful'),
+                      ],
+                    ),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Preferences repair completed successfully.'),
+                        SizedBox(height: 12),
+                        Text(
+                          'It\'s recommended to restart the app for all changes to take full effect.',
+                          style: TextStyle(fontStyle: FontStyle.italic),
+                        ),
+                      ],
+                    ),
+                    actions: [
+                      FilledButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+                        child: Text('OK'),
+                      ),
+                    ],
+                  ),
+                );
+              }
+            },
+            child: const Text('Repair'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -3052,38 +3179,37 @@ class SettingsScreenState extends State<SettingsScreen>
         final bool shouldPop =
             await showDialog<bool>(
               context: context,
-              builder:
-                  (context) => AlertDialog(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    title: const Text('Unsaved Changes'),
-                    content: const Text(
-                      'You have unsaved changes. Do you want to save them before leaving?',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () {
-                          _revertSettings(); // Add this line
-                          Navigator.of(context).pop(true);
-                        },
-                        child: const Text('Discard'),
-                      ),
-                      TextButton(
-                        onPressed: () async {
-                          await _saveSettings();
-                          Navigator.of(context).pop(true);
-                        },
-                        child: const Text('Save'),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          Navigator.of(context).pop(false);
-                        },
-                        child: const Text('Cancel'),
-                      ),
-                    ],
+              builder: (context) => AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                title: const Text('Unsaved Changes'),
+                content: const Text(
+                  'You have unsaved changes. Do you want to save them before leaving?',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      _revertSettings(); // Add this line
+                      Navigator.of(context).pop(true);
+                    },
+                    child: const Text('Discard'),
                   ),
+                  TextButton(
+                    onPressed: () async {
+                      await _saveSettings();
+                      Navigator.of(context).pop(true);
+                    },
+                    child: const Text('Save'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop(false);
+                    },
+                    child: const Text('Cancel'),
+                  ),
+                ],
+              ),
             ) ??
             false;
 
@@ -3106,10 +3232,9 @@ class SettingsScreenState extends State<SettingsScreen>
                     Text(
                       'Settings',
                       style: TextStyle(
-                        color:
-                            Theme.of(
-                              context,
-                            ).primaryTextTheme.titleLarge?.color,
+                        color: Theme.of(
+                          context,
+                        ).primaryTextTheme.titleLarge?.color,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.5,
                       ),
@@ -3206,10 +3331,9 @@ class SettingsScreenState extends State<SettingsScreen>
                           icon: Icons.dark_mode_rounded,
                           title: 'Theme',
                           subtitle: isDarkMode ? 'Dark Mode' : 'Light Mode',
-                          onTap:
-                              () => _onSettingChanged(
-                                () => setState(() => isDarkMode = !isDarkMode),
-                              ),
+                          onTap: () => _onSettingChanged(
+                            () => setState(() => isDarkMode = !isDarkMode),
+                          ),
                         ),
                         _buildQuickActionCard(
                           icon: Icons.text_fields_rounded,
@@ -3258,6 +3382,7 @@ class SettingsScreenState extends State<SettingsScreen>
                       });
                     },
                   ),
+                  _buildWallpaperThemeSettings(),
                 ]),
                 _buildSection('Server Settings', [
                   _buildServerTile(),
@@ -3291,36 +3416,35 @@ class SettingsScreenState extends State<SettingsScreen>
             ),
           ],
         ),
-        floatingActionButton:
-            _hasUnsavedChanges
-                ? Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.blue.withOpacity(0.3),
-                        blurRadius: 12,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: FloatingActionButton.extended(
-                    onPressed: _saveSettings,
-                    elevation: 0,
-                    backgroundColor: Colors.blue.shade600,
-                    icon: const Icon(Icons.save_rounded, color: Colors.white),
-                    label: const Text(
-                      'Save Changes',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.5,
-                      ),
+        floatingActionButton: _hasUnsavedChanges
+            ? Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blue.withOpacity(0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: FloatingActionButton.extended(
+                  onPressed: _saveSettings,
+                  elevation: 0,
+                  backgroundColor: Colors.blue.shade600,
+                  icon: const Icon(Icons.save_rounded, color: Colors.white),
+                  label: const Text(
+                    'Save Changes',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
                     ),
                   ),
-                )
-                : null,
+                ),
+              )
+            : null,
       ),
     );
   }

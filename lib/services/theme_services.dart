@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'preferences_service.dart';
+import 'wallpaper_theme_service.dart';
 
 class ThemeServices extends ChangeNotifier {
   static final ThemeServices _instance = ThemeServices._internal();
@@ -10,25 +11,41 @@ class ThemeServices extends ChangeNotifier {
     _themeMode = ThemeMode.light;
     _textSize = 16.0;
     _textScaleFactor = 1.0;
+
+    // Listen to wallpaper theme changes
+    _wallpaperThemeService.addListener(_onWallpaperThemeChanged);
   }
 
   late ThemeMode _themeMode;
   double _textScaleFactor = 1.0;
   double _textSize = 16.0;
   bool _useDynamicColor = true;
+  bool _useWallpaperColors = false;
   ColorScheme? _lightDynamicColorScheme;
   ColorScheme? _darkDynamicColorScheme;
 
   // Preferences service instance
   final PreferencesService _prefsService = PreferencesService();
 
+  // Wallpaper theme service
+  final WallpaperThemeService _wallpaperThemeService =
+      WallpaperThemeService.instance;
+
+  void _onWallpaperThemeChanged() {
+    // When wallpaper colors change, notify listeners to rebuild themes
+    notifyListeners();
+  }
+
   ThemeMode get themeMode => _themeMode;
   // New getter for textScaler
   TextScaler get textScaler => TextScaler.linear(_textSize / 16.0);
   double get textSize => _textSize;
   bool get useDynamicColor => _useDynamicColor;
+  bool get useWallpaperColors => _useWallpaperColors;
+  bool get hasWallpaperColors => _wallpaperThemeService.hasWallpaperColors;
   ColorScheme? get lightDynamicColorScheme => _lightDynamicColorScheme;
   ColorScheme? get darkDynamicColorScheme => _darkDynamicColorScheme;
+  WallpaperThemeService get wallpaperThemeService => _wallpaperThemeService;
 
   Future<void> init() async {
     try {
@@ -36,19 +53,31 @@ class ThemeServices extends ChangeNotifier {
       await _prefsService.initialize();
 
       // Get values from preferences service
-      _themeMode =
-          _prefsService.getBool('darkMode') ? ThemeMode.dark : ThemeMode.light;
+      _themeMode = _prefsService.getBool('darkMode')
+          ? ThemeMode.dark
+          : ThemeMode.light;
       _textSize = (_prefsService.getDouble(
         'textSize',
         defaultValue: 16.0,
       )).clamp(12.0, 24.0);
-      _useDynamicColor = _prefsService.getBool('useDynamicColor', defaultValue: true);
-      
+      _useDynamicColor = _prefsService.getBool(
+        'useDynamicColor',
+        defaultValue: true,
+      );
+      _useWallpaperColors = _prefsService.getBool(
+        'useWallpaperColors',
+        defaultValue: false,
+      );
+
       // Load dynamic colors from system (Material You)
       await _loadDynamicColors();
-      
+
+      // Sync wallpaper theme service setting
+      _wallpaperThemeService.setUseWallpaperColors(_useWallpaperColors);
+
       print('🔤 Initialized text size: $_textSize');
       print('🎨 Dynamic colors enabled: $_useDynamicColor');
+      print('🖼️ Wallpaper colors enabled: $_useWallpaperColors');
       notifyListeners();
     } catch (e) {
       print('Error initializing ThemeServices: $e');
@@ -69,8 +98,12 @@ class ThemeServices extends ChangeNotifier {
     try {
       final corePalette = await DynamicColorPlugin.getCorePalette();
       if (corePalette != null) {
-        _lightDynamicColorScheme = corePalette.toColorScheme(brightness: Brightness.light);
-        _darkDynamicColorScheme = corePalette.toColorScheme(brightness: Brightness.dark);
+        _lightDynamicColorScheme = corePalette.toColorScheme(
+          brightness: Brightness.light,
+        );
+        _darkDynamicColorScheme = corePalette.toColorScheme(
+          brightness: Brightness.dark,
+        );
         print('🎨 Loaded dynamic colors from system');
       } else {
         print('🎨 Dynamic colors not available on this device');
@@ -87,6 +120,41 @@ class ThemeServices extends ChangeNotifier {
       await _loadDynamicColors();
     }
     notifyListeners();
+  }
+
+  Future<void> setUseWallpaperColors(bool useWallpaper) async {
+    await _prefsService.setBool('useWallpaperColors', useWallpaper);
+    _useWallpaperColors = useWallpaper;
+    _wallpaperThemeService.setUseWallpaperColors(useWallpaper);
+    notifyListeners();
+  }
+
+  Future<bool> updateWallpaperColors() async {
+    final result = await _wallpaperThemeService.updateWallpaperColors();
+    if (result) {
+      notifyListeners();
+    }
+    return result;
+  }
+
+  Future<bool> updateWallpaperColorsFromSystem() async {
+    final result = await _wallpaperThemeService
+        .updateWallpaperColorsFromSystem();
+    if (result) {
+      notifyListeners();
+    }
+    return result;
+  }
+
+  void clearWallpaperColors() {
+    _wallpaperThemeService.clearWallpaperColors();
+    _useWallpaperColors = false;
+    _prefsService.setBool('useWallpaperColors', false);
+    notifyListeners();
+  }
+
+  List<Color> getWallpaperColorPreview() {
+    return _wallpaperThemeService.getColorPreview();
   }
 
   Future<void> setTextSize(double size) async {
@@ -130,9 +198,13 @@ class ThemeServices extends ChangeNotifier {
       'bodySmall': 12.0,
     };
 
-    // Use dynamic colors if available and enabled, otherwise fallback to custom colors
+    // Priority order: Wallpaper colors > System dynamic colors > Static fallback
     ColorScheme colorScheme;
-    if (_useDynamicColor && _lightDynamicColorScheme != null) {
+    if (_useWallpaperColors &&
+        _wallpaperThemeService.extractor.lightColorScheme != null) {
+      colorScheme = _wallpaperThemeService.extractor.lightColorScheme!;
+      print('🎨 Using wallpaper light color scheme');
+    } else if (_useDynamicColor && _lightDynamicColorScheme != null) {
       colorScheme = _lightDynamicColorScheme!;
       print('🎨 Using dynamic light color scheme');
     } else {
@@ -261,7 +333,9 @@ class ThemeServices extends ChangeNotifier {
         labelColor: colorScheme.primary,
         unselectedLabelColor: Colors.grey,
         indicator: BoxDecoration(
-          border: Border(bottom: BorderSide(color: colorScheme.primary, width: 2)),
+          border: Border(
+            bottom: BorderSide(color: colorScheme.primary, width: 2),
+          ),
         ),
       ),
     );
@@ -284,9 +358,13 @@ class ThemeServices extends ChangeNotifier {
       'bodySmall': 12.0,
     };
 
-    // Use dynamic colors if available and enabled, otherwise fallback to custom colors
+    // Priority order: Wallpaper colors > System dynamic colors > Static fallback
     ColorScheme colorScheme;
-    if (_useDynamicColor && _darkDynamicColorScheme != null) {
+    if (_useWallpaperColors &&
+        _wallpaperThemeService.extractor.darkColorScheme != null) {
+      colorScheme = _wallpaperThemeService.extractor.darkColorScheme!;
+      print('🎨 Using wallpaper dark color scheme');
+    } else if (_useDynamicColor && _darkDynamicColorScheme != null) {
       colorScheme = _darkDynamicColorScheme!;
       print('🎨 Using dynamic dark color scheme');
     } else {
@@ -426,9 +504,17 @@ class ThemeServices extends ChangeNotifier {
         labelColor: colorScheme.primary,
         unselectedLabelColor: Colors.grey,
         indicator: BoxDecoration(
-          border: Border(bottom: BorderSide(color: colorScheme.primary, width: 2)),
+          border: Border(
+            bottom: BorderSide(color: colorScheme.primary, width: 2),
+          ),
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _wallpaperThemeService.removeListener(_onWallpaperThemeChanged);
+    super.dispose();
   }
 }

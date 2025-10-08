@@ -34,9 +34,10 @@ class _WallpaperColorsScreenState extends State<WallpaperColorsScreen> {
         title: const Text('Material You from Wallpaper'),
         backgroundColor: _extractor.dominantColor,
         foregroundColor: _extractor.dominantColor != null
-            ? ThemeData.estimateBrightnessForColor(_extractor.dominantColor!) == Brightness.dark
-                ? Colors.white
-                : Colors.black
+            ? ThemeData.estimateBrightnessForColor(_extractor.dominantColor!) ==
+                      Brightness.dark
+                  ? Colors.white
+                  : Colors.black
             : null,
       ),
       body: Padding(
@@ -52,7 +53,10 @@ class _WallpaperColorsScreenState extends State<WallpaperColorsScreen> {
                   children: [
                     const Text(
                       'Extract Colors from Wallpaper',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 16),
                     Row(
@@ -62,18 +66,47 @@ class _WallpaperColorsScreenState extends State<WallpaperColorsScreen> {
                             onPressed: _extractor.isExtracting
                                 ? null
                                 : () async {
+                                    await _extractor
+                                        .extractColorsFromSystemWallpaper();
+                                  },
+                            icon: _extractor.isExtracting
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.wallpaper),
+                            label: Text(
+                              _extractor.isExtracting
+                                  ? 'Extracting...'
+                                  : 'System Wallpaper',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _extractor.isExtracting
+                                ? null
+                                : () async {
                                     await _extractor.extractColorsFromImage();
                                   },
                             icon: _extractor.isExtracting
                                 ? const SizedBox(
                                     width: 16,
                                     height: 16,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   )
                                 : const Icon(Icons.image),
-                            label: Text(_extractor.isExtracting
-                                ? 'Extracting...'
-                                : 'Pick Image'),
+                            label: Text(
+                              _extractor.isExtracting
+                                  ? 'Extracting...'
+                                  : 'Pick Image',
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -93,6 +126,44 @@ class _WallpaperColorsScreenState extends State<WallpaperColorsScreen> {
 
             const SizedBox(height: 16),
 
+            // Color source indicator
+            if (_extractor.extractedColors.isNotEmpty)
+              Card(
+                color: _extractor.isUsingSystemWallpaper
+                    ? Colors.green.shade50
+                    : Colors.blue.shade50,
+                child: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _extractor.isUsingSystemWallpaper
+                            ? Icons.wallpaper
+                            : Icons.image,
+                        size: 20,
+                        color: _extractor.isUsingSystemWallpaper
+                            ? Colors.green.shade700
+                            : Colors.blue.shade700,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _extractor.isUsingSystemWallpaper
+                            ? 'Using System Wallpaper Colors'
+                            : 'Using Custom Image Colors',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: _extractor.isUsingSystemWallpaper
+                              ? Colors.green.shade700
+                              : Colors.blue.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            const SizedBox(height: 16),
+
             // Color preview
             if (_extractor.extractedColors.isNotEmpty)
               Card(
@@ -103,7 +174,10 @@ class _WallpaperColorsScreenState extends State<WallpaperColorsScreen> {
                     children: [
                       const Text(
                         'Extracted Colors',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Wrap(
@@ -139,7 +213,10 @@ class _WallpaperColorsScreenState extends State<WallpaperColorsScreen> {
                       children: [
                         const Text(
                           'Material You Theme Preview',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         const SizedBox(height: 16),
                         Expanded(
@@ -176,12 +253,13 @@ class _WallpaperColorsScreenState extends State<WallpaperColorsScreen> {
     );
   }
 
-  Widget _buildThemePreview(String title, ColorScheme colorScheme, Brightness brightness) {
+  Widget _buildThemePreview(
+    String title,
+    ColorScheme colorScheme,
+    Brightness brightness,
+  ) {
     return Theme(
-      data: ThemeData(
-        colorScheme: colorScheme,
-        useMaterial3: true,
-      ),
+      data: ThemeData(colorScheme: colorScheme, useMaterial3: true),
       child: Builder(
         builder: (context) => Container(
           decoration: BoxDecoration(
@@ -197,12 +275,12 @@ class _WallpaperColorsScreenState extends State<WallpaperColorsScreen> {
                 Text(
                   title,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: colorScheme.onSurface,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    color: colorScheme.onSurface,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 8),
-                
+
                 // Primary button
                 SizedBox(
                   width: double.infinity,
@@ -215,9 +293,9 @@ class _WallpaperColorsScreenState extends State<WallpaperColorsScreen> {
                     child: const Text('Primary'),
                   ),
                 ),
-                
+
                 const SizedBox(height: 4),
-                
+
                 // Secondary button
                 SizedBox(
                   width: double.infinity,
@@ -230,9 +308,9 @@ class _WallpaperColorsScreenState extends State<WallpaperColorsScreen> {
                     child: const Text('Secondary'),
                   ),
                 ),
-                
+
                 const SizedBox(height: 8),
-                
+
                 // Color swatches
                 Expanded(
                   child: Column(
@@ -265,7 +343,8 @@ class _WallpaperColorsScreenState extends State<WallpaperColorsScreen> {
           child: Text(
             label,
             style: TextStyle(
-              color: ThemeData.estimateBrightnessForColor(color) == Brightness.dark
+              color:
+                  ThemeData.estimateBrightnessForColor(color) == Brightness.dark
                   ? Colors.white
                   : Colors.black,
               fontSize: 10,

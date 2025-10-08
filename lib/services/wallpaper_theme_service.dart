@@ -2,27 +2,28 @@ import 'package:flutter/material.dart';
 import 'wallpaper_color_extractor.dart';
 
 class WallpaperThemeService extends ChangeNotifier {
-  static final WallpaperThemeService _instance = WallpaperThemeService._internal();
-  
+  static final WallpaperThemeService _instance =
+      WallpaperThemeService._internal();
+
   WallpaperThemeService._internal() {
     _extractor.addListener(_onColorsChanged);
   }
-  
+
   factory WallpaperThemeService() => _instance;
   static WallpaperThemeService get instance => _instance;
-  
+
   final WallpaperColorExtractor _extractor = WallpaperColorExtractor.instance;
   bool _useWallpaperColors = false;
-  
+
   // Getters
   bool get useWallpaperColors => _useWallpaperColors;
   bool get hasWallpaperColors => _extractor.lightColorScheme != null;
   WallpaperColorExtractor get extractor => _extractor;
-  
+
   void _onColorsChanged() {
     notifyListeners();
   }
-  
+
   /// Enable or disable wallpaper-based theming
   void setUseWallpaperColors(bool use) {
     if (_useWallpaperColors != use) {
@@ -30,7 +31,7 @@ class WallpaperThemeService extends ChangeNotifier {
       notifyListeners();
     }
   }
-  
+
   /// Get the current light theme data
   ThemeData getLightTheme({ThemeData? fallback}) {
     if (_useWallpaperColors && _extractor.lightColorScheme != null) {
@@ -40,12 +41,10 @@ class WallpaperThemeService extends ChangeNotifier {
         brightness: Brightness.light,
       );
     }
-    return fallback ?? ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.light,
-    );
+    return fallback ??
+        ThemeData(useMaterial3: true, brightness: Brightness.light);
   }
-  
+
   /// Get the current dark theme data
   ThemeData getDarkTheme({ThemeData? fallback}) {
     if (_useWallpaperColors && _extractor.darkColorScheme != null) {
@@ -55,34 +54,37 @@ class WallpaperThemeService extends ChangeNotifier {
         brightness: Brightness.dark,
       );
     }
-    return fallback ?? ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.dark,
-    );
+    return fallback ??
+        ThemeData(useMaterial3: true, brightness: Brightness.dark);
   }
-  
+
   /// Extract colors from a new wallpaper image
   Future<bool> updateWallpaperColors() async {
     return await _extractor.extractColorsFromImage();
   }
-  
+
+  /// Extract colors from system wallpaper (Android 12+ / iOS)
+  Future<bool> updateWallpaperColorsFromSystem() async {
+    return await _extractor.extractColorsFromSystemWallpaper();
+  }
+
   /// Extract colors from an asset wallpaper
   Future<bool> updateWallpaperColorsFromAsset(String assetPath) async {
     return await _extractor.extractColorsFromAsset(assetPath);
   }
-  
+
   /// Clear wallpaper colors and disable wallpaper theming
   void clearWallpaperColors() {
     _extractor.clearCache();
     _useWallpaperColors = false;
     notifyListeners();
   }
-  
+
   /// Get extracted color preview for UI
   List<Color> getColorPreview() {
     return _extractor.getColorPreview();
   }
-  
+
   @override
   void dispose() {
     _extractor.removeListener(_onColorsChanged);
@@ -100,7 +102,7 @@ class MaterialYouWallpaperApp extends StatelessWidget {
       listenable: WallpaperThemeService.instance,
       builder: (context, child) {
         final themeService = WallpaperThemeService.instance;
-        
+
         return MaterialApp(
           title: 'Material You Wallpaper Demo',
           theme: themeService.getLightTheme(),
@@ -146,20 +148,22 @@ class _WallpaperThemeDemoState extends State<WallpaperThemeDemo> {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 16),
-                  
+
                   SwitchListTile(
                     title: const Text('Use Wallpaper Colors'),
-                    subtitle: Text(_themeService.hasWallpaperColors
-                        ? 'Colors extracted from wallpaper'
-                        : 'Select a wallpaper to extract colors'),
+                    subtitle: Text(
+                      _themeService.hasWallpaperColors
+                          ? 'Colors extracted from wallpaper'
+                          : 'Select a wallpaper to extract colors',
+                    ),
                     value: _themeService.useWallpaperColors,
                     onChanged: _themeService.hasWallpaperColors
                         ? _themeService.setUseWallpaperColors
                         : null,
                   ),
-                  
+
                   const SizedBox(height: 16),
-                  
+
                   Row(
                     children: [
                       Expanded(
@@ -167,18 +171,23 @@ class _WallpaperThemeDemoState extends State<WallpaperThemeDemo> {
                           onPressed: _extractor.isExtracting
                               ? null
                               : () async {
-                                  final success = await _themeService.updateWallpaperColors();
+                                  final success = await _themeService
+                                      .updateWallpaperColors();
                                   if (success && mounted) {
                                     _themeService.setUseWallpaperColors(true);
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
-                                        content: Text('✅ Colors extracted successfully!'),
+                                        content: Text(
+                                          '✅ Colors extracted successfully!',
+                                        ),
                                       ),
                                     );
                                   } else if (mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
-                                        content: Text('❌ Failed to extract colors'),
+                                        content: Text(
+                                          '❌ Failed to extract colors',
+                                        ),
                                       ),
                                     );
                                   }
@@ -187,12 +196,16 @@ class _WallpaperThemeDemoState extends State<WallpaperThemeDemo> {
                               ? const SizedBox(
                                   width: 16,
                                   height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : const Icon(Icons.image),
-                          label: Text(_extractor.isExtracting
-                              ? 'Extracting...'
-                              : 'Select Wallpaper'),
+                          label: Text(
+                            _extractor.isExtracting
+                                ? 'Extracting...'
+                                : 'Select Wallpaper',
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -209,9 +222,9 @@ class _WallpaperThemeDemoState extends State<WallpaperThemeDemo> {
               ),
             ),
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           // Color preview
           if (_themeService.getColorPreview().isNotEmpty) ...[
             Card(
@@ -247,10 +260,10 @@ class _WallpaperThemeDemoState extends State<WallpaperThemeDemo> {
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 16),
           ],
-          
+
           // Material 3 component showcase
           Card(
             child: Padding(
@@ -263,7 +276,7 @@ class _WallpaperThemeDemoState extends State<WallpaperThemeDemo> {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Buttons
                   Wrap(
                     spacing: 8,
@@ -281,27 +294,18 @@ class _WallpaperThemeDemoState extends State<WallpaperThemeDemo> {
                         onPressed: () {},
                         child: const Text('Outlined'),
                       ),
-                      TextButton(
-                        onPressed: () {},
-                        child: const Text('Text'),
-                      ),
+                      TextButton(onPressed: () {}, child: const Text('Text')),
                     ],
                   ),
-                  
+
                   const SizedBox(height: 16),
-                  
+
                   // Chips
                   Wrap(
                     spacing: 8,
                     children: [
-                      Chip(
-                        label: const Text('Chip'),
-                        onDeleted: () {},
-                      ),
-                      ActionChip(
-                        label: const Text('Action'),
-                        onPressed: () {},
-                      ),
+                      Chip(label: const Text('Chip'), onDeleted: () {}),
+                      ActionChip(label: const Text('Action'), onPressed: () {}),
                       FilterChip(
                         label: const Text('Filter'),
                         selected: true,
@@ -309,9 +313,9 @@ class _WallpaperThemeDemoState extends State<WallpaperThemeDemo> {
                       ),
                     ],
                   ),
-                  
+
                   const SizedBox(height: 16),
-                  
+
                   // Cards with different colors
                   Row(
                     children: [
@@ -322,7 +326,9 @@ class _WallpaperThemeDemoState extends State<WallpaperThemeDemo> {
                             child: Text(
                               'Primary Container',
                               style: TextStyle(
-                                color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onPrimaryContainer,
                               ),
                               textAlign: TextAlign.center,
                             ),
@@ -332,13 +338,17 @@ class _WallpaperThemeDemoState extends State<WallpaperThemeDemo> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Card(
-                          color: Theme.of(context).colorScheme.secondaryContainer,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.secondaryContainer,
                           child: Padding(
                             padding: const EdgeInsets.all(12),
                             child: Text(
                               'Secondary Container',
                               style: TextStyle(
-                                color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSecondaryContainer,
                               ),
                               textAlign: TextAlign.center,
                             ),
@@ -372,14 +382,12 @@ class _WallpaperThemeDemoState extends State<WallpaperThemeDemo> {
 // Import the wallpaper colors screen
 class WallpaperColorsScreen extends StatelessWidget {
   const WallpaperColorsScreen({super.key});
-  
+
   @override
   Widget build(BuildContext context) {
     // This would be your wallpaper_colors_screen.dart content
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Wallpaper Color Details'),
-      ),
+      appBar: AppBar(title: const Text('Wallpaper Color Details')),
       body: const Center(
         child: Text('Detailed wallpaper color extraction UI would go here'),
       ),
