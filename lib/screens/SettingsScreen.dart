@@ -1498,6 +1498,47 @@ class SettingsScreenState extends State<SettingsScreen>
             }
           },
         ),
+        ListTile(
+          leading: const Icon(Icons.library_books_rounded),
+          title: const Text('Open Source Licenses'),
+          subtitle: const Text(
+            'View open source licenses and third-party notices',
+          ),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => Theme(
+                  data: Theme.of(context).copyWith(
+                    appBarTheme: AppBarTheme(
+                      backgroundColor: Theme.of(context).colorScheme.surface,
+                      foregroundColor: Theme.of(context).colorScheme.onSurface,
+                      elevation: 0,
+                    ),
+                    cardTheme: CardThemeData(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerHighest,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                  child: LicensePage(
+                    applicationName: 'Light Novel Reader',
+                    applicationVersion: _appVersion,
+                    applicationLegalese:
+                        '© 2025 Nekkochan\n\n'
+                        'This application is built with Flutter and uses '
+                        'various open source libraries. We are grateful to '
+                        'the open source community for their contributions.',
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
       ],
     );
   }
