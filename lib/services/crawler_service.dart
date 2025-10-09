@@ -18,7 +18,7 @@ import 'dart:math' as math;
 class CrawlerService {
   // Server management service
   final ServerManagementService _serverManagement = ServerManagementService();
-  
+
   // Primary server domains
   static const List<String> servers = [
     'https://docln.sbs',
@@ -114,20 +114,20 @@ class CrawlerService {
     try {
       await _serverManagement.initialize();
       final userServer = _serverManagement.currentServer;
-      
+
       debugPrint('🔧 Using user-selected server: $userServer');
-      
+
       // Try user's server first
       final response = await _tryServers([userServer]);
       if (response != null) {
         return response;
       }
-      
+
       debugPrint('⚠️ User server failed, trying alternatives...');
     } catch (e) {
       debugPrint('❌ Error using user server: $e');
     }
-    
+
     // Fallback to original logic only if user's server fails
     String? workingServer = await _tryServers(servers);
 
@@ -264,10 +264,9 @@ class CrawlerService {
               final anchorTag = element.getElementsByTagName('a').first;
               final title = anchorTag.text.trim();
               final relativeUrl = anchorTag.attributes['href'] ?? '';
-              final url =
-                  relativeUrl.startsWith('http')
-                      ? relativeUrl
-                      : '$workingServer$relativeUrl';
+              final url = relativeUrl.startsWith('http')
+                  ? relativeUrl
+                  : '$workingServer$relativeUrl';
 
               // Extract color with proper regex
               String? color;
@@ -341,10 +340,9 @@ class CrawlerService {
               final title = titleElement.text.trim();
               final relativeUrl = linkElement.attributes['href'] ?? '';
               // Convert relative URL to absolute URL
-              final url =
-                  relativeUrl.startsWith('http')
-                      ? relativeUrl
-                      : '$server$relativeUrl';
+              final url = relativeUrl.startsWith('http')
+                  ? relativeUrl
+                  : '$server$relativeUrl';
               final id = relativeUrl.split('/').last;
 
               // Extract cover URL from style attribute
@@ -418,10 +416,9 @@ class CrawlerService {
             if (titleElement != null && coverElement != null) {
               final title = titleElement.text.trim();
               final relativeUrl = titleElement.attributes['href'] ?? '';
-              final url =
-                  relativeUrl.startsWith('http')
-                      ? relativeUrl
-                      : '$server$relativeUrl';
+              final url = relativeUrl.startsWith('http')
+                  ? relativeUrl
+                  : '$server$relativeUrl';
               final id = relativeUrl.split('/').last;
 
               // Get cover URL from data-bg attribute
@@ -538,11 +535,10 @@ class CrawlerService {
 
         // Extract genres
         final genreElements = document.querySelectorAll('.series-gerne-item');
-        final genres =
-            genreElements
-                .where((e) => !e.text.contains('...'))
-                .map((e) => e.text.trim())
-                .toList();
+        final genres = genreElements
+            .where((e) => !e.text.contains('...'))
+            .map((e) => e.text.trim())
+            .toList();
 
         // Extract chapters
         final chapterElements = document.querySelectorAll('.chapter-name');
@@ -606,8 +602,9 @@ class CrawlerService {
             reviews = int.tryParse(reviewsStr);
 
             // Get the rating value by removing the small element text and any non-numeric chars except decimal point/comma
-            String ratingStr =
-                ratingText.replaceAll(smallElement.text, '').trim();
+            String ratingStr = ratingText
+                .replaceAll(smallElement.text, '')
+                .trim();
 
             // Remove the slash and handle comma as decimal separator
             ratingStr = ratingStr
@@ -829,15 +826,68 @@ class CrawlerService {
       }
     }
 
-    // Simply return the original URL for other cases
+    // Return the original URL - redirects will be followed asynchronously later
     return url;
   }
 
-  // Add a better method for following image URL redirects
-  Future<String> getRedirectUrl(String originalUrl) async {
-    // Simply return the original URL
-    // We're letting the Flutter image provider handle redirects internally
-    return originalUrl;
+  // Follow image URL redirects (up to 10 redirects)
+  Future<String> followImageRedirects(String originalUrl) async {
+    try {
+      print('🔄 Following redirects for: $originalUrl');
+
+      String currentUrl = originalUrl;
+      int redirectCount = 0;
+      const maxRedirects = 10;
+
+      while (redirectCount < maxRedirects) {
+        final response = await _httpClient.head(
+          currentUrl,
+          headers: {
+            'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+          },
+        );
+
+        // Check if it's a redirect (3xx status codes)
+        if (response.statusCode >= 300 && response.statusCode < 400) {
+          final location = response.headers['location'];
+          if (location != null && location.isNotEmpty) {
+            // Handle relative URLs
+            if (location.startsWith('http')) {
+              currentUrl = location;
+            } else {
+              final uri = Uri.parse(currentUrl);
+              currentUrl = '${uri.scheme}://${uri.host}$location';
+            }
+            print('  ↪️ Redirect ${redirectCount + 1}: $currentUrl');
+            redirectCount++;
+          } else {
+            break;
+          }
+        } else if (response.statusCode == 200) {
+          // Found the final URL
+          if (redirectCount > 0) {
+            print('  ✅ Final URL after $redirectCount redirects: $currentUrl');
+          }
+          return currentUrl;
+        } else {
+          print(
+            '  ⚠️ Unexpected status ${response.statusCode}, returning original URL',
+          );
+          return originalUrl;
+        }
+      }
+
+      if (redirectCount >= maxRedirects) {
+        print('  ⚠️ Max redirects reached, returning last URL');
+      }
+
+      return currentUrl;
+    } catch (e) {
+      print('  ❌ Error following redirects: $e');
+      return originalUrl;
+    }
   }
 
   // Optimize image URLs with redirect detection
@@ -902,7 +952,7 @@ class CrawlerService {
             result = await _processLargeChapterContent(rawHtml, url);
           } else {
             // Use regular processing for normal-sized content
-            result = _processChapterContent(rawHtml, url);
+            result = await _processChapterContent(rawHtml, url);
           }
 
           completer.complete(result);
@@ -953,7 +1003,10 @@ class CrawlerService {
   }
 
   // Process regular-sized chapter content
-  Map<String, dynamic> _processChapterContent(String rawHtml, String url) {
+  Future<Map<String, dynamic>> _processChapterContent(
+    String rawHtml,
+    String url,
+  ) async {
     // PREPROCESSING: Aggressively remove ALL HTML comments before any parsing
     print('Processing normal-sized content');
 
@@ -987,7 +1040,7 @@ class CrawlerService {
 
     // Remove standard HTML comments
     rawHtml = _removeAllComments(rawHtml);
-    print('HTML size after comment removal: ${rawHtml.length}');
+    print('🔍 HTML size after comment removal: ${rawHtml.length}');
 
     // Parse the HTML after comment removal
     final document = parser.parse(rawHtml);
@@ -1010,25 +1063,98 @@ class CrawlerService {
 
     // Extract the chapter content
     String content = '';
-    final contentElement =
-        document.querySelector('.chapter-content') ??
-        document.querySelector('#chapter-content') ??
-        document.querySelector('.content') ??
-        document.querySelector('article.content');
+
+    // Try to find the content element with detailed logging
+    var contentElement = document.querySelector('#chapter-content');
+    if (contentElement != null) {
+      print('🔍 Found content via #chapter-content (ID)');
+    } else {
+      contentElement = document.querySelector('.chapter-content');
+      if (contentElement != null) {
+        print('🔍 Found content via .chapter-content (class)');
+      } else {
+        contentElement = document.querySelector('.content');
+        if (contentElement != null) {
+          print('🔍 Found content via .content (class)');
+        } else {
+          contentElement = document.querySelector('article.content');
+          if (contentElement != null) {
+            print('🔍 Found content via article.content');
+          }
+        }
+      }
+    }
 
     if (contentElement != null) {
+      print('🔍 Content element tag: ${contentElement.localName}');
+      print('🔍 Content element classes: ${contentElement.classes}');
+      print('🔍 Content element id: ${contentElement.id}');
+
+      // Check how many child elements it has
+      final childCount = contentElement.children.length;
+      print('🔍 Content element has $childCount direct children');
+
+      // Log first few children
+      for (var i = 0; i < childCount && i < 3; i++) {
+        final child = contentElement.children[i];
+        print(
+          '🔍 Child $i: <${child.localName}> id="${child.id}" classes="${child.classes}"',
+        );
+        // Log the first 100 chars of each child's content
+        final childHtml = child.outerHtml;
+        final preview = childHtml.length > 100
+            ? '${childHtml.substring(0, 100)}...'
+            : childHtml;
+        print('🔍 Child $i preview: $preview');
+
+        // Special logging for the first child (should be <p id="1">)
+        if (i == 0) {
+          print('🔍 Child 0 full length: ${childHtml.length} chars');
+          print(
+            '🔍 Child 0 contains ${childHtml.split('<img').length - 1} <img> tags',
+          );
+        }
+      }
+
+      // Get innerHtml BEFORE removing elements
+      final innerHtmlBefore = contentElement.innerHtml;
+      print(
+        '🔍 InnerHtml BEFORE removing ads: ${innerHtmlBefore.length} chars',
+      );
+
       // Remove any script, ad elements, and social media elements
-      contentElement
-          .querySelectorAll(
-            'script, .ads, [id*="ads"], [class*="ads"], a[href*="discord"], a[href*="facebook"], a[href*="fb.com"], .social-links, [class*="social"]',
-          )
-          .forEach((e) => e.remove());
+      final elementsToRemove = contentElement.querySelectorAll(
+        'script, .ads, [id*="ads"], [class*="ads"], a[href*="discord"], a[href*="facebook"], a[href*="fb.com"], .social-links, [class*="social"]',
+      );
+      print('🔍 Found ${elementsToRemove.length} elements to remove');
+      elementsToRemove.forEach((e) {
+        print(
+          '🔍 Removing: <${e.localName}> id="${e.id}" class="${e.classes}" href="${e.attributes['href'] ?? ''}"',
+        );
+        e.remove();
+      });
 
       // Extract the raw HTML content
       String contentHtml = contentElement.innerHtml;
+      print('🔍 Content innerHtml length: ${contentHtml.length}');
 
       // Clean and format the content
       content = _cleanContent(contentHtml);
+      print('🔍 Content after _cleanContent: ${content.length}');
+
+      // Follow redirects for imgur images asynchronously
+      content = await _followImageRedirectsInContent(content);
+      print('🔍 Content after following redirects: ${content.length}');
+
+      // Debug: Count images in the cleaned content
+      final imgCount = content.split('<img').length - 1;
+      print('🔍 Content contains $imgCount <img> tags after cleaning');
+
+      // Debug: Show first 200 chars of cleaned content
+      final preview = content.length > 200
+          ? content.substring(0, 200)
+          : content;
+      print('🔍 Cleaned content preview: $preview');
 
       // Final check for social media content
       if (content.toLowerCase().contains('discord') ||
@@ -1215,10 +1341,9 @@ class CrawlerService {
     final seriesMatch = seriesRegex.firstMatch(rawHtml);
     if (seriesMatch != null) {
       seriesUrl = seriesMatch.group(1) ?? '';
-      seriesTitle =
-          seriesMatch.group(2) != null
-              ? _cleanTextContent(seriesMatch.group(2)!)
-              : '';
+      seriesTitle = seriesMatch.group(2) != null
+          ? _cleanTextContent(seriesMatch.group(2)!)
+          : '';
     }
 
     return {
@@ -1245,12 +1370,11 @@ class CrawlerService {
     }
 
     // Split content into paragraphs first for cleaner chunking
-    final paragraphs =
-        RegExp(r'<p[^>]*>.*?</p>', dotAll: true)
-            .allMatches(contentHtml)
-            .map((m) => m.group(0) ?? '')
-            .where((p) => p.isNotEmpty)
-            .toList();
+    final paragraphs = RegExp(r'<p[^>]*>.*?</p>', dotAll: true)
+        .allMatches(contentHtml)
+        .map((m) => m.group(0) ?? '')
+        .where((p) => p.isNotEmpty)
+        .toList();
 
     // If no paragraphs found, fall back to simple chunking
     if (paragraphs.isEmpty) {
@@ -1436,8 +1560,10 @@ class CrawlerService {
     html = html.replaceAll(RegExp(r'<p>\s*</p>'), '');
 
     // Ensure paragraphs for each line
-    final lines =
-        html.split('\n').where((line) => line.trim().isNotEmpty).toList();
+    final lines = html
+        .split('\n')
+        .where((line) => line.trim().isNotEmpty)
+        .toList();
     html = lines
         .map((line) {
           if (!line.trim().startsWith('<') && !line.trim().endsWith('>')) {
@@ -1466,6 +1592,48 @@ class CrawlerService {
     });
 
     return html;
+  }
+
+  // Follow redirects for imgur images asynchronously
+  // Follow redirects for all external image URLs asynchronously
+  Future<String> _followImageRedirectsInContent(String html) async {
+    // Find ALL external image URLs (http/https)
+    final imageMatches = RegExp(
+      r'<img\s+[^>]*src\s*=\s*"(https?://[^"]+)"[^>]*>',
+      dotAll: true,
+    ).allMatches(html);
+
+    if (imageMatches.isEmpty) {
+      return html; // No external images, return as-is
+    }
+
+    print(
+      '🖼️ Found ${imageMatches.length} external images to check for redirects',
+    );
+
+    String updatedHtml = html;
+    int redirectedCount = 0;
+
+    for (final match in imageMatches) {
+      final fullTag = match.group(0);
+      final imageUrl = match.group(1);
+      if (fullTag != null && imageUrl != null) {
+        // Follow redirects to get the final URL
+        final finalUrl = await followImageRedirects(imageUrl);
+        if (finalUrl != imageUrl) {
+          redirectedCount++;
+          // Replace the original URL with the final URL
+          final updatedTag = fullTag.replaceFirst(imageUrl, finalUrl);
+          updatedHtml = updatedHtml.replaceFirst(fullTag, updatedTag);
+        }
+      }
+    }
+
+    if (redirectedCount > 0) {
+      print('✅ Resolved $redirectedCount redirected image URLs');
+    }
+
+    return updatedHtml;
   }
 
   // Helper method for aggressive removal of social media content
@@ -1530,101 +1698,31 @@ class CrawlerService {
 
   // New helper method to aggressively remove ALL HTML comments
   String _removeAllComments(String html) {
-    // First pass: Basic HTML comment removal
     String cleanedHtml = html;
 
-    // Handle different forms of comments
+    // Only remove HTML comments and script/style tags
+    // DO NOT use aggressive regex patterns that might match content divs
+
+    // Remove HTML comments
     cleanedHtml = cleanedHtml.replaceAll(
       RegExp(r'<!--[\s\S]*?-->', dotAll: true),
       '',
     );
 
-    // Handle unclosed comments (which might continue until end of file)
+    // Remove script tags
     cleanedHtml = cleanedHtml.replaceAll(
-      RegExp(r'<!--[\s\S]*?($|-->)', dotAll: true),
+      RegExp(r'<script[\s\S]*?</script>', dotAll: true, caseSensitive: false),
       '',
     );
 
-    // Remove any CSS/JS style comments
+    // Remove style tags
     cleanedHtml = cleanedHtml.replaceAll(
-      RegExp(r'/\*[\s\S]*?\*/', dotAll: true),
+      RegExp(r'<style[\s\S]*?</style>', dotAll: true, caseSensitive: false),
       '',
     );
 
-    // Remove single line comments
-    cleanedHtml = cleanedHtml.replaceAll(RegExp(r'//.*?(\n|$)'), '');
-
-    // Remove any script tags that might contain comments or scripts
-    cleanedHtml = cleanedHtml.replaceAll(
-      RegExp(r'<script[\s\S]*?</script>', dotAll: true),
-      '',
-    );
-
-    // Remove any style tags that might contain comments
-    cleanedHtml = cleanedHtml.replaceAll(
-      RegExp(r'<style[\s\S]*?</style>', dotAll: true),
-      '',
-    );
-
-    // Handle the specific pattern shown in the example
-    cleanedHtml = cleanedHtml.replaceAll(
-      RegExp(r'Facebook\s*Discord\s*Facebook\s*Discord'),
-      '',
-    );
-
-    // Additional stage: Remove any partial comments that might remain
-    cleanedHtml = cleanedHtml.replaceAll('<!--', '');
-    cleanedHtml = cleanedHtml.replaceAll('-->', '');
-
-    // Pre-emptively remove social media elements before parsing
-    // Discord related
-    cleanedHtml = cleanedHtml.replaceAll(
-      RegExp(
-        r'<[^>]*discord[^>]*>[\s\S]*?</[^>]*>',
-        dotAll: true,
-        caseSensitive: false,
-      ),
-      '',
-    );
-
-    // Facebook related
-    cleanedHtml = cleanedHtml.replaceAll(
-      RegExp(
-        r'<[^>]*(?:facebook|fb\.com)[^>]*>[\s\S]*?</[^>]*>',
-        dotAll: true,
-        caseSensitive: false,
-      ),
-      '',
-    );
-
-    // Handle divs with social media related classes or IDs
-    cleanedHtml = cleanedHtml.replaceAll(
-      RegExp(
-        r'<div[^>]*(?:class|id)\s*=\s*"[^"]*(?:social|follow|connect|share)[^"]*"[^>]*>[\s\S]*?</div>',
-        dotAll: true,
-        caseSensitive: false,
-      ),
-      '',
-    );
-
-    // Remove divs containing "Discord" or "Facebook" text
-    cleanedHtml = cleanedHtml.replaceAll(
-      RegExp(
-        r'<div[^>]*>[\s\S]*?(?:Discord|Facebook|fb\.com)[\s\S]*?</div>',
-        dotAll: true,
-        caseSensitive: false,
-      ),
-      '',
-    );
-
-    // Remove any flex or row containers that often contain social links
-    cleanedHtml = cleanedHtml.replaceAll(
-      RegExp(
-        r'<div[^>]*(?:flex|row|space-x-3|mt-10|justify-center)[^>]*>[\s\S]*?</div>',
-        dotAll: true,
-        caseSensitive: false,
-      ),
-      '',
+    print(
+      '🔍 After removing comments/scripts/styles: ${cleanedHtml.length} chars',
     );
 
     return cleanedHtml;
@@ -2139,10 +2237,9 @@ class CrawlerService {
       for (final element in allCommentElements) {
         try {
           // Basic extraction of just text and info we can find
-          final id =
-              element.id.isNotEmpty
-                  ? element.id
-                  : 'comment-${comments.length + 1}';
+          final id = element.id.isNotEmpty
+              ? element.id
+              : 'comment-${comments.length + 1}';
           final content = element.text.trim();
 
           if (content.isNotEmpty) {
@@ -2406,10 +2503,9 @@ class CrawlerService {
       // Generate a hash only if we have username or content
       if (userName.isNotEmpty || contentSample.isNotEmpty) {
         // Use first part of content for stability
-        final contentForHash =
-            contentSample.length > 50
-                ? contentSample.substring(0, 50)
-                : contentSample;
+        final contentForHash = contentSample.length > 50
+            ? contentSample.substring(0, 50)
+            : contentSample;
 
         // Generate a more stable hash from the combination of user + content sample
         final combinedString = '$userName|$contentForHash';

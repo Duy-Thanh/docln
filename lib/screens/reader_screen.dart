@@ -79,14 +79,72 @@ List<ContentBlock> _parseContentInIsolate(_ParseParams params) {
         final endTag = processedContent.indexOf('</p>', nextTagStart);
         if (endTag != -1) {
           final contentStart = processedContent.indexOf('>', nextTagStart) + 1;
-          final blockContent = processedContent.substring(contentStart, endTag);
-          blocks.add(
-            ContentBlock(
-              type: ContentBlockType.paragraph,
-              content: blockContent,
-              startPosition: nextTagStart,
-            ),
+          final paragraphContent = processedContent.substring(
+            contentStart,
+            endTag,
           );
+
+          // Check if paragraph contains ONLY images (no text)
+          final textContent = paragraphContent
+              .replaceAll(RegExp(r'<img[^>]*>'), '')
+              .trim();
+          final hasOnlyImages = textContent.isEmpty;
+          final imageMatches = RegExp(
+            r'<img[^>]*>',
+          ).allMatches(paragraphContent);
+
+          if (hasOnlyImages && imageMatches.isNotEmpty) {
+            // Parse each image in the paragraph as separate blocks
+            for (final match in imageMatches) {
+              final imgTag = match.group(0)!;
+              final srcMatch = RegExp(
+                r'src\s*=\s*["'
+                "'"
+                r']([^"'
+                "'"
+                r']+)["'
+                "'"
+                r']',
+              ).firstMatch(imgTag);
+              if (srcMatch != null) {
+                final imageUrl = srcMatch.group(1)!;
+                if (imageUrl.startsWith('http')) {
+                  // Extract alt text
+                  String? altText;
+                  final altStart = imgTag.indexOf('alt=');
+                  if (altStart != -1) {
+                    final quoteStart = altStart + 4;
+                    if (quoteStart < imgTag.length) {
+                      final quote = imgTag[quoteStart];
+                      if (quote == '"' || quote == "'") {
+                        final quoteEnd = imgTag.indexOf(quote, quoteStart + 1);
+                        if (quoteEnd != -1) {
+                          altText = imgTag.substring(quoteStart + 1, quoteEnd);
+                        }
+                      }
+                    }
+                  }
+                  blocks.add(
+                    ContentBlock(
+                      type: ContentBlockType.image,
+                      content: imageUrl,
+                      startPosition: nextTagStart + match.start,
+                      altText: altText,
+                    ),
+                  );
+                }
+              }
+            }
+          } else {
+            // Regular paragraph with text
+            blocks.add(
+              ContentBlock(
+                type: ContentBlockType.paragraph,
+                content: paragraphContent,
+                startPosition: nextTagStart,
+              ),
+            );
+          }
           currentPos = endTag + 4;
           continue;
         }
@@ -568,6 +626,18 @@ class _ReaderScreenState extends State<ReaderScreen>
         '✅ Content parsed in ${parseStopwatch.elapsedMilliseconds}ms (${contentBlocks.length} blocks)',
       );
 
+      // DEBUG: Check for images
+      final imageBlocks = contentBlocks
+          .where((b) => b.type == ContentBlockType.image)
+          .length;
+      debugPrint('🖼️ Found $imageBlocks image blocks');
+      if (imageBlocks > 0) {
+        final firstImage = contentBlocks.firstWhere(
+          (b) => b.type == ContentBlockType.image,
+        );
+        debugPrint('🖼️ First image URL: ${firstImage.content}');
+      }
+
       if (!mounted) return;
 
       // Now update state with parsed data
@@ -579,7 +649,8 @@ class _ReaderScreenState extends State<ReaderScreen>
 
         // PERFORMANCE OPTIMIZATION: Invalidate cache when content changes
         _cachedContentWidgets = null;
-        _lastParsedContent = null;
+        // Keep _lastParsedContent synchronized so isolate blocks are used
+        _lastParsedContent = rawContent;
 
         // Update chapter navigation info
         if (!_hasNextChapter &&
@@ -1444,6 +1515,14 @@ class _ReaderScreenState extends State<ReaderScreen>
     if (_parsedContentBlocks != null && _lastParsedContent == _content) {
       // Use blocks from isolate parsing
       contentBlocks = _parsedContentBlocks!;
+
+      // DEBUG: Check image blocks in widget building
+      final imageCount = contentBlocks
+          .where((b) => b.type == ContentBlockType.image)
+          .length;
+      debugPrint(
+        '🎨 Building widgets with $imageCount images from ${contentBlocks.length} blocks',
+      );
     } else {
       // Fallback to synchronous parsing (should rarely happen)
       final stopwatch = Stopwatch()..start();
