@@ -351,8 +351,7 @@ class CrawlerService {
                 r"url\('([^']+)'\)",
               ).firstMatch(styleAttr);
               final coverUrl =
-                  coverUrlMatch?.group(1) ??
-                  'https://ln.hako.vn/img/nocover.jpg';
+                  coverUrlMatch?.group(1) ?? '$server/img/nocover.jpg';
 
               novels.add(
                 LightNovel(
@@ -428,9 +427,7 @@ class CrawlerService {
                 final coverUrlMatch = RegExp(
                   r'url\("([^"]+)"\)',
                 ).firstMatch(styleAttr);
-                coverUrl =
-                    coverUrlMatch?.group(1) ??
-                    'https://ln.hako.vn/img/nocover.jpg';
+                coverUrl = coverUrlMatch?.group(1) ?? '$server/img/nocover.jpg';
               }
 
               // Extract chapter number if available
@@ -754,9 +751,10 @@ class CrawlerService {
   }
 
   // Improve the extract cover URL method to use new optimized approach
-  String _extractCoverUrl(dom.Element? coverElement) {
+  Future<String> _extractCoverUrl(dom.Element? coverElement) async {
     if (coverElement == null) {
-      return 'https://ln.hako.vn/img/nocover.jpg';
+      final server = await _getWorkingServer() ?? 'https://docln.sbs';
+      return '$server/img/nocover.jpg';
     }
 
     // Try to get from data-bg attribute
@@ -787,7 +785,8 @@ class CrawlerService {
     }
 
     // If all else fails, return default image
-    return 'https://ln.hako.vn/img/nocover.jpg';
+    final server = await _getWorkingServer() ?? 'https://docln.sbs';
+    return '$server/img/nocover.jpg';
   }
 
   // Process image URLs in content to prevent 404 errors
@@ -1764,7 +1763,7 @@ class CrawlerService {
           baseUrl = '${uri.scheme}://${uri.host}';
         } else {
           // Try to determine the base URL from a working server
-          baseUrl = await _getWorkingServer() ?? 'https://ln.hako.vn';
+          baseUrl = await _getWorkingServer() ?? 'https://docln.sbs';
         }
 
         // First, we need to get a valid CSRF token by loading the main page

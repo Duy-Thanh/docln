@@ -32,7 +32,7 @@ class Chapter {
     return Chapter(
       title: titleMatch?.group(1) ?? '',
       url: urlMatch?.group(1) ?? '',
-      coverUrl: coverMatch?.group(1) ?? 'https://ln.hako.vn/img/nocover.jpg',
+      coverUrl: coverMatch?.group(1) ?? 'https://docln.sbs/img/nocover.jpg',
       seriesTitle: seriesTitleMatch?.group(1) ?? '',
       seriesUrl: '', // Extract from series link
       volumeTitle: volumeTitleMatch?.group(1),

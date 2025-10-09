@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'preferences_service.dart';
 
 /// Server Management Service
-/// 
+///
 /// Handles server selection, URL resolution, and prevents data corruption
 /// from server changes. All novel URLs are stored as relative paths and
 /// resolved dynamically based on the current server.
@@ -14,10 +14,10 @@ class ServerManagementService extends ChangeNotifier {
   ServerManagementService._internal();
 
   final PreferencesService _prefsService = PreferencesService();
-  
+
   static const String _serverKey = 'current_server';
   static const String _serverHistoryKey = 'server_history';
-  
+
   // Available servers - must match CrawlerService.servers
   static const List<String> availableServers = [
     'https://docln.sbs',
@@ -31,9 +31,9 @@ class ServerManagementService extends ChangeNotifier {
     'https://docln.cc',
     'https://docln.me',
   ];
-  
-  static const String defaultServer = 'https://ln.hako.vn';
-  
+
+  static const String defaultServer = 'https://docln.sbs';
+
   String _currentServer = defaultServer;
   List<String> _serverHistory = [];
   bool _isInitialized = false;
@@ -48,13 +48,13 @@ class ServerManagementService extends ChangeNotifier {
 
     try {
       await _prefsService.initialize();
-      
+
       // Load current server
       final savedServer = _prefsService.getString(
         _serverKey,
         defaultValue: defaultServer,
       );
-      
+
       // Validate saved server
       if (availableServers.contains(savedServer)) {
         _currentServer = savedServer;
@@ -63,7 +63,7 @@ class ServerManagementService extends ChangeNotifier {
         _currentServer = defaultServer;
         await _prefsService.setString(_serverKey, defaultServer);
       }
-      
+
       // Load server history
       final historyJson = _prefsService.getString(
         _serverHistoryKey,
@@ -71,10 +71,10 @@ class ServerManagementService extends ChangeNotifier {
       );
       final historyList = jsonDecode(historyJson) as List<dynamic>;
       _serverHistory = historyList.cast<String>();
-      
+
       _isInitialized = true;
       debugPrint('✅ ServerManagementService initialized: $_currentServer');
-      
+
       notifyListeners();
     } catch (e) {
       debugPrint('❌ Error initializing ServerManagementService: $e');
@@ -99,20 +99,20 @@ class ServerManagementService extends ChangeNotifier {
 
       final oldServer = _currentServer;
       _currentServer = server;
-      
+
       // Save to preferences
       await _prefsService.setString(_serverKey, server);
-      
+
       // Add to history
       if (!_serverHistory.contains(oldServer)) {
         _serverHistory.add(oldServer);
         final historyJson = jsonEncode(_serverHistory);
         await _prefsService.setString(_serverHistoryKey, historyJson);
       }
-      
+
       debugPrint('✅ Server changed: $oldServer → $server');
       notifyListeners();
-      
+
       return true;
     } catch (e) {
       debugPrint('❌ Error setting server: $e');
@@ -121,7 +121,7 @@ class ServerManagementService extends ChangeNotifier {
   }
 
   /// Convert absolute URL to relative path
-  /// 
+  ///
   /// Examples:
   /// - https://ln.hako.vn/truyen/123 → /truyen/123
   /// - https://docln.net/truyen/456 → /truyen/456
@@ -134,17 +134,17 @@ class ServerManagementService extends ChangeNotifier {
 
       final uri = Uri.parse(absoluteUrl);
       String path = uri.path;
-      
+
       // Include query parameters if present
       if (uri.query.isNotEmpty) {
         path += '?${uri.query}';
       }
-      
+
       // Ensure leading slash
       if (!path.startsWith('/')) {
         path = '/$path';
       }
-      
+
       return path;
     } catch (e) {
       debugPrint('⚠️ Error converting to relative path: $absoluteUrl, $e');
@@ -153,7 +153,7 @@ class ServerManagementService extends ChangeNotifier {
   }
 
   /// Convert relative path to absolute URL using current server
-  /// 
+  ///
   /// Examples:
   /// - /truyen/123 → https://ln.hako.vn/truyen/123
   /// - truyen/456 → https://ln.hako.vn/truyen/456
@@ -165,10 +165,10 @@ class ServerManagementService extends ChangeNotifier {
       }
 
       // Ensure leading slash
-      String path = relativePath.startsWith('/') 
-          ? relativePath 
+      String path = relativePath.startsWith('/')
+          ? relativePath
           : '/$relativePath';
-      
+
       return '$_currentServer$path';
     } catch (e) {
       debugPrint('⚠️ Error converting to absolute URL: $relativePath, $e');
@@ -177,7 +177,7 @@ class ServerManagementService extends ChangeNotifier {
   }
 
   /// Extract server domain from URL
-  /// 
+  ///
   /// Examples:
   /// - https://ln.hako.vn/truyen/123 → https://ln.hako.vn
   /// - https://docln.net/truyen/456 → https://docln.net
@@ -211,13 +211,13 @@ class ServerManagementService extends ChangeNotifier {
   }
 
   /// Migrate URL to current server
-  /// 
+  ///
   /// This converts URLs from other servers to use the current server
   String migrateUrl(String url) {
     try {
       // Get relative path
       final relativePath = toRelativePath(url);
-      
+
       // Convert back to absolute using current server
       return toAbsoluteUrl(relativePath);
     } catch (e) {

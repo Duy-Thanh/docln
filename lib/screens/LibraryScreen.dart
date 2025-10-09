@@ -324,35 +324,35 @@ class _LibraryScreenState extends State<LibraryScreen>
                     curve: Curves.easeOutCubic,
                   ),
                   child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0.03, 0),
-                      end: Offset.zero,
-                    ).animate(
-                      CurvedAnimation(
-                        parent: animation,
-                        curve: Curves.easeOutCubic,
-                      ),
-                    ),
+                    position:
+                        Tween<Offset>(
+                          begin: const Offset(0.03, 0),
+                          end: Offset.zero,
+                        ).animate(
+                          CurvedAnimation(
+                            parent: animation,
+                            curve: Curves.easeOutCubic,
+                          ),
+                        ),
                     child: child,
                   ),
                 );
               },
               child: KeyedSubtree(
                 key: ValueKey<int>(_selectedIndex),
-                child:
-                    [
-                      _buildTabContent(
-                        novels: popularNovels,
-                        isLoading: isLoading,
-                        showRating: true,
-                      ),
-                      _buildTabContent(
-                        novels: creativeNovels,
-                        isLoading: isLoading,
-                        showChapterInfo: true,
-                      ),
-                      _buildLatestChaptersTab(),
-                    ][_selectedIndex],
+                child: [
+                  _buildTabContent(
+                    novels: popularNovels,
+                    isLoading: isLoading,
+                    showRating: true,
+                  ),
+                  _buildTabContent(
+                    novels: creativeNovels,
+                    isLoading: isLoading,
+                    showChapterInfo: true,
+                  ),
+                  _buildLatestChaptersTab(),
+                ][_selectedIndex],
               ),
             ),
           ),
@@ -519,10 +519,9 @@ class _LibraryScreenState extends State<LibraryScreen>
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
-          color:
-              isSelected
-                  ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
-                  : Colors.transparent,
+          color: isSelected
+              ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
+              : Colors.transparent,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -544,10 +543,9 @@ class _LibraryScreenState extends State<LibraryScreen>
     return Container(
       height: 52, // Increased height
       decoration: BoxDecoration(
-        color:
-            isDark
-                ? colorScheme.surfaceVariant.withOpacity(0.3)
-                : colorScheme.surfaceVariant.withOpacity(0.1),
+        color: isDark
+            ? colorScheme.surfaceVariant.withOpacity(0.3)
+            : colorScheme.surfaceVariant.withOpacity(0.1),
         border: Border(
           bottom: BorderSide(
             color: colorScheme.outlineVariant.withOpacity(0.5),
@@ -559,13 +557,12 @@ class _LibraryScreenState extends State<LibraryScreen>
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: announcements.length,
-        itemBuilder:
-            (context, index) => _buildAnnouncementChip(
-              announcement: announcements[index],
-              colorScheme: colorScheme,
-              textTheme: textTheme,
-              isDark: isDark,
-            ),
+        itemBuilder: (context, index) => _buildAnnouncementChip(
+          announcement: announcements[index],
+          colorScheme: colorScheme,
+          textTheme: textTheme,
+          isDark: isDark,
+        ),
       ),
     );
   }
@@ -583,13 +580,12 @@ class _LibraryScreenState extends State<LibraryScreen>
         borderRadius: BorderRadius.circular(24),
         child: InkWell(
           borderRadius: BorderRadius.circular(24),
-          onTap:
-              () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => WebViewScreen(url: announcement.url),
-                ),
-              ),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => WebViewScreen(url: announcement.url),
+            ),
+          ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
@@ -657,17 +653,15 @@ class _LibraryScreenState extends State<LibraryScreen>
                     novel: novel,
                     showRating: showRating,
                     showChapterInfo: showChapterInfo,
-                    onTap:
-                        () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder:
-                                (context) => LightNovelDetailsScreen(
-                                  novel: novel,
-                                  novelUrl: novel.url,
-                                ),
-                          ),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => LightNovelDetailsScreen(
+                          novel: novel,
+                          novelUrl: novel.url,
                         ),
+                      ),
+                    ),
                   ),
                 );
               }, childCount: novels.length),
@@ -834,17 +828,15 @@ class _LibraryScreenState extends State<LibraryScreen>
             novel: novels[index],
             showRating: showRating,
             showChapterInfo: showChapterInfo,
-            onTap:
-                () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder:
-                        (context) => LightNovelDetailsScreen(
-                          novel: novels[index],
-                          novelUrl: novels[index].url,
-                        ),
-                  ),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => LightNovelDetailsScreen(
+                  novel: novels[index],
+                  novelUrl: novels[index].url,
                 ),
+              ),
+            ),
           );
         },
       ),
@@ -855,13 +847,12 @@ class _LibraryScreenState extends State<LibraryScreen>
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 4),
       child: InkWell(
-        onTap:
-            () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => WebViewScreen(url: announcement.url),
-              ),
-            ),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => WebViewScreen(url: announcement.url),
+          ),
+        ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Center(
@@ -932,17 +923,15 @@ class _LibraryScreenState extends State<LibraryScreen>
                 novel: novel,
                 showRating: showRating,
                 showChapterInfo: showChapterInfo,
-                onTap:
-                    () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder:
-                            (context) => LightNovelDetailsScreen(
-                              novel: novel,
-                              novelUrl: novel.url,
-                            ),
-                      ),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => LightNovelDetailsScreen(
+                      novel: novel,
+                      novelUrl: novel.url,
                     ),
+                  ),
+                ),
               );
             },
           ),
@@ -1169,33 +1158,36 @@ class _LibraryScreenState extends State<LibraryScreen>
                     onPressed: _loadAnnouncements,
                     icon: const Icon(Icons.refresh_rounded, size: 18),
                     label: const Text('Try Again'),
-                    style: TextButton.styleFrom(
-                      backgroundColor: Theme.of(
-                        context,
-                      ).colorScheme.error.withOpacity(0.1),
-                      foregroundColor: Theme.of(context).colorScheme.error,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 32,
-                        vertical: 16,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ).copyWith(
-                      overlayColor: MaterialStateProperty.resolveWith((states) {
-                        if (states.contains(MaterialState.pressed)) {
-                          return Theme.of(
+                    style:
+                        TextButton.styleFrom(
+                          backgroundColor: Theme.of(
                             context,
-                          ).colorScheme.error.withOpacity(0.2);
-                        }
-                        if (states.contains(MaterialState.hovered)) {
-                          return Theme.of(
-                            context,
-                          ).colorScheme.error.withOpacity(0.15);
-                        }
-                        return null;
-                      }),
-                    ),
+                          ).colorScheme.error.withOpacity(0.1),
+                          foregroundColor: Theme.of(context).colorScheme.error,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 32,
+                            vertical: 16,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ).copyWith(
+                          overlayColor: MaterialStateProperty.resolveWith((
+                            states,
+                          ) {
+                            if (states.contains(MaterialState.pressed)) {
+                              return Theme.of(
+                                context,
+                              ).colorScheme.error.withOpacity(0.2);
+                            }
+                            if (states.contains(MaterialState.hovered)) {
+                              return Theme.of(
+                                context,
+                              ).colorScheme.error.withOpacity(0.15);
+                            }
+                            return null;
+                          }),
+                        ),
                   ),
                 ),
               ],
@@ -1213,20 +1205,23 @@ class _LibraryScreenState extends State<LibraryScreen>
   }) {
     return OutlinedButton(
       onPressed: onTap,
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        side: BorderSide(
-          color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
-        ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ).copyWith(
-        overlayColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.pressed)) {
-            return Theme.of(context).colorScheme.primary.withOpacity(0.1);
-          }
-          return null;
-        }),
-      ),
+      style:
+          OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            side: BorderSide(
+              color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ).copyWith(
+            overlayColor: MaterialStateProperty.resolveWith((states) {
+              if (states.contains(MaterialState.pressed)) {
+                return Theme.of(context).colorScheme.primary.withOpacity(0.1);
+              }
+              return null;
+            }),
+          ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1263,13 +1258,12 @@ class _LibraryScreenState extends State<LibraryScreen>
         width: double.infinity,
         padding: const EdgeInsets.all(8),
         child: Column(
-          children:
-              announcements
-                  .map(
-                    (announcement) =>
-                        _buildAnnouncementItem(announcement, isDarkMode),
-                  )
-                  .toList(),
+          children: announcements
+              .map(
+                (announcement) =>
+                    _buildAnnouncementItem(announcement, isDarkMode),
+              )
+              .toList(),
         ),
       ),
     );
@@ -1382,13 +1376,12 @@ class _LibraryScreenState extends State<LibraryScreen>
     }
 
     // Filter out invalid chapters
-    final validChapters =
-        latestChapters
-            .where(
-              (chapter) =>
-                  chapter.title.isNotEmpty && chapter.seriesTitle.isNotEmpty,
-            )
-            .toList();
+    final validChapters = latestChapters
+        .where(
+          (chapter) =>
+              chapter.title.isNotEmpty && chapter.seriesTitle.isNotEmpty,
+        )
+        .toList();
 
     if (validChapters.isEmpty) {
       return const Center(child: Text('No chapters available'));
@@ -1405,24 +1398,22 @@ class _LibraryScreenState extends State<LibraryScreen>
           crossAxisSpacing: 8,
         ),
         itemCount: validChapters.length,
-        itemBuilder:
-            (context, index) => ChapterCard(
-              chapter: validChapters[index],
-              onTap: () async {
-                final fullUrl = await _ensureFullUrl(validChapters[index].url);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder:
-                        (context) => ReaderScreen(
-                          url: fullUrl,
-                          title: validChapters[index].seriesTitle,
-                          chapterTitle: validChapters[index].title,
-                        ),
-                  ),
-                );
-              },
-            ),
+        itemBuilder: (context, index) => ChapterCard(
+          chapter: validChapters[index],
+          onTap: () async {
+            final fullUrl = await _ensureFullUrl(validChapters[index].url);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ReaderScreen(
+                  url: fullUrl,
+                  title: validChapters[index].seriesTitle,
+                  chapterTitle: validChapters[index].title,
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -1435,7 +1426,7 @@ class _LibraryScreenState extends State<LibraryScreen>
     // Get the current server from settings
     final settingsService = SettingsService();
     final baseUrl =
-        await settingsService.getCurrentServer() ?? 'https://ln.hako.vn';
+        await settingsService.getCurrentServer() ?? 'https://docln.sbs';
 
     // Remove any leading slash to prevent double slashes
     final cleanPath = url.startsWith('/') ? url.substring(1) : url;

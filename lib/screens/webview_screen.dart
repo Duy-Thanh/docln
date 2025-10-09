@@ -254,7 +254,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
     final settingsService = SettingsService();
     final baseUrl =
-        await settingsService.getCurrentServer() ?? 'https://ln.hako.vn';
+        await settingsService.getCurrentServer() ?? 'https://docln.sbs';
     final cleanPath = url.startsWith('/') ? url.substring(1) : url;
     return '$baseUrl/$cleanPath';
   }
@@ -269,73 +269,72 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
     print('Loading URL: $fullUrl'); // Debug log
 
-    final controller =
-        WebViewController()
-          ..setJavaScriptMode(JavaScriptMode.unrestricted)
-          ..enableZoom(false) // Optional: disable zoom if not needed
-          ..setBackgroundColor(Colors.transparent)
-          ..setNavigationDelegate(
-            NavigationDelegate(
-              onNavigationRequest: (NavigationRequest request) {
-                final Uri uri = Uri.parse(request.url);
-                print('Navigation request to: ${request.url}'); // Debug log
+    final controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..enableZoom(false) // Optional: disable zoom if not needed
+      ..setBackgroundColor(Colors.transparent)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onNavigationRequest: (NavigationRequest request) {
+            final Uri uri = Uri.parse(request.url);
+            print('Navigation request to: ${request.url}'); // Debug log
 
-                bool isAllowed = _allowedDomains.any(
-                  (domain) => uri.host.contains(domain),
-                );
-                return isAllowed
-                    ? NavigationDecision.navigate
-                    : NavigationDecision.prevent;
-              },
-              onPageStarted: (String url) {
-                print('Page started loading: $url'); // Debug log
-                if (mounted) {
-                  setState(() {
-                    _isLoading = true;
-                    _hasError = false;
-                  });
-                }
-                _updateNavigationState();
-                _injectScripts();
-              },
-              onPageFinished: (String url) {
-                print('Page finished loading: $url'); // Debug log
-                if (mounted) {
-                  setState(() {
-                    _isLoading = false;
-                  });
-                }
-                _updateNavigationState();
-                _injectScripts();
-
-                // Add to history when page loads
-                _addToHistory(url);
-              },
-              onWebResourceError: (WebResourceError error) {
-                print('Web resource error: ${error.description}'); // Debug log
-                if (mounted) {
-                  setState(() {
-                    _isLoading = false;
-                    _hasError = true;
-                  });
-                }
-              },
-            ),
-          )
-          // Add console message handling with filtering
-          ..setOnConsoleMessage((JavaScriptConsoleMessage message) {
-            final msg = message.message;
-            // Filter out known harmless WebView errors
-            if (msg.contains('Cannot read properties of null') ||
-                msg.contains('Cannot read properties of undefined') ||
-                msg.contains('Push notifications are not supported') ||
-                msg.contains('Alpine Expression Error') ||
-                msg.contains('net::ERR_CONNECTION_REFUSED')) {
-              // Suppress these common WebView errors
-              return;
+            bool isAllowed = _allowedDomains.any(
+              (domain) => uri.host.contains(domain),
+            );
+            return isAllowed
+                ? NavigationDecision.navigate
+                : NavigationDecision.prevent;
+          },
+          onPageStarted: (String url) {
+            print('Page started loading: $url'); // Debug log
+            if (mounted) {
+              setState(() {
+                _isLoading = true;
+                _hasError = false;
+              });
             }
-            debugPrint('WebView Console: $msg');
-          });
+            _updateNavigationState();
+            _injectScripts();
+          },
+          onPageFinished: (String url) {
+            print('Page finished loading: $url'); // Debug log
+            if (mounted) {
+              setState(() {
+                _isLoading = false;
+              });
+            }
+            _updateNavigationState();
+            _injectScripts();
+
+            // Add to history when page loads
+            _addToHistory(url);
+          },
+          onWebResourceError: (WebResourceError error) {
+            print('Web resource error: ${error.description}'); // Debug log
+            if (mounted) {
+              setState(() {
+                _isLoading = false;
+                _hasError = true;
+              });
+            }
+          },
+        ),
+      )
+      // Add console message handling with filtering
+      ..setOnConsoleMessage((JavaScriptConsoleMessage message) {
+        final msg = message.message;
+        // Filter out known harmless WebView errors
+        if (msg.contains('Cannot read properties of null') ||
+            msg.contains('Cannot read properties of undefined') ||
+            msg.contains('Push notifications are not supported') ||
+            msg.contains('Alpine Expression Error') ||
+            msg.contains('net::ERR_CONNECTION_REFUSED')) {
+          // Suppress these common WebView errors
+          return;
+        }
+        debugPrint('WebView Console: $msg');
+      });
 
     controller.loadRequest(Uri.parse(fullUrl));
 
@@ -750,94 +749,87 @@ class _WebViewScreenState extends State<WebViewScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder:
-          (context) => StatefulBuilder(
-            builder:
-                (context, setState) => Container(
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, -2),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Handle bar
+                Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  width: 40,
+                  height: 4,
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.surface,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(20),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 10,
-                        offset: const Offset(0, -2),
+                    color: theme.colorScheme.onSurfaceVariant.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Translate Page',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton.filledTonal(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                        style: IconButton.styleFrom(
+                          backgroundColor: theme.colorScheme.surfaceVariant
+                              .withOpacity(0.5),
+                        ),
                       ),
                     ],
                   ),
-                  child: SafeArea(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Handle bar
-                        Container(
-                          margin: const EdgeInsets.only(top: 8),
-                          width: 40,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.onSurfaceVariant
-                                .withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            children: [
-                              Text(
-                                'Translate Page',
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const Spacer(),
-                              IconButton.filledTonal(
-                                icon: const Icon(Icons.close),
-                                onPressed: () => Navigator.pop(context),
-                                style: IconButton.styleFrom(
-                                  backgroundColor: theme
-                                      .colorScheme
-                                      .surfaceVariant
-                                      .withOpacity(0.5),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Divider(),
-                        _buildLanguageOption(
-                          'English',
-                          'en',
-                          onTap: () => _translatePage('en'),
-                        ),
-                        _buildLanguageOption(
-                          'Vietnamese',
-                          'vi',
-                          onTap: () => _translatePage('vi'),
-                        ),
-                        _buildLanguageOption(
-                          'Japanese',
-                          'ja',
-                          onTap: () => _translatePage('ja'),
-                        ),
-                        _buildLanguageOption(
-                          'Korean',
-                          'ko',
-                          onTap: () => _translatePage('ko'),
-                        ),
-                        _buildLanguageOption(
-                          'Chinese (Simplified)',
-                          'zh-CN',
-                          onTap: () => _translatePage('zh-CN'),
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-                    ),
-                  ),
                 ),
+                const Divider(),
+                _buildLanguageOption(
+                  'English',
+                  'en',
+                  onTap: () => _translatePage('en'),
+                ),
+                _buildLanguageOption(
+                  'Vietnamese',
+                  'vi',
+                  onTap: () => _translatePage('vi'),
+                ),
+                _buildLanguageOption(
+                  'Japanese',
+                  'ja',
+                  onTap: () => _translatePage('ja'),
+                ),
+                _buildLanguageOption(
+                  'Korean',
+                  'ko',
+                  onTap: () => _translatePage('ko'),
+                ),
+                _buildLanguageOption(
+                  'Chinese (Simplified)',
+                  'zh-CN',
+                  onTap: () => _translatePage('zh-CN'),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
           ),
+        ),
+      ),
     );
   }
 
@@ -885,25 +877,24 @@ class _WebViewScreenState extends State<WebViewScreen> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder:
-            (context) => Center(
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const CircularProgressIndicator(),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Translating...',
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                    ],
+        builder: (context) => Center(
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Translating...',
+                    style: Theme.of(context).textTheme.bodyLarge,
                   ),
-                ),
+                ],
               ),
             ),
+          ),
+        ),
       );
 
       // Initialize translation infrastructure in JavaScript
@@ -1183,165 +1174,156 @@ class _WebViewScreenState extends State<WebViewScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true, // Add this
-      builder:
-          (context) => DraggableScrollableSheet(
-            initialChildSize: 0.6, // Start at 60% of screen height
-            minChildSize: 0.3, // Min 30% of screen height
-            maxChildSize: 0.9, // Max 90% of screen height
-            expand: false,
-            builder:
-                (context, scrollController) => Container(
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surface,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(20),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 10,
-                        offset: const Offset(0, -2),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Handle bar and header (fixed)
-                      Container(
-                        margin: const EdgeInsets.only(top: 8),
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.onSurfaceVariant.withOpacity(
-                            0.2,
-                          ),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            Text(
-                              'More options',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const Spacer(),
-                            IconButton.filledTonal(
-                              icon: const Icon(Icons.close),
-                              onPressed: () => Navigator.pop(context),
-                              style: IconButton.styleFrom(
-                                backgroundColor: theme
-                                    .colorScheme
-                                    .surfaceVariant
-                                    .withOpacity(0.5),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Divider(height: 1),
-                      // Scrollable content
-                      Expanded(
-                        child: ListView(
-                          controller: scrollController,
-                          padding: EdgeInsets.zero,
-                          children: [
-                            _buildOptionTile(
-                              icon: Icons.block,
-                              title: 'Ad Blocker',
-                              subtitle:
-                                  _isAdBlockEnabled
-                                      ? 'Blocking ads (enabled)'
-                                      : 'Not blocking ads (disabled)',
-                              onTap: () {
-                                Navigator.pop(context);
-                                _toggleAdBlock();
-                              },
-                              isActive: _isAdBlockEnabled,
-                            ),
-                            _buildOptionTile(
-                              icon: Icons.text_fields_rounded,
-                              title: 'Text size',
-                              subtitle: 'Adjust reading text size',
-                              onTap: () {
-                                Navigator.pop(context);
-                                _showTextSizeDialog();
-                              },
-                            ),
-                            _buildOptionTile(
-                              icon: Icons.chrome_reader_mode_rounded,
-                              title: 'Reader mode',
-                              subtitle: 'Clean, simplified view',
-                              onTap: () {
-                                Navigator.pop(context);
-                                _toggleReaderMode();
-                              },
-                              isActive: _isReaderMode,
-                            ),
-                            _buildOptionTile(
-                              icon: Icons.dark_mode_rounded,
-                              title: 'Dark mode',
-                              subtitle: 'Toggle dark appearance',
-                              onTap: () {
-                                Navigator.pop(context);
-                                _toggleDarkMode();
-                              },
-                              isActive: _isDarkMode,
-                            ),
-                            _buildOptionTile(
-                              icon: Icons.translate_rounded,
-                              title: 'Translate',
-                              subtitle: 'Translate page content',
-                              onTap: () {
-                                Navigator.pop(context);
-                                _showTranslateOptions();
-                              },
-                            ),
-                            _buildOptionTile(
-                              icon: Icons.share_rounded,
-                              title: 'Share',
-                              subtitle: 'Share this page with others',
-                              onTap: () async {
-                                final url = await _controller?.currentUrl();
-                                if (url != null) {
-                                  await Share.share(url);
-                                  if (mounted) Navigator.pop(context);
-                                }
-                              },
-                            ),
-                            _buildOptionTile(
-                              icon: Icons.open_in_browser_rounded,
-                              title: 'Open in browser',
-                              subtitle: 'View in external browser',
-                              onTap: () async {
-                                final url = await _controller?.currentUrl();
-                                if (url != null) {
-                                  Navigator.pop(context);
-                                  _openInBrowser(url);
-                                }
-                              },
-                            ),
-                            _buildOptionTile(
-                              icon: Icons.info_outline_rounded,
-                              title: 'Page info',
-                              subtitle: 'View page information',
-                              onTap: () {
-                                Navigator.pop(context);
-                                _showPageInfo();
-                              },
-                            ),
-                            const SizedBox(height: 8),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6, // Start at 60% of screen height
+        minChildSize: 0.3, // Min 30% of screen height
+        maxChildSize: 0.9, // Max 90% of screen height
+        expand: false,
+        builder: (context, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, -2),
+              ),
+            ],
           ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar and header (fixed)
+              Container(
+                margin: const EdgeInsets.only(top: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Text(
+                      'More options',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton.filledTonal(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                      style: IconButton.styleFrom(
+                        backgroundColor: theme.colorScheme.surfaceVariant
+                            .withOpacity(0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              // Scrollable content
+              Expanded(
+                child: ListView(
+                  controller: scrollController,
+                  padding: EdgeInsets.zero,
+                  children: [
+                    _buildOptionTile(
+                      icon: Icons.block,
+                      title: 'Ad Blocker',
+                      subtitle: _isAdBlockEnabled
+                          ? 'Blocking ads (enabled)'
+                          : 'Not blocking ads (disabled)',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _toggleAdBlock();
+                      },
+                      isActive: _isAdBlockEnabled,
+                    ),
+                    _buildOptionTile(
+                      icon: Icons.text_fields_rounded,
+                      title: 'Text size',
+                      subtitle: 'Adjust reading text size',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showTextSizeDialog();
+                      },
+                    ),
+                    _buildOptionTile(
+                      icon: Icons.chrome_reader_mode_rounded,
+                      title: 'Reader mode',
+                      subtitle: 'Clean, simplified view',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _toggleReaderMode();
+                      },
+                      isActive: _isReaderMode,
+                    ),
+                    _buildOptionTile(
+                      icon: Icons.dark_mode_rounded,
+                      title: 'Dark mode',
+                      subtitle: 'Toggle dark appearance',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _toggleDarkMode();
+                      },
+                      isActive: _isDarkMode,
+                    ),
+                    _buildOptionTile(
+                      icon: Icons.translate_rounded,
+                      title: 'Translate',
+                      subtitle: 'Translate page content',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showTranslateOptions();
+                      },
+                    ),
+                    _buildOptionTile(
+                      icon: Icons.share_rounded,
+                      title: 'Share',
+                      subtitle: 'Share this page with others',
+                      onTap: () async {
+                        final url = await _controller?.currentUrl();
+                        if (url != null) {
+                          await Share.share(url);
+                          if (mounted) Navigator.pop(context);
+                        }
+                      },
+                    ),
+                    _buildOptionTile(
+                      icon: Icons.open_in_browser_rounded,
+                      title: 'Open in browser',
+                      subtitle: 'View in external browser',
+                      onTap: () async {
+                        final url = await _controller?.currentUrl();
+                        if (url != null) {
+                          Navigator.pop(context);
+                          _openInBrowser(url);
+                        }
+                      },
+                    ),
+                    _buildOptionTile(
+                      icon: Icons.info_outline_rounded,
+                      title: 'Page info',
+                      subtitle: 'View page information',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showPageInfo();
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -1366,18 +1348,16 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color:
-                      isActive
-                          ? theme.colorScheme.primaryContainer
-                          : theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                  color: isActive
+                      ? theme.colorScheme.primaryContainer
+                      : theme.colorScheme.surfaceVariant.withOpacity(0.5),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
                   icon,
-                  color:
-                      isActive
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.onSurfaceVariant,
+                  color: isActive
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(width: 16),
@@ -1389,10 +1369,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       title,
                       style: theme.textTheme.bodyLarge?.copyWith(
                         fontWeight: isActive ? FontWeight.w600 : null,
-                        color:
-                            isActive
-                                ? theme.colorScheme.primary
-                                : theme.colorScheme.onSurface,
+                        color: isActive
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurface,
                       ),
                     ),
                     if (subtitle != null)
@@ -1422,49 +1401,48 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
     showDialog(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: Row(
-              children: [
-                Icon(
-                  Icons.text_fields_rounded,
-                  color: theme.colorScheme.primary,
-                  size: 24,
-                ),
-                const SizedBox(width: 8),
-                const Text('Text Size'),
-              ],
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              Icons.text_fields_rounded,
+              color: theme.colorScheme.primary,
+              size: 24,
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _TextSizeOption(
-                  label: 'Small',
-                  size: 90,
-                  currentSize: _textZoom,
-                  onSelect: _setTextSize,
-                ),
-                _TextSizeOption(
-                  label: 'Normal',
-                  size: 100,
-                  currentSize: _textZoom,
-                  onSelect: _setTextSize,
-                ),
-                _TextSizeOption(
-                  label: 'Large',
-                  size: 110,
-                  currentSize: _textZoom,
-                  onSelect: _setTextSize,
-                ),
-                _TextSizeOption(
-                  label: 'Extra Large',
-                  size: 120,
-                  currentSize: _textZoom,
-                  onSelect: _setTextSize,
-                ),
-              ],
+            const SizedBox(width: 8),
+            const Text('Text Size'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _TextSizeOption(
+              label: 'Small',
+              size: 90,
+              currentSize: _textZoom,
+              onSelect: _setTextSize,
             ),
-          ),
+            _TextSizeOption(
+              label: 'Normal',
+              size: 100,
+              currentSize: _textZoom,
+              onSelect: _setTextSize,
+            ),
+            _TextSizeOption(
+              label: 'Large',
+              size: 110,
+              currentSize: _textZoom,
+              onSelect: _setTextSize,
+            ),
+            _TextSizeOption(
+              label: 'Extra Large',
+              size: 120,
+              currentSize: _textZoom,
+              onSelect: _setTextSize,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1493,67 +1471,66 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
     showDialog(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: Row(
-              children: [
-                Icon(
-                  Icons.info_outline_rounded,
-                  color: theme.colorScheme.primary,
-                  size: 24,
-                ),
-                const SizedBox(width: 8),
-                const Text('Page Information'),
-              ],
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              Icons.info_outline_rounded,
+              color: theme.colorScheme.primary,
+              size: 24,
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'URL:',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                SelectableText(url, style: theme.textTheme.bodyMedium),
-                const SizedBox(height: 16),
-                Text(
-                  'Domain:',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                SelectableText(
-                  Uri.parse(url).host,
-                  style: theme.textTheme.bodyMedium,
-                ),
-              ],
+            const SizedBox(width: 8),
+            const Text('Page Information'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'URL:',
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: theme.colorScheme.primary,
+              ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
+            const SizedBox(height: 4),
+            SelectableText(url, style: theme.textTheme.bodyMedium),
+            const SizedBox(height: 16),
+            Text(
+              'Domain:',
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: theme.colorScheme.primary,
               ),
-              TextButton(
-                onPressed: () async {
-                  await Clipboard.setData(ClipboardData(text: url));
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('URL copied to clipboard'),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                    Navigator.pop(context);
-                  }
-                },
-                child: const Text('Copy URL'),
-              ),
-            ],
+            ),
+            const SizedBox(height: 4),
+            SelectableText(
+              Uri.parse(url).host,
+              style: theme.textTheme.bodyMedium,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
           ),
+          TextButton(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: url));
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('URL copied to clipboard'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Copy URL'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1643,10 +1620,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       ),
                       _VerticalDivider(theme: theme),
                       _NavButton(
-                        icon:
-                            _isLoading
-                                ? Icons.close_rounded
-                                : Icons.refresh_rounded,
+                        icon: _isLoading
+                            ? Icons.close_rounded
+                            : Icons.refresh_rounded,
                         enabled: true,
                         onPressed: () {
                           if (_isLoading) {
@@ -1787,11 +1763,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     id: novelId,
                     title: novelTitle,
                     coverUrl:
-                        'https://ln.hako.vn/img/nocover.jpg', // Default cover
-                    url:
-                        isChapterPage
-                            ? url.split('/chuong')[0]
-                            : url, // Remove chapter from URL if it's a chapter page
+                        'https://docln.sbs/img/nocover.jpg', // Default cover
+                    url: isChapterPage
+                        ? url.split('/chuong')[0]
+                        : url, // Remove chapter from URL if it's a chapter page
                   );
 
                   // Add to history
@@ -1863,34 +1838,32 @@ class _NavButton extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
-              color:
-                  enabled && !isLoading
-                      ? theme.colorScheme.surfaceVariant.withOpacity(0.1)
-                      : Colors.transparent,
+              color: enabled && !isLoading
+                  ? theme.colorScheme.surfaceVariant.withOpacity(0.1)
+                  : Colors.transparent,
             ),
-            child:
-                isLoading
-                    ? SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: theme.colorScheme.primary,
-                      ),
-                    )
-                    : AnimatedScale(
-                      scale: enabled ? 1.0 : 0.8,
-                      duration: const Duration(milliseconds: 200),
-                      child: Icon(
-                        icon,
-                        size: 20,
-                        color:
-                            enabled
-                                ? theme.colorScheme.onSurfaceVariant
-                                : theme.colorScheme.onSurfaceVariant
-                                    .withOpacity(0.38),
-                      ),
+            child: isLoading
+                ? SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: theme.colorScheme.primary,
                     ),
+                  )
+                : AnimatedScale(
+                    scale: enabled ? 1.0 : 0.8,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      icon,
+                      size: 20,
+                      color: enabled
+                          ? theme.colorScheme.onSurfaceVariant
+                          : theme.colorScheme.onSurfaceVariant.withOpacity(
+                              0.38,
+                            ),
+                    ),
+                  ),
           ),
         ),
       ),
@@ -1926,10 +1899,9 @@ class _TextSizeOption extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            color:
-                isSelected
-                    ? theme.colorScheme.primaryContainer.withOpacity(0.4)
-                    : Colors.transparent,
+            color: isSelected
+                ? theme.colorScheme.primaryContainer.withOpacity(0.4)
+                : Colors.transparent,
           ),
           child: Row(
             children: [
@@ -1940,10 +1912,9 @@ class _TextSizeOption extends StatelessWidget {
                     Text(
                       label,
                       style: theme.textTheme.bodyLarge?.copyWith(
-                        color:
-                            isSelected
-                                ? theme.colorScheme.primary
-                                : theme.colorScheme.onSurface,
+                        color: isSelected
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurface,
                         fontWeight: isSelected ? FontWeight.w600 : null,
                       ),
                     ),

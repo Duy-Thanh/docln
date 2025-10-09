@@ -33,7 +33,7 @@ class LightNovel {
     return LightNovel(
       id: json['id'] ?? '',
       title: json['title'] ?? '',
-      coverUrl: json['coverUrl'] ?? 'https://ln.hako.vn/img/nocover.jpg',
+      coverUrl: json['coverUrl'] ?? 'https://docln.sbs/img/nocover.jpg',
       url: json['url'] ?? '',
       chapters: json['chapters'],
       latestChapter: json['latestChapter'],

@@ -328,7 +328,7 @@ class SettingsScreenState extends State<SettingsScreen>
         notificationService.setNotificationEnabled(isNotificationsEnabled),
         prefsService.setString('language', selectedLanguage ?? 'English'),
         prefsService.setBool('dataSaver', isDataSaverEnabled),
-        serverManagement.setServer(currentServer ?? 'https://ln.hako.vn'),
+        serverManagement.setServer(currentServer ?? 'https://docln.sbs'),
         _settingsService.saveCurrentServer(currentServer ?? ''),
 
         // Save proxy settings
@@ -1043,9 +1043,7 @@ class SettingsScreenState extends State<SettingsScreen>
           );
           await serverManagement.setServer(server);
           await _settingsService.saveCurrentServer(server);
-          _onSettingChanged(
-            () => _loadCurrentServer(),
-          );
+          _onSettingChanged(() => _loadCurrentServer());
           Navigator.pop(context);
         },
       ),

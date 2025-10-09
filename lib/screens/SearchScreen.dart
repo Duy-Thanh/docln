@@ -93,10 +93,9 @@ class _SearchScreenState extends State<SearchScreen>
   Future<void> _performSearch({int page = 1}) async {
     if (!mounted) return;
 
-    final String searchTerm =
-        page == 1
-            ? _searchController.text.trim()
-            : (_searchResponse?.keyword ?? _searchController.text.trim());
+    final String searchTerm = page == 1
+        ? _searchController.text.trim()
+        : (_searchResponse?.keyword ?? _searchController.text.trim());
 
     if (searchTerm.isEmpty) return;
 
@@ -153,16 +152,15 @@ class _SearchScreenState extends State<SearchScreen>
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder:
-              (context) => LightNovelDetailsScreen(
-                novel: LightNovel(
-                  id: url.split('/').last,
-                  title: result.seriesTitle,
-                  coverUrl: result.coverUrl,
-                  url: url,
-                ),
-                novelUrl: url,
-              ),
+          builder: (context) => LightNovelDetailsScreen(
+            novel: LightNovel(
+              id: url.split('/').last,
+              title: result.seriesTitle,
+              coverUrl: result.coverUrl,
+              url: url,
+            ),
+            novelUrl: url,
+          ),
         ),
       );
     } else {
@@ -196,7 +194,7 @@ class _SearchScreenState extends State<SearchScreen>
       return url;
     } catch (e) {
       // If anything goes wrong with URL manipulation, return default
-      return 'https://ln.hako.vn/img/nocover.jpg';
+      return 'https://docln.sbs/img/nocover.jpg';
     }
   }
 
@@ -228,12 +226,11 @@ class _SearchScreenState extends State<SearchScreen>
         'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36',
       },
-      placeholder:
-          (context, url) => Shimmer.fromColors(
-            baseColor: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
-            highlightColor: isDarkMode ? Colors.grey[700]! : Colors.grey[100]!,
-            child: Container(height: height, color: Colors.white),
-          ),
+      placeholder: (context, url) => Shimmer.fromColors(
+        baseColor: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
+        highlightColor: isDarkMode ? Colors.grey[700]! : Colors.grey[100]!,
+        child: Container(height: height, color: Colors.white),
+      ),
       errorWidget: (context, url, error) {
         // Try each domain in sequence if the original fails
         for (int i = 1; i < domains.length; i++) {
@@ -249,28 +246,25 @@ class _SearchScreenState extends State<SearchScreen>
                 height: height,
                 width: double.infinity,
                 fit: BoxFit.cover,
-                placeholder:
-                    (context, url) => Shimmer.fromColors(
-                      baseColor:
-                          isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
-                      highlightColor:
-                          isDarkMode ? Colors.grey[700]! : Colors.grey[100]!,
-                      child: Container(height: height, color: Colors.white),
-                    ),
+                placeholder: (context, url) => Shimmer.fromColors(
+                  baseColor: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
+                  highlightColor: isDarkMode
+                      ? Colors.grey[700]!
+                      : Colors.grey[100]!,
+                  child: Container(height: height, color: Colors.white),
+                ),
                 // Final fallback is a generic image placeholder
-                errorWidget:
-                    (context, url, error) => Container(
-                      height: height,
-                      color: isDarkMode ? Colors.grey[800] : Colors.grey[300],
-                      child: Center(
-                        child: Icon(
-                          Icons.image_not_supported,
-                          color:
-                              isDarkMode ? Colors.grey[600] : Colors.grey[400],
-                          size: height / 3,
-                        ),
-                      ),
+                errorWidget: (context, url, error) => Container(
+                  height: height,
+                  color: isDarkMode ? Colors.grey[800] : Colors.grey[300],
+                  child: Center(
+                    child: Icon(
+                      Icons.image_not_supported,
+                      color: isDarkMode ? Colors.grey[600] : Colors.grey[400],
+                      size: height / 3,
                     ),
+                  ),
+                ),
               );
             } catch (e) {
               continue; // Try next domain if URI parsing fails
@@ -305,26 +299,27 @@ class _SearchScreenState extends State<SearchScreen>
 
     final themeService = Provider.of<ThemeServices>(context);
     final isDarkMode = themeService.themeMode == ThemeMode.dark;
-    final primaryColor =
-        isDarkMode ? Colors.deepOrangeAccent : Colors.deepOrange;
+    final primaryColor = isDarkMode
+        ? Colors.deepOrangeAccent
+        : Colors.deepOrange;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Search'),
         elevation: 0,
         backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
-        systemOverlayStyle:
-            isDarkMode ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+        systemOverlayStyle: isDarkMode
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark,
       ),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors:
-                isDarkMode
-                    ? [Colors.grey[900]!, Colors.grey[850]!]
-                    : [Colors.white, Colors.grey[50]!],
+            colors: isDarkMode
+                ? [Colors.grey[900]!, Colors.grey[850]!]
+                : [Colors.white, Colors.grey[50]!],
           ),
         ),
         child: Column(
@@ -410,10 +405,9 @@ class _SearchScreenState extends State<SearchScreen>
         borderRadius: BorderRadius.circular(_isSearchBarFocused ? 16 : 28),
         boxShadow: [
           BoxShadow(
-            color:
-                _isSearchBarFocused
-                    ? primaryColor.withOpacity(0.2)
-                    : Colors.black.withOpacity(0.1),
+            color: _isSearchBarFocused
+                ? primaryColor.withOpacity(0.2)
+                : Colors.black.withOpacity(0.1),
             blurRadius: _isSearchBarFocused ? 8 : 4,
             offset: const Offset(0, 2),
             spreadRadius: _isSearchBarFocused ? 1 : 0,
@@ -434,49 +428,46 @@ class _SearchScreenState extends State<SearchScreen>
             padding: const EdgeInsets.all(10),
             child: Icon(
               Icons.search_rounded,
-              color:
-                  _isSearchBarFocused
-                      ? primaryColor
-                      : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
+              color: _isSearchBarFocused
+                  ? primaryColor
+                  : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
               size: 24,
             ),
           ),
-          suffixIcon:
-              _searchController.text.isNotEmpty
-                  ? TweenAnimationBuilder<double>(
-                    duration: const Duration(milliseconds: 300),
-                    tween: Tween<double>(begin: 0.0, end: 1.0),
-                    builder: (context, value, child) {
-                      // Ensure value is valid
-                      final safeValue = value.clamp(0.0, 1.0);
+          suffixIcon: _searchController.text.isNotEmpty
+              ? TweenAnimationBuilder<double>(
+                  duration: const Duration(milliseconds: 300),
+                  tween: Tween<double>(begin: 0.0, end: 1.0),
+                  builder: (context, value, child) {
+                    // Ensure value is valid
+                    final safeValue = value.clamp(0.0, 1.0);
 
-                      return Transform.scale(
-                        scale: safeValue,
-                        child: Opacity(
-                          opacity: safeValue,
-                          child: IconButton(
-                            icon: const Icon(Icons.clear_rounded),
-                            onPressed: () {
-                              if (mounted) {
-                                setState(() {
-                                  _searchController.clear();
-                                  _searchResponse = null;
-                                  // Provide haptic feedback
-                                  HapticFeedback.lightImpact();
-                                });
-                              }
-                            },
-                            splashRadius: 20,
-                            color:
-                                isDarkMode
-                                    ? Colors.grey[400]
-                                    : Colors.grey[600],
-                          ),
+                    return Transform.scale(
+                      scale: safeValue,
+                      child: Opacity(
+                        opacity: safeValue,
+                        child: IconButton(
+                          icon: const Icon(Icons.clear_rounded),
+                          onPressed: () {
+                            if (mounted) {
+                              setState(() {
+                                _searchController.clear();
+                                _searchResponse = null;
+                                // Provide haptic feedback
+                                HapticFeedback.lightImpact();
+                              });
+                            }
+                          },
+                          splashRadius: 20,
+                          color: isDarkMode
+                              ? Colors.grey[400]
+                              : Colors.grey[600],
                         ),
-                      );
-                    },
-                  )
-                  : null,
+                      ),
+                    );
+                  },
+                )
+              : null,
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 16),
           fillColor: Colors.transparent,
@@ -556,10 +547,9 @@ class _SearchScreenState extends State<SearchScreen>
         child: Chip(
           label: Text(_popularSearches[index]),
           avatar: Icon(Icons.trending_up, size: 16, color: primaryColor),
-          backgroundColor:
-              isDarkMode
-                  ? Colors.grey[800]!.withOpacity(0.7)
-                  : Colors.grey[200]!.withOpacity(0.7),
+          backgroundColor: isDarkMode
+              ? Colors.grey[800]!.withOpacity(0.7)
+              : Colors.grey[200]!.withOpacity(0.7),
           side: BorderSide(
             width: 1,
             color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
@@ -934,10 +924,9 @@ class _SearchScreenState extends State<SearchScreen>
                                     curve: Curves.easeOut,
                                     builder: (context, value, child) {
                                       final safeValue = value.clamp(0.0, 1.0);
-                                      final safeAngle = ((1 - safeValue) *
-                                              math.pi /
-                                              10)
-                                          .clamp(0.0, math.pi / 10);
+                                      final safeAngle =
+                                          ((1 - safeValue) * math.pi / 10)
+                                              .clamp(0.0, math.pi / 10);
 
                                       return Transform.scale(
                                         scale: safeValue,
@@ -1014,10 +1003,9 @@ class _SearchScreenState extends State<SearchScreen>
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14,
-                                    color:
-                                        isDarkMode
-                                            ? Colors.white
-                                            : Colors.black87,
+                                    color: isDarkMode
+                                        ? Colors.white
+                                        : Colors.black87,
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -1032,10 +1020,9 @@ class _SearchScreenState extends State<SearchScreen>
                                     style: TextStyle(
                                       fontSize: 13,
                                       height: 1.2,
-                                      color:
-                                          isDarkMode
-                                              ? Colors.grey[400]
-                                              : Colors.grey[700],
+                                      color: isDarkMode
+                                          ? Colors.grey[400]
+                                          : Colors.grey[700],
                                     ),
                                     overflow: TextOverflow.ellipsis,
                                     // Allow as many lines as fit in the available space
@@ -1200,10 +1187,9 @@ class _SearchScreenState extends State<SearchScreen>
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors:
-              isDarkMode
-                  ? [Colors.grey[900]!.withOpacity(0.0), Colors.grey[900]!]
-                  : [Colors.white.withOpacity(0.0), Colors.white],
+          colors: isDarkMode
+              ? [Colors.grey[900]!.withOpacity(0.0), Colors.grey[900]!]
+              : [Colors.white.withOpacity(0.0), Colors.white],
         ),
         border: Border(
           top: BorderSide(
@@ -1231,22 +1217,20 @@ class _SearchScreenState extends State<SearchScreen>
                 // Pagination buttons
                 _buildPageButton(
                   icon: Icons.first_page_rounded,
-                  onTap:
-                      _searchResponse!.currentPage > 1
-                          ? () => _performSearch(page: 1)
-                          : null,
+                  onTap: _searchResponse!.currentPage > 1
+                      ? () => _performSearch(page: 1)
+                      : null,
                   isActive: _searchResponse!.currentPage > 1,
                   isDarkMode: isDarkMode,
                   primaryColor: primaryColor,
                 ),
                 _buildPageButton(
                   icon: Icons.navigate_before_rounded,
-                  onTap:
-                      _searchResponse!.currentPage > 1
-                          ? () => _performSearch(
-                            page: _searchResponse!.currentPage - 1,
-                          )
-                          : null,
+                  onTap: _searchResponse!.currentPage > 1
+                      ? () => _performSearch(
+                          page: _searchResponse!.currentPage - 1,
+                        )
+                      : null,
                   isActive: _searchResponse!.currentPage > 1,
                   isDarkMode: isDarkMode,
                   primaryColor: primaryColor,
@@ -1256,10 +1240,10 @@ class _SearchScreenState extends State<SearchScreen>
                   icon: Icons.navigate_next_rounded,
                   onTap:
                       _searchResponse!.currentPage < _searchResponse!.totalPages
-                          ? () => _performSearch(
-                            page: _searchResponse!.currentPage + 1,
-                          )
-                          : null,
+                      ? () => _performSearch(
+                          page: _searchResponse!.currentPage + 1,
+                        )
+                      : null,
                   isActive:
                       _searchResponse!.currentPage <
                       _searchResponse!.totalPages,
@@ -1270,9 +1254,8 @@ class _SearchScreenState extends State<SearchScreen>
                   icon: Icons.last_page_rounded,
                   onTap:
                       _searchResponse!.currentPage < _searchResponse!.totalPages
-                          ? () =>
-                              _performSearch(page: _searchResponse!.totalPages)
-                          : null,
+                      ? () => _performSearch(page: _searchResponse!.totalPages)
+                      : null,
                   isActive:
                       _searchResponse!.currentPage <
                       _searchResponse!.totalPages,
@@ -1300,30 +1283,27 @@ class _SearchScreenState extends State<SearchScreen>
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(20),
         child: InkWell(
-          onTap:
-              isActive
-                  ? () {
-                    HapticFeedback.lightImpact();
-                    onTap?.call();
-                  }
-                  : null,
+          onTap: isActive
+              ? () {
+                  HapticFeedback.lightImpact();
+                  onTap?.call();
+                }
+              : null,
           borderRadius: BorderRadius.circular(20),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color:
-                  isActive
-                      ? (isDarkMode ? Colors.grey[800] : Colors.grey[100])
-                      : Colors.transparent,
+              color: isActive
+                  ? (isDarkMode ? Colors.grey[800] : Colors.grey[100])
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Icon(
               icon,
-              color:
-                  isActive
-                      ? (isDarkMode ? primaryColor : primaryColor)
-                      : (isDarkMode ? Colors.grey[700] : Colors.grey[400]),
+              color: isActive
+                  ? (isDarkMode ? primaryColor : primaryColor)
+                  : (isDarkMode ? Colors.grey[700] : Colors.grey[400]),
               size: 24,
             ),
           ),
@@ -1372,51 +1352,46 @@ class _SearchScreenState extends State<SearchScreen>
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap:
-                    isCurrentPage
-                        ? null
-                        : () {
-                          HapticFeedback.lightImpact();
-                          _performSearch(page: i);
-                        },
+                onTap: isCurrentPage
+                    ? null
+                    : () {
+                        HapticFeedback.lightImpact();
+                        _performSearch(page: i);
+                      },
                 borderRadius: BorderRadius.circular(20),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color:
-                        isCurrentPage
-                            ? primaryColor
-                            : (isDarkMode
-                                ? Colors.grey[800]
-                                : Colors.grey[200]),
+                    color: isCurrentPage
+                        ? primaryColor
+                        : (isDarkMode ? Colors.grey[800] : Colors.grey[200]),
                     borderRadius: BorderRadius.circular(
                       isCurrentPage ? 12 : 18,
                     ),
-                    boxShadow:
-                        isCurrentPage
-                            ? [
-                              BoxShadow(
-                                color: primaryColor.withOpacity(0.4),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ]
-                            : null,
+                    boxShadow: isCurrentPage
+                        ? [
+                            BoxShadow(
+                              color: primaryColor.withOpacity(0.4),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ]
+                        : null,
                   ),
                   child: Center(
                     child: Text(
                       '$i',
                       style: TextStyle(
-                        color:
-                            isCurrentPage
-                                ? Colors.white
-                                : (isDarkMode
-                                    ? Colors.grey[400]
-                                    : Colors.grey[700]),
-                        fontWeight:
-                            isCurrentPage ? FontWeight.bold : FontWeight.normal,
+                        color: isCurrentPage
+                            ? Colors.white
+                            : (isDarkMode
+                                  ? Colors.grey[400]
+                                  : Colors.grey[700]),
+                        fontWeight: isCurrentPage
+                            ? FontWeight.bold
+                            : FontWeight.normal,
                         fontSize: 14,
                       ),
                     ),

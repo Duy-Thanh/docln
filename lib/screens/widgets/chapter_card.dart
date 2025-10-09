@@ -27,10 +27,9 @@ class _ChapterCardState extends State<ChapterCard> {
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap:
-            widget.chapter.url.isNotEmpty
-                ? widget.onTap
-                : null, // Disable tap if no URL
+        onTap: widget.chapter.url.isNotEmpty
+            ? widget.onTap
+            : null, // Disable tap if no URL
         child: SizedBox(
           height: 400,
           child: Column(
@@ -43,16 +42,14 @@ class _ChapterCardState extends State<ChapterCard> {
                   children: [
                     // Image with fallback
                     OptimizedNetworkImage(
-                      imageUrl:
-                          widget.chapter.coverUrl.isNotEmpty
-                              ? widget.chapter.coverUrl
-                              : 'https://ln.hako.vn/img/nocover.jpg', // Fallback image
+                      imageUrl: widget.chapter.coverUrl.isNotEmpty
+                          ? widget.chapter.coverUrl
+                          : 'https://docln.sbs/img/nocover.jpg', // Fallback image
                       fit: BoxFit.cover,
-                      errorWidget:
-                          (context, url, error) => Container(
-                            color: Colors.grey[300],
-                            child: const Icon(Icons.broken_image),
-                          ),
+                      errorWidget: (context, url, error) => Container(
+                        color: Colors.grey[300],
+                        child: const Icon(Icons.broken_image),
+                      ),
                     ),
                     // Volume badge (if exists and not empty)
                     if (widget.chapter.volumeTitle?.isNotEmpty == true)
