@@ -1,141 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'dart:convert';
 import '../modules/light_novel.dart';
 import './widgets/light_novel_card.dart';
 import './LightNovelDetailsScreen.dart';
 import './custom_toast.dart';
 import '../screens/HomeScreen.dart';
 import '../widgets/network_image.dart';
-import '../services/preferences_service.dart';
+import '../services/history_service_v2.dart';
 
-// Create a History service
-class HistoryService extends ChangeNotifier {
-  static final HistoryService _instance = HistoryService._internal();
-  factory HistoryService() => _instance;
-  HistoryService._internal();
-
-  List<HistoryItem> _historyItems = [];
-  List<HistoryItem> get historyItems => _historyItems;
-
-  static const String _historyKey = 'reading_history';
-
-  // Preferences service instance
-  final PreferencesService _prefsService = PreferencesService();
-
-  // Add a history item
-  void addToHistory(LightNovel novel, String? chapterTitle) {
-    // Check if already exists
-    final existingIndex = _historyItems.indexWhere(
-      (item) => item.novel.id == novel.id,
-    );
-
-    final newItem = HistoryItem(
-      novel: novel,
-      lastReadChapter: chapterTitle ?? 'Unknown Chapter',
-      timestamp: DateTime.now(),
-    );
-
-    if (existingIndex != -1) {
-      // Update existing entry
-      _historyItems[existingIndex] = newItem;
-    } else {
-      // Add new entry
-      _historyItems.add(newItem);
-    }
-
-    // Limit history to 100 items
-    if (_historyItems.length > 100) {
-      _historyItems.removeLast();
-    }
-
-    notifyListeners();
-    _saveHistory();
-  }
-
-  // Remove from history
-  void removeFromHistory(String novelId) {
-    _historyItems.removeWhere((item) => item.novel.id == novelId);
-    notifyListeners();
-    _saveHistory();
-  }
-
-  // Clear history
-  void clearHistory() {
-    _historyItems.clear();
-    notifyListeners();
-    _saveHistory();
-  }
-
-  // Load history from storage
-  Future<void> loadHistory() async {
-    try {
-      // Initialize preferences service if not already initialized
-      await _prefsService.initialize();
-
-      final String historyJson = _prefsService.getString(_historyKey);
-
-      if (historyJson.isNotEmpty) {
-        final List<dynamic> historyList = jsonDecode(historyJson);
-        _historyItems =
-            historyList.map((json) => HistoryItem.fromJson(json)).toList();
-
-        // Sort by most recent first
-        _historyItems.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      }
-
-      notifyListeners();
-    } catch (e) {
-      print('Error loading history: $e');
-      _historyItems = [];
-      notifyListeners();
-    }
-  }
-
-  // Save history to storage
-  Future<void> _saveHistory() async {
-    try {
-      final String historyJson = jsonEncode(
-        _historyItems.map((item) => item.toJson()).toList(),
-      );
-
-      await _prefsService.setString(_historyKey, historyJson);
-    } catch (e) {
-      print('Error saving history: $e');
-    }
-  }
-}
-
-// History item model
-class HistoryItem {
-  final LightNovel novel;
-  final String lastReadChapter;
-  final DateTime timestamp;
-
-  HistoryItem({
-    required this.novel,
-    required this.lastReadChapter,
-    required this.timestamp,
-  });
-
-  // Serialize to JSON
-  Map<String, dynamic> toJson() {
-    return {
-      'novel': novel.toJson(),
-      'lastReadChapter': lastReadChapter,
-      'timestamp': timestamp.toIso8601String(),
-    };
-  }
-
-  // Deserialize from JSON
-  factory HistoryItem.fromJson(Map<String, dynamic> json) {
-    return HistoryItem(
-      novel: LightNovel.fromJson(json['novel']),
-      lastReadChapter: json['lastReadChapter'],
-      timestamp: DateTime.parse(json['timestamp']),
-    );
-  }
-}
+// Old HistoryService and HistoryItem classes removed
+// Now using HistoryServiceV2 and HistoryItemV2 from services
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({Key? key}) : super(key: key);
@@ -188,7 +62,7 @@ class _HistoryScreenState extends State<HistoryScreen>
   }
 
   // Filter history based on search query
-  List<HistoryItem> _filterHistory(List<HistoryItem> historyItems) {
+  List<HistoryItemV2> _filterHistory(List<HistoryItemV2> historyItems) {
     if (_searchQuery.isEmpty) return historyItems;
 
     return historyItems.where((item) {
@@ -229,23 +103,21 @@ class _HistoryScreenState extends State<HistoryScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title:
-            _isSearching
-                ? _buildSearchField()
-                : Text(
-                  'Reading History',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+        title: _isSearching
+            ? _buildSearchField()
+            : Text(
+                'Reading History',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
                 ),
+              ),
         centerTitle: !_isSearching,
-        leading:
-            _isSearching
-                ? IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: _toggleSearch,
-                )
-                : null,
+        leading: _isSearching
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: _toggleSearch,
+              )
+            : null,
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
@@ -259,7 +131,7 @@ class _HistoryScreenState extends State<HistoryScreen>
           ),
         ],
       ),
-      body: Consumer<HistoryService>(
+      body: Consumer<HistoryServiceV2>(
         builder: (context, historyService, _) {
           final historyItems = historyService.historyItems;
           final filteredItems = _filterHistory(historyItems);
@@ -314,7 +186,7 @@ class _HistoryScreenState extends State<HistoryScreen>
     );
   }
 
-  Widget _buildHistoryItem(HistoryItem item, ColorScheme colorScheme) {
+  Widget _buildHistoryItem(HistoryItemV2 item, ColorScheme colorScheme) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final timeAgo = _getTimeAgo(item.timestamp);
 
@@ -338,16 +210,12 @@ class _HistoryScreenState extends State<HistoryScreen>
                   width: 80,
                   height: 120,
                   fit: BoxFit.cover,
-                  errorWidget:
-                      (context, url, error) => Container(
-                        width: 80,
-                        height: 120,
-                        color: isDarkMode ? Colors.grey[800] : Colors.grey[300],
-                        child: const Icon(
-                          Icons.broken_image,
-                          color: Colors.grey,
-                        ),
-                      ),
+                  errorWidget: (context, url, error) => Container(
+                    width: 80,
+                    height: 120,
+                    color: isDarkMode ? Colors.grey[800] : Colors.grey[300],
+                    child: const Icon(Icons.broken_image, color: Colors.grey),
+                  ),
                 ),
               ),
               const SizedBox(width: 16),
@@ -421,72 +289,69 @@ class _HistoryScreenState extends State<HistoryScreen>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder:
-            (context) =>
-                LightNovelDetailsScreen(novel: novel, novelUrl: novel.url),
+        builder: (context) =>
+            LightNovelDetailsScreen(novel: novel, novelUrl: novel.url),
       ),
     );
   }
 
-  void _removeHistoryItem(HistoryItem item) {
+  void _removeHistoryItem(HistoryItemV2 item) {
     // Show confirmation dialog
     showDialog(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Remove from History'),
-            content: Text(
-              'Remove "${item.novel.title}" from your reading history?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  // Get the history service from provider
-                  Provider.of<HistoryService>(
-                    context,
-                    listen: false,
-                  ).removeFromHistory(item.novel.id);
-                  CustomToast.show(context, 'Removed from history');
-                },
-                child: const Text('Remove'),
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: const Text('Remove from History'),
+        content: Text(
+          'Remove "${item.novel.title}" from your reading history?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
           ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // Get the history service from provider
+              Provider.of<HistoryServiceV2>(
+                context,
+                listen: false,
+              ).removeFromHistory(item.novel.id);
+              CustomToast.show(context, 'Removed from history');
+            },
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
     );
   }
 
   void _showClearHistoryDialog() {
     showDialog(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Clear History'),
-            content: const Text(
-              'Are you sure you want to clear your entire reading history? This action cannot be undone.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  Provider.of<HistoryService>(
-                    context,
-                    listen: false,
-                  ).clearHistory();
-                  CustomToast.show(context, 'History cleared');
-                },
-                child: const Text('Clear'),
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: const Text('Clear History'),
+        content: const Text(
+          'Are you sure you want to clear your entire reading history? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
           ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Provider.of<HistoryServiceV2>(
+                context,
+                listen: false,
+              ).clearHistory();
+              CustomToast.show(context, 'History cleared');
+            },
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
     );
   }
 

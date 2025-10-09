@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import '../services/server_management_service.dart';
 import '../services/novel_url_migration_service.dart';
-import '../services/bookmark_service.dart';
+import '../services/bookmark_service_v2.dart';
 
 /// Server Diagnostic Screen
-/// 
+///
 /// Helps users diagnose and fix server-related issues
 class ServerDiagnosticScreen extends StatefulWidget {
   const ServerDiagnosticScreen({super.key});
@@ -16,8 +16,8 @@ class ServerDiagnosticScreen extends StatefulWidget {
 class _ServerDiagnosticScreenState extends State<ServerDiagnosticScreen> {
   final ServerManagementService _serverManagement = ServerManagementService();
   final NovelUrlMigrationService _urlMigration = NovelUrlMigrationService();
-  final BookmarkService _bookmarkService = BookmarkService();
-  
+  final BookmarkServiceV2 _bookmarkService = BookmarkServiceV2();
+
   bool _isLoading = true;
   bool _isMigrating = false;
   Map<String, dynamic>? _migrationInfo;
@@ -38,9 +38,9 @@ class _ServerDiagnosticScreenState extends State<ServerDiagnosticScreen> {
     try {
       await _serverManagement.initialize();
       await _bookmarkService.init();
-      
+
       final info = await _urlMigration.getMigrationInfo();
-      
+
       setState(() {
         _migrationInfo = info;
         _isLoading = false;
@@ -60,7 +60,7 @@ class _ServerDiagnosticScreenState extends State<ServerDiagnosticScreen> {
 
     try {
       final success = await _urlMigration.migrateNovelUrls();
-      
+
       if (success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -68,10 +68,10 @@ class _ServerDiagnosticScreenState extends State<ServerDiagnosticScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        
+
         // Reload diagnostics
         await _loadDiagnostics();
-        
+
         // Reload bookmarks
         await _bookmarkService.loadBookmarks();
       } else if (mounted) {
@@ -84,9 +84,9 @@ class _ServerDiagnosticScreenState extends State<ServerDiagnosticScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       if (mounted) {
@@ -100,17 +100,14 @@ class _ServerDiagnosticScreenState extends State<ServerDiagnosticScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Server Diagnostics'),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Server Diagnostics'), elevation: 0),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? _buildErrorView()
-              : _buildDiagnosticsView(colorScheme),
+          ? _buildErrorView()
+          : _buildDiagnosticsView(colorScheme),
     );
   }
 
@@ -152,7 +149,7 @@ class _ServerDiagnosticScreenState extends State<ServerDiagnosticScreen> {
     final needsMigration = _migrationInfo?['needsMigration'] ?? false;
     final totalNovels = _migrationInfo?['totalNovels'] ?? 0;
     final corruptedUrls = _migrationInfo?['corruptedUrls'] ?? 0;
-    
+
     final hasProblems = needsMigration || corruptedUrls > 0;
 
     return ListView(
@@ -160,9 +157,13 @@ class _ServerDiagnosticScreenState extends State<ServerDiagnosticScreen> {
       children: [
         // Status Card
         Card(
-          color: hasProblems 
-              ? (colorScheme.brightness == Brightness.dark ? Colors.orange.shade900 : Colors.orange.shade50)
-              : (colorScheme.brightness == Brightness.dark ? Colors.green.shade900 : Colors.green.shade50),
+          color: hasProblems
+              ? (colorScheme.brightness == Brightness.dark
+                    ? Colors.orange.shade900
+                    : Colors.orange.shade50)
+              : (colorScheme.brightness == Brightness.dark
+                    ? Colors.green.shade900
+                    : Colors.green.shade50),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -178,15 +179,17 @@ class _ServerDiagnosticScreenState extends State<ServerDiagnosticScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        hasProblems 
-                            ? 'Issues Detected' 
-                            : 'All Systems Normal',
+                        hasProblems ? 'Issues Detected' : 'All Systems Normal',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: hasProblems 
-                              ? (colorScheme.brightness == Brightness.dark ? Colors.orange.shade100 : Colors.orange.shade900)
-                              : (colorScheme.brightness == Brightness.dark ? Colors.green.shade100 : Colors.green.shade900),
+                          color: hasProblems
+                              ? (colorScheme.brightness == Brightness.dark
+                                    ? Colors.orange.shade100
+                                    : Colors.orange.shade900)
+                              : (colorScheme.brightness == Brightness.dark
+                                    ? Colors.green.shade100
+                                    : Colors.green.shade900),
                         ),
                       ),
                     ),
@@ -198,8 +201,8 @@ class _ServerDiagnosticScreenState extends State<ServerDiagnosticScreen> {
                     'Your library may have corrupted novel URLs due to server changes. '
                     'Run migration to fix this issue.',
                     style: TextStyle(
-                      color: colorScheme.brightness == Brightness.dark 
-                          ? Colors.orange.shade100 
+                      color: colorScheme.brightness == Brightness.dark
+                          ? Colors.orange.shade100
                           : Colors.orange.shade900,
                     ),
                   ),
@@ -208,9 +211,9 @@ class _ServerDiagnosticScreenState extends State<ServerDiagnosticScreen> {
             ),
           ),
         ),
-        
+
         const SizedBox(height: 16),
-        
+
         // Current Server
         _buildInfoCard(
           colorScheme,
@@ -219,23 +222,21 @@ class _ServerDiagnosticScreenState extends State<ServerDiagnosticScreen> {
           value: _serverManagement.currentServer,
           subtitle: 'All new novels will use this server',
         ),
-        
+
         const SizedBox(height: 8),
-        
+
         // Migration Status
         _buildInfoCard(
           colorScheme,
           icon: Icons.sync,
           title: 'Migration Version',
           value: '$migrationVersion / $currentVersion',
-          subtitle: needsMigration 
-              ? '⚠️ Migration needed' 
-              : '✅ Up to date',
+          subtitle: needsMigration ? '⚠️ Migration needed' : '✅ Up to date',
           valueColor: needsMigration ? Colors.orange : Colors.green,
         ),
-        
+
         const SizedBox(height: 8),
-        
+
         // Total Novels
         _buildInfoCard(
           colorScheme,
@@ -244,9 +245,9 @@ class _ServerDiagnosticScreenState extends State<ServerDiagnosticScreen> {
           value: totalNovels.toString(),
           subtitle: 'Novels in your library',
         ),
-        
+
         const SizedBox(height: 8),
-        
+
         // Corrupted URLs
         _buildInfoCard(
           colorScheme,
@@ -258,9 +259,9 @@ class _ServerDiagnosticScreenState extends State<ServerDiagnosticScreen> {
               : '✅ No corrupted URLs found',
           valueColor: corruptedUrls > 0 ? Colors.red : Colors.green,
         ),
-        
+
         const SizedBox(height: 24),
-        
+
         // Action Buttons
         if (hasProblems) ...[
           SizedBox(
@@ -293,7 +294,7 @@ class _ServerDiagnosticScreenState extends State<ServerDiagnosticScreen> {
           ),
           const SizedBox(height: 12),
         ],
-        
+
         SizedBox(
           width: double.infinity,
           height: 50,
@@ -303,9 +304,9 @@ class _ServerDiagnosticScreenState extends State<ServerDiagnosticScreen> {
             label: const Text('Refresh Diagnostics'),
           ),
         ),
-        
+
         const SizedBox(height: 24),
-        
+
         // Information Section
         Card(
           child: Padding(
@@ -366,10 +367,7 @@ class _ServerDiagnosticScreenState extends State<ServerDiagnosticScreen> {
         ),
         title: Text(
           title,
-          style: TextStyle(
-            fontSize: 14,
-            color: colorScheme.onSurfaceVariant,
-          ),
+          style: TextStyle(fontSize: 14, color: colorScheme.onSurfaceVariant),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

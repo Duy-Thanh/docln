@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter/foundation.dart'; // For compute()
 import '../screens/custom_toast.dart';
 import '../modules/light_novel.dart';
-import '../screens/HistoryScreen.dart';
+import '../services/history_service_v2.dart';
 import '../services/crawler_service.dart';
 import '../services/eye_protection_service.dart';
 import '../widgets/eye_protection_overlay.dart';
@@ -699,7 +699,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     if (!mounted || widget.novel == null) return;
 
     try {
-      final historyService = Provider.of<HistoryService>(
+      final historyService = Provider.of<HistoryServiceV2>(
         context,
         listen: false,
       );

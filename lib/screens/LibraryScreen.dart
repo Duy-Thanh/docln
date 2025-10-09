@@ -142,7 +142,9 @@ class _LibraryScreenState extends State<LibraryScreen>
   }
 
   Future<void> _loadData() async {
+    if (!mounted) return; // Check if still mounted
     setState(() => isLoading = true);
+
     try {
       final futures = await Future.wait([
         _crawlerService.getAnnouncements(context),
@@ -150,6 +152,8 @@ class _LibraryScreenState extends State<LibraryScreen>
         _crawlerService.getCreativeNovels(context),
         _crawlerService.getLatestChapters(context),
       ]);
+
+      if (!mounted) return; // Check again after async operation
 
       setState(() {
         announcements = futures[0] as List<Announcement>;
@@ -159,6 +163,8 @@ class _LibraryScreenState extends State<LibraryScreen>
         isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return; // Check again after error
+
       setState(() {
         error = e.toString();
         isLoading = false;

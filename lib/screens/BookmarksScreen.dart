@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/bookmark_service.dart';
+import '../services/bookmark_service_v2.dart';
 import '../modules/light_novel.dart';
 import './widgets/light_novel_card.dart';
 import './LightNovelDetailsScreen.dart';
@@ -50,8 +50,8 @@ class _BookmarksScreenState extends State<BookmarksScreen>
     // Ensure bookmarks are loaded
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        // Load bookmarks from shared preferences
-        Provider.of<BookmarkService>(context, listen: false).loadBookmarks();
+        // Load bookmarks from database
+        Provider.of<BookmarkServiceV2>(context, listen: false).loadBookmarks();
       }
     });
 
@@ -77,30 +77,27 @@ class _BookmarksScreenState extends State<BookmarksScreen>
 
     // Apply text search filter
     if (_searchQuery.isNotEmpty) {
-      filteredList =
-          filteredList.where((novel) {
-            final title = novel.title.toLowerCase();
-            final author =
-                novel.alternativeTitles?.join(' ').toLowerCase() ?? '';
-            final query = _searchQuery.toLowerCase();
+      filteredList = filteredList.where((novel) {
+        final title = novel.title.toLowerCase();
+        final author = novel.alternativeTitles?.join(' ').toLowerCase() ?? '';
+        final query = _searchQuery.toLowerCase();
 
-            return title.contains(query) || author.contains(query);
-          }).toList();
+        return title.contains(query) || author.contains(query);
+      }).toList();
     }
 
     // Apply category filter if selected
     if (_selectedCategory != null && _selectedCategory != 'All') {
-      filteredList =
-          filteredList.where((novel) {
-            // LightNovel doesn't have genres property, so we'll check title and alt titles
-            // for potential category matches as a simple fallback
-            final title = novel.title.toLowerCase();
-            final altTitles =
-                novel.alternativeTitles?.join(' ').toLowerCase() ?? '';
-            final category = _selectedCategory!.toLowerCase();
+      filteredList = filteredList.where((novel) {
+        // LightNovel doesn't have genres property, so we'll check title and alt titles
+        // for potential category matches as a simple fallback
+        final title = novel.title.toLowerCase();
+        final altTitles =
+            novel.alternativeTitles?.join(' ').toLowerCase() ?? '';
+        final category = _selectedCategory!.toLowerCase();
 
-            return title.contains(category) || altTitles.contains(category);
-          }).toList();
+        return title.contains(category) || altTitles.contains(category);
+      }).toList();
     }
 
     return filteredList;
@@ -133,23 +130,21 @@ class _BookmarksScreenState extends State<BookmarksScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title:
-            _isSearching
-                ? _buildSearchField()
-                : Text(
-                  'Bookmarks',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+        title: _isSearching
+            ? _buildSearchField()
+            : Text(
+                'Bookmarks',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
                 ),
+              ),
         centerTitle: !_isSearching,
-        leading:
-            _isSearching
-                ? IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: _toggleSearch,
-                )
-                : null,
+        leading: _isSearching
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: _toggleSearch,
+              )
+            : null,
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
@@ -203,7 +198,7 @@ class _BookmarksScreenState extends State<BookmarksScreen>
 
           // Main content
           Expanded(
-            child: Consumer<BookmarkService>(
+            child: Consumer<BookmarkServiceV2>(
               builder: (context, bookmarkService, child) {
                 final allBookmarks = bookmarkService.bookmarkedNovels;
                 final filteredBookmarks = _filterBookmarks(allBookmarks);
@@ -328,10 +323,9 @@ class _BookmarksScreenState extends State<BookmarksScreen>
 
             return AnimatedContainer(
               duration: const Duration(milliseconds: 300),
-              transform:
-                  isMatched
-                      ? (Matrix4.identity()..scale(1.05))
-                      : Matrix4.identity(),
+              transform: isMatched
+                  ? (Matrix4.identity()..scale(1.05))
+                  : Matrix4.identity(),
               child: LightNovelCard(
                 novel: novel,
                 onTap: () => _openNovelDetails(novel),
@@ -348,9 +342,8 @@ class _BookmarksScreenState extends State<BookmarksScreen>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder:
-            (context) =>
-                LightNovelDetailsScreen(novel: novel, novelUrl: novel.url),
+        builder: (context) =>
+            LightNovelDetailsScreen(novel: novel, novelUrl: novel.url),
       ),
     );
   }
@@ -361,81 +354,79 @@ class _BookmarksScreenState extends State<BookmarksScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder:
-          (context) => Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Handle at the top of bottom sheet
-              Container(
-                margin: const EdgeInsets.only(top: 8),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              ListTile(
-                leading: const Icon(Icons.book),
-                title: const Text('Read novel'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _openNovelDetails(novel);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.bookmark_remove),
-                title: const Text('Remove from bookmarks'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _removeBookmark(novel);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.share),
-                title: const Text('Share'),
-                onTap: () {
-                  Navigator.pop(context);
-                  // TODO: Implement share functionality
-                  CustomToast.show(context, 'Share functionality coming soon');
-                },
-              ),
-            ],
+      builder: (context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle at the top of bottom sheet
+          Container(
+            margin: const EdgeInsets.only(top: 8),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
+          ListTile(
+            leading: const Icon(Icons.book),
+            title: const Text('Read novel'),
+            onTap: () {
+              Navigator.pop(context);
+              _openNovelDetails(novel);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.bookmark_remove),
+            title: const Text('Remove from bookmarks'),
+            onTap: () {
+              Navigator.pop(context);
+              _removeBookmark(novel);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.share),
+            title: const Text('Share'),
+            onTap: () {
+              Navigator.pop(context);
+              // TODO: Implement share functionality
+              CustomToast.show(context, 'Share functionality coming soon');
+            },
+          ),
+        ],
+      ),
     );
   }
 
   void _removeBookmark(LightNovel novel) {
-    final bookmarkService = Provider.of<BookmarkService>(
+    final bookmarkService = Provider.of<BookmarkServiceV2>(
       context,
       listen: false,
     );
 
     showDialog(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Remove Bookmark'),
-            content: Text('Remove "${novel.title}" from your bookmarks?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  bookmarkService.removeBookmark(novel.id).then((_) {
-                    CustomToast.show(
-                      context,
-                      '${novel.title} removed from bookmarks',
-                    );
-                  });
-                },
-                child: const Text('Remove'),
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: const Text('Remove Bookmark'),
+        content: Text('Remove "${novel.title}" from your bookmarks?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
           ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              bookmarkService.removeBookmark(novel.id).then((_) {
+                CustomToast.show(
+                  context,
+                  '${novel.title} removed from bookmarks',
+                );
+              });
+            },
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
     );
   }
 

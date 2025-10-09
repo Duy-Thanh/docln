@@ -13,7 +13,7 @@ import 'package:translator/translator.dart';
 import 'dart:math' show min;
 import 'dart:math' show Random;
 import '../services/performance_service.dart';
-import '../screens/HistoryScreen.dart';
+import '../services/history_service_v2.dart';
 import 'package:provider/provider.dart';
 import '../modules/light_novel.dart';
 import '../services/preferences_recovery_service.dart';
@@ -1770,7 +1770,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   );
 
                   // Add to history
-                  final historyService = Provider.of<HistoryService>(
+                  final historyService = Provider.of<HistoryServiceV2>(
                     context,
                     listen: false,
                   );

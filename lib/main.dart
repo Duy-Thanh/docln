@@ -9,6 +9,10 @@ import 'services/notification_service.dart';
 import 'services/theme_services.dart';
 import 'services/language_service.dart';
 import 'services/bookmark_service.dart';
+import 'services/bookmark_service_v2.dart';
+import 'services/history_service_v2.dart';
+import 'services/novel_database_service.dart';
+import 'services/novel_data_migration_service.dart';
 import 'services/proxy_service.dart';
 import 'services/http_client.dart';
 import 'services/dns_service.dart';
@@ -21,14 +25,11 @@ import 'services/crawler_service.dart';
 import 'services/preferences_service.dart';
 import 'services/preferences_recovery_service.dart';
 
-
 // Firebase
 // import 'package:firebase_core/firebase_core.dart';
 // import 'firebase_options.dart';
 // import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 // import 'package:firebase_analytics/firebase_analytics.dart';
-
-
 
 // Dart libs
 import 'dart:ui';
@@ -65,6 +66,73 @@ Future<void> migratePreferences() async {
   }
 }
 
+// Function to migrate novel data from JSON to database
+Future<void> migrateNovelData() async {
+  try {
+    debugPrint('🔄 Checking if novel data migration is needed...');
+
+    final migrationService = NovelDataMigrationService();
+
+    // Check if we need to fix a previous migration (backup exists but migration done)
+    final prefs = PreferencesService();
+    await prefs.initialize();
+
+    final migrationComplete = prefs.getBool(
+      'novel_data_migration_complete_v2',
+      defaultValue: false,
+    );
+    final hasBackup = prefs.getString('bookmarked_novels_backup').isNotEmpty;
+
+    // If migration was done but we still have backup, fix the migration
+    if (migrationComplete && hasBackup) {
+      debugPrint('🔧 Detected previous migration with URL issues, fixing...');
+
+      final fixSuccess = await migrationService.fixMigration();
+
+      if (fixSuccess) {
+        debugPrint('✅ Migration fix successful!');
+
+        // Show stats
+        final info = await migrationService.getMigrationInfo();
+        debugPrint('   Fixed bookmarks: ${info['newData']?['bookmarks'] ?? 0}');
+        debugPrint('   Fixed history: ${info['newData']?['history'] ?? 0}');
+      } else {
+        debugPrint('⚠️ Migration fix had issues, using existing data');
+      }
+
+      return;
+    }
+
+    if (await migrationService.needsMigration()) {
+      debugPrint('📚 Starting novel data migration (JSON → Database)...');
+
+      final success = await migrationService.migrate();
+
+      if (success) {
+        debugPrint('✅ Novel data migration successful!');
+
+        // Show migration info
+        final info = await migrationService.getMigrationInfo();
+        debugPrint('   Old bookmarks: ${info['oldData']?['bookmarks'] ?? 0}');
+        debugPrint('   Old history: ${info['oldData']?['history'] ?? 0}');
+        debugPrint('   New bookmarks: ${info['newData']?['bookmarks'] ?? 0}');
+        debugPrint('   New history: ${info['newData']?['history'] ?? 0}');
+
+        // Clean up old JSON data (backed up first)
+        await migrationService.cleanupOldData();
+        debugPrint('🧹 Old JSON data cleaned up (backups saved)');
+      } else {
+        debugPrint('⚠️ Novel data migration had issues, but app will continue');
+      }
+    } else {
+      debugPrint('ℹ️ Novel data migration not needed (already completed)');
+    }
+  } catch (e) {
+    debugPrint('❌ Error during novel data migration: $e');
+    debugPrint('App will continue with current data');
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -98,17 +166,21 @@ void main() async {
   await serverManagement.initialize();
   await urlMigration.migrateNovelUrls();
 
+  // Migrate novel data from JSON to database (CRITICAL FIX!)
+  await migrateNovelData();
+
   final themeService = ThemeServices();
   final languageService = LanguageService();
   final notificationService = NotificationService();
   final bookmarkService = BookmarkService();
-  final historyService = HistoryService();
+  final bookmarkServiceV2 = BookmarkServiceV2();
+  // final historyService = HistoryService(); // Old service removed
+  final historyServiceV2 = HistoryServiceV2();
   final proxyService = ProxyService();
   final httpClient = AppHttpClient();
   final dnsService = DnsService();
   final crawlerService = CrawlerService();
   final preferencesService = PreferencesService();
-
 
   await Future.wait([
     preferencesService.initialize(),
@@ -116,12 +188,13 @@ void main() async {
     languageService.init(),
     notificationService.init(),
     bookmarkService.init(),
-    historyService.loadHistory(),
+    bookmarkServiceV2.init(),
+    // historyService.loadHistory(), // Old service removed
+    historyServiceV2.init(),
     proxyService.initialize(),
     httpClient.initialize(),
     dnsService.initialize(),
     crawlerService.initialize(),
-
   ]);
 
   // Set initial system UI styling
@@ -151,7 +224,11 @@ void main() async {
           value: notificationService,
         ),
         ChangeNotifierProvider<BookmarkService>.value(value: bookmarkService),
-        ChangeNotifierProvider<HistoryService>.value(value: historyService),
+        ChangeNotifierProvider<BookmarkServiceV2>.value(
+          value: bookmarkServiceV2,
+        ),
+        // ChangeNotifierProvider<HistoryService>.value(value: historyService), // Old service removed
+        ChangeNotifierProvider<HistoryServiceV2>.value(value: historyServiceV2),
         ChangeNotifierProvider<ServerManagementService>.value(
           value: serverManagement,
         ),
@@ -160,8 +237,6 @@ void main() async {
     ),
   );
 }
-
-
 
 class MainApp extends StatelessWidget {
   const MainApp({super.key});

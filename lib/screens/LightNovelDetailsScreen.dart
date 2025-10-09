@@ -9,8 +9,8 @@ import '../screens/reader_screen.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../services/bookmark_service.dart';
-import '../screens/HistoryScreen.dart';
+import '../services/bookmark_service_v2.dart';
+import '../services/history_service_v2.dart';
 import 'package:provider/provider.dart';
 import '../widgets/network_image.dart';
 
@@ -55,7 +55,7 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         // Add to history when the screen is first viewed
-        Provider.of<HistoryService>(
+        Provider.of<HistoryServiceV2>(
           context,
           listen: false,
         ).addToHistory(widget.novel, widget.novel.latestChapter);
@@ -135,8 +135,9 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
         // Construct a cleaner description by removing junk
         String cleanDescription = summary;
         if (cleanDescription.contains('Truyện dịch')) {
-          cleanDescription =
-              cleanDescription.replaceAll('Truyện dịch', '').trim();
+          cleanDescription = cleanDescription
+              .replaceAll('Truyện dịch', '')
+              .trim();
         }
 
         // Extract additional info like wordCount, views, etc.
@@ -172,7 +173,7 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
           _reviews = reviews;
 
           // Update history with the loaded chapter information
-          Provider.of<HistoryService>(
+          Provider.of<HistoryServiceV2>(
             context,
             listen: false,
           ).addToHistory(widget.novel, widget.novel.latestChapter);
@@ -269,24 +270,23 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
           ),
         ],
       ),
-      body:
-          _isLoading
-              ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const CircularProgressIndicator(),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Loading novel details...',
-                      style: TextStyle(
-                        color: isDarkMode ? Colors.white70 : Colors.black54,
-                      ),
+      body: _isLoading
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Loading novel details...',
+                    style: TextStyle(
+                      color: isDarkMode ? Colors.white70 : Colors.black54,
                     ),
-                  ],
-                ),
-              )
-              : _buildNovelDetailContent(isDarkMode),
+                  ),
+                ],
+              ),
+            )
+          : _buildNovelDetailContent(isDarkMode),
     );
   }
 
@@ -493,11 +493,11 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
                                               1
                                       ? Icons.star
                                       : index <
-                                          (_rating ??
-                                                      widget.novel.rating ??
-                                                      0) /
-                                                  1 +
-                                              0.5
+                                            (_rating ??
+                                                        widget.novel.rating ??
+                                                        0) /
+                                                    1 +
+                                                0.5
                                       ? Icons.star_half
                                       : Icons.star_border,
                                   color: Colors.amber,
@@ -541,43 +541,40 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
                 Expanded(
                   flex: 3,
                   child: ElevatedButton.icon(
-                    onPressed:
-                        _chapters.isEmpty && !_isLoading
-                            ? () {
-                              // If no chapters found, open in web view
+                    onPressed: _chapters.isEmpty && !_isLoading
+                        ? () {
+                            // If no chapters found, open in web view
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    WebViewScreen(url: widget.novelUrl),
+                              ),
+                            );
+                          }
+                        : _isLoading
+                        ? null
+                        : () {
+                            // Navigate to the first chapter
+                            if (_chapters.isNotEmpty) {
+                              final chapterUrl = _chapters.first['url'] ?? '';
+                              final fullChapterUrl = _getFullUrl(chapterUrl);
+                              final chapterTitle =
+                                  _chapters.first['title'] ?? 'Chapter 1';
+
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder:
-                                      (context) =>
-                                          WebViewScreen(url: widget.novelUrl),
+                                  builder: (context) => ReaderScreen(
+                                    url: fullChapterUrl,
+                                    title: widget.novel.title,
+                                    novel: widget.novel,
+                                    chapterTitle: chapterTitle,
+                                  ),
                                 ),
                               );
                             }
-                            : _isLoading
-                            ? null
-                            : () {
-                              // Navigate to the first chapter
-                              if (_chapters.isNotEmpty) {
-                                final chapterUrl = _chapters.first['url'] ?? '';
-                                final fullChapterUrl = _getFullUrl(chapterUrl);
-                                final chapterTitle =
-                                    _chapters.first['title'] ?? 'Chapter 1';
-
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder:
-                                        (context) => ReaderScreen(
-                                          url: fullChapterUrl,
-                                          title: widget.novel.title,
-                                          novel: widget.novel,
-                                          chapterTitle: chapterTitle,
-                                        ),
-                                  ),
-                                );
-                              }
-                            },
+                          },
                     style: ElevatedButton.styleFrom(
                       foregroundColor: Colors.white,
                       backgroundColor: colorScheme.primary,
@@ -932,7 +929,8 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
     final textTheme = Theme.of(context).textTheme;
 
     // Extract meaningful data from text and description
-    final allTextContent = '''
+    final allTextContent =
+        '''
 $_description
 Tác giả: $_author
 Tình trạng: $_status
@@ -1006,30 +1004,29 @@ ${_genres.join(', ')}
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children:
-                    _genres.map((genre) {
-                      // Get a consistent color for each genre
-                      final colorIndex = genre.hashCode % _genreColors.length;
-                      final color = _genreColors[colorIndex];
+                children: _genres.map((genre) {
+                  // Get a consistent color for each genre
+                  final colorIndex = genre.hashCode % _genreColors.length;
+                  final color = _genreColors[colorIndex];
 
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: color,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          genre,
-                          style: textTheme.labelMedium?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      );
-                    }).toList(),
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      genre,
+                      style: textTheme.labelMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
             ],
 
@@ -1127,11 +1124,10 @@ ${_genres.join(', ')}
     final textTheme = Theme.of(context).textTheme;
 
     // Clean up description by removing excessive whitespace and known labels
-    String cleanedDesc =
-        _description
-            .replaceAll(RegExp(r'\n{3,}'), '\n\n')
-            .replaceAll('Truyện dịch', '')
-            .trim();
+    String cleanedDesc = _description
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .replaceAll('Truyện dịch', '')
+        .trim();
 
     // Remove common patterns that might be part of the metadata, not the description
     final metadataPatterns = [
@@ -1253,16 +1249,13 @@ ${_genres.join(', ')}
         _chapters.any((ch) => ch['url']?.isNotEmpty == true);
 
     // If we don't have any real chapters, let's see if we know how many there are
-    final int chapterCount =
-        hasRealChapters
-            ? _chapters.length
-            : int.tryParse(
-                  RegExp(
-                        r'(\d+)\s+chương',
-                      ).firstMatch(_description)?.group(1) ??
-                      '0',
-                ) ??
-                0;
+    final int chapterCount = hasRealChapters
+        ? _chapters.length
+        : int.tryParse(
+                RegExp(r'(\d+)\s+chương').firstMatch(_description)?.group(1) ??
+                    '0',
+              ) ??
+              0;
 
     // If no chapters or count found, but UI shows chapters, create dummy chapter list
     List<Map<String, dynamic>> displayChapters = [];
@@ -1308,8 +1301,8 @@ ${_genres.join(', ')}
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder:
-                            (context) => WebViewScreen(url: widget.novelUrl),
+                        builder: (context) =>
+                            WebViewScreen(url: widget.novelUrl),
                       ),
                     );
                   },
@@ -1378,15 +1371,14 @@ ${_genres.join(', ')}
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder:
-                          (context) => ReaderScreen(
-                            url: chapterUrl,
-                            title: widget.novel.title,
-                            novel: widget.novel,
-                            chapterTitle:
-                                chapter['title'] ??
-                                'Chapter ${displayChapters.indexOf(chapter) + 1}',
-                          ),
+                      builder: (context) => ReaderScreen(
+                        url: chapterUrl,
+                        title: widget.novel.title,
+                        novel: widget.novel,
+                        chapterTitle:
+                            chapter['title'] ??
+                            'Chapter ${displayChapters.indexOf(chapter) + 1}',
+                      ),
                     ),
                   );
                 },
@@ -1555,8 +1547,8 @@ ${_genres.join(', ')}
                   child: ListView.separated(
                     controller: scrollController,
                     itemCount: chapters.length,
-                    separatorBuilder:
-                        (context, index) => const Divider(height: 1),
+                    separatorBuilder: (context, index) =>
+                        const Divider(height: 1),
                     itemBuilder: (context, index) {
                       final chapter = chapters[index];
                       final chapterUrl = _getFullUrl(chapter['url'] ?? '');
@@ -1586,17 +1578,14 @@ ${_genres.join(', ')}
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        subtitle:
-                            hasDate
-                                ? Text(
-                                  chapter['date'] ?? '',
-                                  style: textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurface.withOpacity(
-                                      0.6,
-                                    ),
-                                  ),
-                                )
-                                : null,
+                        subtitle: hasDate
+                            ? Text(
+                                chapter['date'] ?? '',
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurface.withOpacity(0.6),
+                                ),
+                              )
+                            : null,
                         trailing: Icon(
                           Icons.arrow_forward_ios,
                           size: 16,
@@ -1607,15 +1596,13 @@ ${_genres.join(', ')}
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder:
-                                  (context) => ReaderScreen(
-                                    url: chapterUrl,
-                                    title: widget.novel.title,
-                                    novel: widget.novel,
-                                    chapterTitle:
-                                        chapter['title'] ??
-                                        'Chapter ${index + 1}',
-                                  ),
+                              builder: (context) => ReaderScreen(
+                                url: chapterUrl,
+                                title: widget.novel.title,
+                                novel: widget.novel,
+                                chapterTitle:
+                                    chapter['title'] ?? 'Chapter ${index + 1}',
+                              ),
                             ),
                           );
                         },
@@ -1651,7 +1638,7 @@ ${_genres.join(', ')}
 
   void _showMoreOptions(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final bookmarkService = Provider.of<BookmarkService>(
+    final bookmarkService = Provider.of<BookmarkServiceV2>(
       context,
       listen: false,
     );
@@ -1662,70 +1649,63 @@ ${_genres.join(', ')}
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder:
-          (context) => Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Handle at the top of bottom sheet
-              Container(
-                margin: const EdgeInsets.only(top: 8),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              ListTile(
-                leading: Icon(Icons.share, color: colorScheme.primary),
-                title: const Text('Share'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _shareNovel();
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  isBookmarked ? Icons.bookmark : Icons.bookmark_add_outlined,
-                  color: colorScheme.primary,
-                ),
-                title: Text(
-                  isBookmarked ? 'Remove from bookmarks' : 'Add to bookmarks',
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _toggleBookmark();
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  Icons.open_in_browser,
-                  color: colorScheme.primary,
-                ),
-                title: const Text('Open in browser'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => WebViewScreen(url: widget.novelUrl),
-                    ),
-                  );
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  Icons.report_outlined,
-                  color: colorScheme.primary,
-                ),
-                title: const Text('Report issue'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showReportIssueDialog();
-                },
-              ),
-            ],
+      builder: (context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle at the top of bottom sheet
+          Container(
+            margin: const EdgeInsets.only(top: 8),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
+          ListTile(
+            leading: Icon(Icons.share, color: colorScheme.primary),
+            title: const Text('Share'),
+            onTap: () {
+              Navigator.pop(context);
+              _shareNovel();
+            },
+          ),
+          ListTile(
+            leading: Icon(
+              isBookmarked ? Icons.bookmark : Icons.bookmark_add_outlined,
+              color: colorScheme.primary,
+            ),
+            title: Text(
+              isBookmarked ? 'Remove from bookmarks' : 'Add to bookmarks',
+            ),
+            onTap: () {
+              Navigator.pop(context);
+              _toggleBookmark();
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.open_in_browser, color: colorScheme.primary),
+            title: const Text('Open in browser'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => WebViewScreen(url: widget.novelUrl),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.report_outlined, color: colorScheme.primary),
+            title: const Text('Report issue'),
+            onTap: () {
+              Navigator.pop(context);
+              _showReportIssueDialog();
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -1749,67 +1729,55 @@ ${_genres.join(', ')}
 
     showDialog(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: Text(
-              'Report an Issue',
-              style: textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Report an Issue',
+          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'What issue are you experiencing with this novel?',
+              style: textTheme.bodyMedium,
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'What issue are you experiencing with this novel?',
-                  style: textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 16),
-                _buildReportOption(
-                  icon: Icons.broken_image_outlined,
-                  title: 'Broken images',
-                  onTap: () => _submitReport('Broken images', widget.novelUrl),
-                ),
-                _buildReportOption(
-                  icon: Icons.translate,
-                  title: 'Translation errors',
-                  onTap:
-                      () =>
-                          _submitReport('Translation errors', widget.novelUrl),
-                ),
-                _buildReportOption(
-                  icon: Icons.format_indent_decrease,
-                  title: 'Formatting issues',
-                  onTap:
-                      () => _submitReport('Formatting issues', widget.novelUrl),
-                ),
-                _buildReportOption(
-                  icon: Icons.error_outline,
-                  title: 'Content errors',
-                  onTap: () => _submitReport('Content errors', widget.novelUrl),
-                ),
-                _buildReportOption(
-                  icon: Icons.security,
-                  title: 'Inappropriate content',
-                  onTap:
-                      () => _submitReport(
-                        'Inappropriate content',
-                        widget.novelUrl,
-                      ),
-                ),
-              ],
+            const SizedBox(height: 16),
+            _buildReportOption(
+              icon: Icons.broken_image_outlined,
+              title: 'Broken images',
+              onTap: () => _submitReport('Broken images', widget.novelUrl),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(
-                  'Cancel',
-                  style: TextStyle(color: colorScheme.primary),
-                ),
-              ),
-            ],
+            _buildReportOption(
+              icon: Icons.translate,
+              title: 'Translation errors',
+              onTap: () => _submitReport('Translation errors', widget.novelUrl),
+            ),
+            _buildReportOption(
+              icon: Icons.format_indent_decrease,
+              title: 'Formatting issues',
+              onTap: () => _submitReport('Formatting issues', widget.novelUrl),
+            ),
+            _buildReportOption(
+              icon: Icons.error_outline,
+              title: 'Content errors',
+              onTap: () => _submitReport('Content errors', widget.novelUrl),
+            ),
+            _buildReportOption(
+              icon: Icons.security,
+              title: 'Inappropriate content',
+              onTap: () =>
+                  _submitReport('Inappropriate content', widget.novelUrl),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel', style: TextStyle(color: colorScheme.primary)),
           ),
+        ],
+      ),
     );
   }
 
@@ -1842,10 +1810,9 @@ ${_genres.join(', ')}
   void _submitReport(String issueType, String novelUrl) {
     try {
       // Create a simplified version of the title without special characters
-      final simplifiedTitle =
-          widget.novel.title.length > 30
-              ? '${widget.novel.title.substring(0, 30)}...'
-              : widget.novel.title;
+      final simplifiedTitle = widget.novel.title.length > 30
+          ? '${widget.novel.title.substring(0, 30)}...'
+          : widget.novel.title;
 
       // Use a simpler subject line with fewer special characters
       final subject = 'Report: $issueType';
@@ -1898,60 +1865,54 @@ ${_genres.join(', ')}
 
     showDialog(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: Text(
-              'Manual Report Instructions',
-              style: textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Manual Report Instructions',
+          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Please send an email with the following details:',
+              style: textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceVariant,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('To: support@docln.net', style: textTheme.bodyMedium),
+                  Text('Subject: $subject', style: textTheme.bodyMedium),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Body:',
+                    style: textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(body, style: textTheme.bodyMedium),
+                ],
               ),
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Please send an email with the following details:',
-                  style: textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: colorScheme.surfaceVariant,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'To: support@docln.net',
-                        style: textTheme.bodyMedium,
-                      ),
-                      Text('Subject: $subject', style: textTheme.bodyMedium),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Body:',
-                        style: textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(body, style: textTheme.bodyMedium),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  // Copy to clipboard option could be added here
-                },
-                child: Text('OK', style: TextStyle(color: colorScheme.primary)),
-              ),
-            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // Copy to clipboard option could be added here
+            },
+            child: Text('OK', style: TextStyle(color: colorScheme.primary)),
           ),
+        ],
+      ),
     );
   }
 
@@ -1968,7 +1929,7 @@ ${_genres.join(', ')}
   }
 
   void _toggleBookmark() {
-    final bookmarkService = Provider.of<BookmarkService>(
+    final bookmarkService = Provider.of<BookmarkServiceV2>(
       context,
       listen: false,
     );
@@ -2090,7 +2051,7 @@ class _BookmarkButtonState extends State<BookmarkButton>
   }
 
   void _toggleBookmark(BuildContext context, bool isBookmarked) {
-    final bookmarkService = Provider.of<BookmarkService>(
+    final bookmarkService = Provider.of<BookmarkServiceV2>(
       context,
       listen: false,
     );
@@ -2117,7 +2078,7 @@ class _BookmarkButtonState extends State<BookmarkButton>
     final theme = Theme.of(context);
     final activeColor = widget.activeColor ?? theme.colorScheme.primary;
 
-    return Consumer<BookmarkService>(
+    return Consumer<BookmarkServiceV2>(
       builder: (context, bookmarkService, child) {
         final isBookmarked = bookmarkService.isBookmarked(widget.novel.id);
 
@@ -2135,8 +2096,9 @@ class _BookmarkButtonState extends State<BookmarkButton>
                   size: widget.size,
                 ),
                 onPressed: () => _toggleBookmark(context, isBookmarked),
-                tooltip:
-                    isBookmarked ? 'Remove from bookmarks' : 'Add to bookmarks',
+                tooltip: isBookmarked
+                    ? 'Remove from bookmarks'
+                    : 'Add to bookmarks',
               ),
             );
           },
