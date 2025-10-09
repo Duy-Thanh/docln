@@ -81,15 +81,22 @@ Future<void> migrateNovelData() async {
       'novel_data_migration_complete_v2',
       defaultValue: false,
     );
+    final fixApplied = prefs.getBool(
+      'novel_data_migration_fix_applied',
+      defaultValue: false,
+    );
     final hasBackup = prefs.getString('bookmarked_novels_backup').isNotEmpty;
 
-    // If migration was done but we still have backup, fix the migration
-    if (migrationComplete && hasBackup) {
+    // If migration was done but fix not applied yet, and we still have backup
+    if (migrationComplete && !fixApplied && hasBackup) {
       debugPrint('🔧 Detected previous migration with URL issues, fixing...');
 
       final fixSuccess = await migrationService.fixMigration();
 
       if (fixSuccess) {
+        // Mark fix as applied so it doesn't run again
+        await prefs.setBool('novel_data_migration_fix_applied', true);
+
         debugPrint('✅ Migration fix successful!');
 
         // Show stats
