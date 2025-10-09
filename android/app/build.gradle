@@ -39,7 +39,7 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = 36
-        versionCode = 20251008
+        versionCode = 20251009
         versionName = flutter.versionName
 
         ndk {

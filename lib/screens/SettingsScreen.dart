@@ -68,7 +68,7 @@ class SettingsScreenState extends State<SettingsScreen>
     with SingleTickerProviderStateMixin {
   final SettingsService _settingsService = SettingsService();
   final CrawlerService _crawlerService = CrawlerService();
-  static const String _appVersion = 'Version: 2025.10.08';
+  static const String _appVersion = 'Version: 2025.10.09';
   bool isDarkMode = false;
   String? currentServer;
   double textSize = 16.0;
@@ -1624,7 +1624,7 @@ class SettingsScreenState extends State<SettingsScreen>
                       ),
                     ),
                     applicationLegalese:
-                        '© 2025 Duy-Thanh\n\n'
+                        '© 2025 Nekkochan\n\n'
                         'This application is built with Flutter and uses '
                         'various open source libraries. We are grateful to '
                         'the open source community for their contributions.',
