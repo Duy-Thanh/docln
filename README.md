@@ -2,7 +2,7 @@
 
 Light Novel Reader written in Flutter (for Android)
 
-Latest version is **2025.10.09-rev2.0**
+Latest version is **2025.10.09-rev2.0**. Please make sure that you have latest version installed
 
 # License
 
