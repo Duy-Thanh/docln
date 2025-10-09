@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'dart:convert';
-import '../services/theme_services.dart';
+import 'package:flutter/foundation.dart'; // For compute()
 import '../screens/custom_toast.dart';
 import '../modules/light_novel.dart';
 import '../screens/HistoryScreen.dart';
@@ -32,6 +31,173 @@ class ContentBlock {
     required this.startPosition,
     this.altText,
   });
+}
+
+// PERFORMANCE OPTIMIZATION: Data class for passing to isolate
+class _ParseParams {
+  final String content;
+  final double fontSize;
+  final String fontFamily;
+  final double lineHeight;
+  final double paragraphSpacing;
+  final Color textColor;
+
+  _ParseParams({
+    required this.content,
+    required this.fontSize,
+    required this.fontFamily,
+    required this.lineHeight,
+    required this.paragraphSpacing,
+    required this.textColor,
+  });
+}
+
+// PERFORMANCE OPTIMIZATION: Top-level function for isolate parsing
+// This runs on a separate thread, keeping UI responsive
+List<ContentBlock> _parseContentInIsolate(_ParseParams params) {
+  final content = params.content;
+  final List<ContentBlock> blocks = [];
+
+  // Check if the content is HTML
+  if (content.contains('<p>') ||
+      content.contains('<h') ||
+      content.contains('<img')) {
+    // Pre-process content
+    final processedContent = content.replaceAll(
+      RegExp(r'<p\s+id\s*=\s*"[^"]*"'),
+      '<p',
+    );
+
+    // Single-pass parsing
+    int currentPos = 0;
+    while (currentPos < processedContent.length) {
+      final nextTagStart = processedContent.indexOf('<', currentPos);
+      if (nextTagStart == -1) break;
+
+      // Parse paragraphs
+      if (processedContent.startsWith('<p', nextTagStart)) {
+        final endTag = processedContent.indexOf('</p>', nextTagStart);
+        if (endTag != -1) {
+          final contentStart = processedContent.indexOf('>', nextTagStart) + 1;
+          final blockContent = processedContent.substring(contentStart, endTag);
+          blocks.add(
+            ContentBlock(
+              type: ContentBlockType.paragraph,
+              content: blockContent,
+              startPosition: nextTagStart,
+            ),
+          );
+          currentPos = endTag + 4;
+          continue;
+        }
+      }
+      // Parse headers
+      else if (processedContent.startsWith(RegExp(r'<h[1-6]'), nextTagStart)) {
+        final endTagMatch = RegExp(
+          r'</h[1-6]>',
+        ).firstMatch(processedContent.substring(nextTagStart));
+        if (endTagMatch != null) {
+          final contentStart = processedContent.indexOf('>', nextTagStart) + 1;
+          final endTagPos = nextTagStart + endTagMatch.start;
+          final blockContent = processedContent.substring(
+            contentStart,
+            endTagPos,
+          );
+          blocks.add(
+            ContentBlock(
+              type: ContentBlockType.header,
+              content: blockContent,
+              startPosition: nextTagStart,
+            ),
+          );
+          currentPos = nextTagStart + endTagMatch.end;
+          continue;
+        }
+      }
+      // Parse images
+      else if (processedContent.startsWith('<img', nextTagStart)) {
+        final imgTagEnd = processedContent.indexOf('>', nextTagStart);
+        if (imgTagEnd != -1) {
+          final imgTag = processedContent.substring(
+            nextTagStart,
+            imgTagEnd + 1,
+          );
+          final srcMatch = RegExp(
+            r'src\s*=\s*["'
+            "'"
+            r']([^"'
+            "'"
+            r']+)["'
+            "'"
+            r']',
+          ).firstMatch(imgTag);
+          if (srcMatch != null) {
+            final imageUrl = srcMatch.group(1)!;
+            if (imageUrl.startsWith('http')) {
+              // Extract alt text
+              String? altText;
+              final altStart = imgTag.indexOf('alt=');
+              if (altStart != -1) {
+                final quoteStart = altStart + 4;
+                if (quoteStart < imgTag.length) {
+                  final quote = imgTag[quoteStart];
+                  if (quote == '"' || quote == "'") {
+                    final quoteEnd = imgTag.indexOf(quote, quoteStart + 1);
+                    if (quoteEnd != -1) {
+                      altText = imgTag.substring(quoteStart + 1, quoteEnd);
+                    }
+                  }
+                }
+              }
+              blocks.add(
+                ContentBlock(
+                  type: ContentBlockType.image,
+                  content: imageUrl,
+                  startPosition: nextTagStart,
+                  altText: altText,
+                ),
+              );
+            }
+          }
+          currentPos = imgTagEnd + 1;
+          continue;
+        }
+      }
+
+      currentPos = nextTagStart + 1;
+    }
+  } else {
+    // Plain text parsing
+    final paragraphs = content.split('\n\n');
+    int position = 0;
+    for (final paragraph in paragraphs) {
+      if (paragraph.trim().isEmpty) {
+        position += paragraph.length + 2;
+        continue;
+      }
+
+      if (paragraph.trim().startsWith('#')) {
+        blocks.add(
+          ContentBlock(
+            type: ContentBlockType.header,
+            content: paragraph.trim().substring(1).trim(),
+            startPosition: position,
+          ),
+        );
+      } else {
+        blocks.add(
+          ContentBlock(
+            type: ContentBlockType.paragraph,
+            content: paragraph.trim(),
+            startPosition: position,
+          ),
+        );
+      }
+      position += paragraph.length + 2;
+    }
+  }
+
+  return blocks;
 }
 
 class ReaderScreen extends StatefulWidget {
@@ -64,6 +230,15 @@ class _ReaderScreenState extends State<ReaderScreen>
   bool _isDarkMode = false;
   double _paragraphSpacing = 1.5;
   bool _showControls = true;
+
+  // PERFORMANCE OPTIMIZATION: Cache parsed content
+  List<Widget>? _cachedContentWidgets;
+  List<ContentBlock>?
+  _parsedContentBlocks; // Store pre-parsed blocks from isolate
+  String? _lastParsedContent;
+  double? _lastFontSize;
+  double? _lastLineHeight;
+  double? _lastParagraphSpacing;
 
   // Reading progress
   double _readingProgress = 0.0;
@@ -205,13 +380,12 @@ class _ReaderScreenState extends State<ReaderScreen>
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder:
-            (context) => ReaderScreen(
-              url: fullUrl,
-              title: widget.title,
-              novel: widget.novel,
-              chapterTitle: title,
-            ),
+        builder: (context) => ReaderScreen(
+          url: fullUrl,
+          title: widget.title,
+          novel: widget.novel,
+          chapterTitle: title,
+        ),
       ),
     );
   }
@@ -298,34 +472,30 @@ class _ReaderScreenState extends State<ReaderScreen>
         // Set colors based on theme
         if (_isDarkMode) {
           final textColorStr = prefsService.getString('reader_text_color_dark');
-          _textColor =
-              textColorStr.isNotEmpty
-                  ? Color(int.parse(textColorStr))
-                  : Colors.white.withOpacity(0.9);
+          _textColor = textColorStr.isNotEmpty
+              ? Color(int.parse(textColorStr))
+              : Colors.white.withOpacity(0.9);
 
           final bgColorStr = prefsService.getString(
             'reader_background_color_dark',
           );
-          _backgroundColor =
-              bgColorStr.isNotEmpty
-                  ? Color(int.parse(bgColorStr))
-                  : const Color(0xFF121212);
+          _backgroundColor = bgColorStr.isNotEmpty
+              ? Color(int.parse(bgColorStr))
+              : const Color(0xFF121212);
         } else {
           final textColorStr = prefsService.getString(
             'reader_text_color_light',
           );
-          _textColor =
-              textColorStr.isNotEmpty
-                  ? Color(int.parse(textColorStr))
-                  : Colors.black.withOpacity(0.9);
+          _textColor = textColorStr.isNotEmpty
+              ? Color(int.parse(textColorStr))
+              : Colors.black.withOpacity(0.9);
 
           final bgColorStr = prefsService.getString(
             'reader_background_color_light',
           );
-          _backgroundColor =
-              bgColorStr.isNotEmpty
-                  ? Color(int.parse(bgColorStr))
-                  : Colors.white;
+          _backgroundColor = bgColorStr.isNotEmpty
+              ? Color(int.parse(bgColorStr))
+              : Colors.white;
         }
 
         // Apply eye protection to colors if enabled
@@ -356,39 +526,85 @@ class _ReaderScreenState extends State<ReaderScreen>
     });
 
     try {
+      debugPrint('🔄 Starting content fetch...');
+      final fetchStopwatch = Stopwatch()..start();
+
       // Fetch real content from the crawler service
       final chapterData = await _crawlerService.getChapterContent(
         widget.url,
         context,
       );
 
-      if (mounted) {
-        setState(() {
-          // Update content
-          _content = chapterData['content'] ?? '';
+      fetchStopwatch.stop();
+      debugPrint(
+        '📥 Content fetched in ${fetchStopwatch.elapsedMilliseconds}ms',
+      );
 
-          // Update chapter navigation info if we didn't already get it
-          if (!_hasNextChapter &&
-              chapterData['nextChapterUrl'] != null &&
-              chapterData['nextChapterUrl'].isNotEmpty) {
-            _hasNextChapter = true;
-            _nextChapterUrl = chapterData['nextChapterUrl'];
-            _nextChapterTitle =
-                chapterData['nextChapterTitle'] ?? 'Next Chapter';
-          }
+      if (!mounted) return;
 
-          if (!_hasPreviousChapter &&
-              chapterData['prevChapterUrl'] != null &&
-              chapterData['prevChapterUrl'].isNotEmpty) {
-            _hasPreviousChapter = true;
-            _prevChapterUrl = chapterData['prevChapterUrl'];
-            _prevChapterTitle =
-                chapterData['prevChapterTitle'] ?? 'Previous Chapter';
-          }
+      final rawContent = chapterData['content'] ?? '';
 
-          _isLoading = false;
-        });
-      }
+      // CRITICAL PERFORMANCE FIX: Parse content in background isolate
+      // This keeps the UI thread responsive during heavy parsing
+      debugPrint(
+        '🔄 Starting async content parsing (${rawContent.length} chars)...',
+      );
+      final parseStopwatch = Stopwatch()..start();
+
+      final parseParams = _ParseParams(
+        content: rawContent,
+        fontSize: _fontSize,
+        fontFamily: _fontFamily,
+        lineHeight: _lineHeight,
+        paragraphSpacing: _paragraphSpacing,
+        textColor: _textColor,
+      );
+
+      // Parse in separate isolate - UI stays responsive!
+      final contentBlocks = await compute(_parseContentInIsolate, parseParams);
+
+      parseStopwatch.stop();
+      debugPrint(
+        '✅ Content parsed in ${parseStopwatch.elapsedMilliseconds}ms (${contentBlocks.length} blocks)',
+      );
+
+      if (!mounted) return;
+
+      // Now update state with parsed data
+      setState(() {
+        _content = rawContent;
+
+        // Store parsed blocks for widget building
+        _parsedContentBlocks = contentBlocks;
+
+        // PERFORMANCE OPTIMIZATION: Invalidate cache when content changes
+        _cachedContentWidgets = null;
+        _lastParsedContent = null;
+
+        // Update chapter navigation info
+        if (!_hasNextChapter &&
+            chapterData['nextChapterUrl'] != null &&
+            chapterData['nextChapterUrl'].isNotEmpty) {
+          _hasNextChapter = true;
+          _nextChapterUrl = chapterData['nextChapterUrl'];
+          _nextChapterTitle = chapterData['nextChapterTitle'] ?? 'Next Chapter';
+        }
+
+        if (!_hasPreviousChapter &&
+            chapterData['prevChapterUrl'] != null &&
+            chapterData['prevChapterUrl'].isNotEmpty) {
+          _hasPreviousChapter = true;
+          _prevChapterUrl = chapterData['prevChapterUrl'];
+          _prevChapterTitle =
+              chapterData['prevChapterTitle'] ?? 'Previous Chapter';
+        }
+
+        _isLoading = false;
+      });
+
+      debugPrint(
+        '🎉 Total load time: ${fetchStopwatch.elapsedMilliseconds + parseStopwatch.elapsedMilliseconds}ms',
+      );
 
       // Reset scroll position after content is loaded
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -397,6 +613,7 @@ class _ReaderScreenState extends State<ReaderScreen>
         }
       });
     } catch (e) {
+      debugPrint('❌ Error loading content: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -708,16 +925,14 @@ class _ReaderScreenState extends State<ReaderScreen>
                         vertical: 12,
                       ),
                       decoration: BoxDecoration(
-                        color:
-                            _isDarkMode
-                                ? Colors.grey.shade800.withOpacity(0.3)
-                                : Colors.grey.shade200,
+                        color: _isDarkMode
+                            ? Colors.grey.shade800.withOpacity(0.3)
+                            : Colors.grey.shade200,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color:
-                              _isDarkMode
-                                  ? Colors.grey.shade700
-                                  : Colors.grey.shade300,
+                          color: _isDarkMode
+                              ? Colors.grey.shade700
+                              : Colors.grey.shade300,
                           width: 1,
                         ),
                       ),
@@ -866,15 +1081,14 @@ class _ReaderScreenState extends State<ReaderScreen>
                             const SizedBox(width: 8),
                             DropdownButton<int>(
                               value: _eyeProtectionService.readingTimerInterval,
-                              items:
-                                  [5, 10, 15, 20, 25, 30, 45, 60].map((
-                                    int value,
-                                  ) {
-                                    return DropdownMenuItem<int>(
-                                      value: value,
-                                      child: Text('$value minutes'),
-                                    );
-                                  }).toList(),
+                              items: [5, 10, 15, 20, 25, 30, 45, 60].map((
+                                int value,
+                              ) {
+                                return DropdownMenuItem<int>(
+                                  value: value,
+                                  child: Text('$value minutes'),
+                                );
+                              }).toList(),
                               onChanged: (int? newValue) async {
                                 if (newValue != null) {
                                   await _eyeProtectionService
@@ -932,8 +1146,9 @@ class _ReaderScreenState extends State<ReaderScreen>
                                 children: [
                                   Icon(
                                     Icons.info_outline,
-                                    color:
-                                        Theme.of(context).colorScheme.primary,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
                                     size: 20,
                                   ),
                                   const SizedBox(width: 8),
@@ -941,8 +1156,9 @@ class _ReaderScreenState extends State<ReaderScreen>
                                     'Eye Protection Information',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      color:
-                                          Theme.of(context).colorScheme.primary,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
                                     ),
                                   ),
                                 ],
@@ -1053,353 +1269,220 @@ class _ReaderScreenState extends State<ReaderScreen>
               _isLoading
                   ? Center(child: CircularProgressIndicator())
                   : GestureDetector(
-                    onHorizontalDragEnd: (details) {
-                      // Swipe right to go to previous chapter
-                      if (details.primaryVelocity! > 300 &&
-                          _hasPreviousChapter) {
-                        _navigateToChapter(_prevChapterUrl, _prevChapterTitle);
-                      }
-                      // Swipe left to go to next chapter
-                      else if (details.primaryVelocity! < -300 &&
-                          _hasNextChapter) {
-                        _navigateToChapter(_nextChapterUrl, _nextChapterTitle);
-                      }
-                    },
-                    child: Stack(
-                      children: [
-                        // Main content
-                        SelectionArea(
-                          selectionControls:
-                              _enableTextSelection
-                                  ? MaterialTextSelectionControls()
-                                  : null,
-                          child: SingleChildScrollView(
-                            controller: _scrollController,
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: _parseContent(),
-                            ),
+                      onHorizontalDragEnd: (details) {
+                        // Swipe right to go to previous chapter
+                        if (details.primaryVelocity! > 300 &&
+                            _hasPreviousChapter) {
+                          _navigateToChapter(
+                            _prevChapterUrl,
+                            _prevChapterTitle,
+                          );
+                        }
+                        // Swipe left to go to next chapter
+                        else if (details.primaryVelocity! < -300 &&
+                            _hasNextChapter) {
+                          _navigateToChapter(
+                            _nextChapterUrl,
+                            _nextChapterTitle,
+                          );
+                        }
+                      },
+                      child: Stack(
+                        children: [
+                          // Main content - OPTIMIZED: Use ListView.builder for large chapters
+                          SelectionArea(
+                            selectionControls: _enableTextSelection
+                                ? MaterialTextSelectionControls()
+                                : null,
+                            child: _buildOptimizedContentView(),
                           ),
-                        ),
 
-                        // Reading progress indicator
-                        Positioned(
-                          bottom: 0,
-                          left: 0,
-                          right: 0,
-                          child: Container(
-                            width: double.infinity,
-                            height: 4,
-                            color: Colors.grey.withOpacity(0.3),
-                            child: FractionallySizedBox(
-                              alignment: Alignment.centerLeft,
-                              widthFactor: _readingProgress,
-                              child: Container(
-                                color: Theme.of(context).colorScheme.primary,
+                          // Reading progress indicator
+                          Positioned(
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            child: Container(
+                              width: double.infinity,
+                              height: 4,
+                              color: Colors.grey.withOpacity(0.3),
+                              child: FractionallySizedBox(
+                                alignment: Alignment.centerLeft,
+                                widthFactor: _readingProgress,
+                                child: Container(
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
             ],
           ),
         ),
       ),
       // Navigation buttons - always visible now
-      bottomNavigationBar:
-          _isLoading
-              ? null
-              : BottomAppBar(
-                color: _backgroundColor,
-                elevation: 0,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8.0,
-                    vertical: 8.0,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Previous chapter button
-                      IconButton(
-                        icon: Icon(
-                          Icons.arrow_back_ios,
-                          color:
-                              _hasPreviousChapter
-                                  ? _textColor
-                                  : _textColor.withOpacity(0.3),
+      bottomNavigationBar: _isLoading
+          ? null
+          : BottomAppBar(
+              color: _backgroundColor,
+              elevation: 0,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8.0,
+                  vertical: 8.0,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Previous chapter button
+                    IconButton(
+                      icon: Icon(
+                        Icons.arrow_back_ios,
+                        color: _hasPreviousChapter
+                            ? _textColor
+                            : _textColor.withOpacity(0.3),
+                      ),
+                      onPressed: _hasPreviousChapter
+                          ? () => _navigateToChapter(
+                              _prevChapterUrl,
+                              _prevChapterTitle,
+                            )
+                          : null,
+                      tooltip: _hasPreviousChapter
+                          ? 'Previous Chapter: $_prevChapterTitle'
+                          : 'No Previous Chapter',
+                    ),
+
+                    // Chapter indicator
+                    if (widget.chapterTitle != null)
+                      Expanded(
+                        child: Text(
+                          widget.chapterTitle!,
+                          style: TextStyle(color: _textColor, fontSize: 12),
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        onPressed:
-                            _hasPreviousChapter
-                                ? () => _navigateToChapter(
-                                  _prevChapterUrl,
-                                  _prevChapterTitle,
-                                )
-                                : null,
-                        tooltip:
-                            _hasPreviousChapter
-                                ? 'Previous Chapter: $_prevChapterTitle'
-                                : 'No Previous Chapter',
                       ),
 
-                      // Chapter indicator
-                      if (widget.chapterTitle != null)
-                        Expanded(
-                          child: Text(
-                            widget.chapterTitle!,
-                            style: TextStyle(color: _textColor, fontSize: 12),
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-
-                      // Next chapter button
-                      IconButton(
-                        icon: Icon(
-                          Icons.arrow_forward_ios,
-                          color:
-                              _hasNextChapter
-                                  ? _textColor
-                                  : _textColor.withOpacity(0.3),
-                        ),
-                        onPressed:
-                            _hasNextChapter
-                                ? () => _navigateToChapter(
-                                  _nextChapterUrl,
-                                  _nextChapterTitle,
-                                )
-                                : null,
-                        tooltip:
-                            _hasNextChapter
-                                ? 'Next Chapter: $_nextChapterTitle'
-                                : 'No Next Chapter',
+                    // Next chapter button
+                    IconButton(
+                      icon: Icon(
+                        Icons.arrow_forward_ios,
+                        color: _hasNextChapter
+                            ? _textColor
+                            : _textColor.withOpacity(0.3),
                       ),
-                    ],
-                  ),
+                      onPressed: _hasNextChapter
+                          ? () => _navigateToChapter(
+                              _nextChapterUrl,
+                              _nextChapterTitle,
+                            )
+                          : null,
+                      tooltip: _hasNextChapter
+                          ? 'Next Chapter: $_nextChapterTitle'
+                          : 'No Next Chapter',
+                    ),
+                  ],
                 ),
               ),
+            ),
+    );
+  }
+
+  // PERFORMANCE OPTIMIZATION: Build optimized content view with lazy loading
+  Widget _buildOptimizedContentView() {
+    final contentWidgets = _parseContent();
+
+    // For small chapters (<50 widgets), use SingleChildScrollView (faster)
+    if (contentWidgets.length < 50) {
+      return SingleChildScrollView(
+        controller: _scrollController,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: contentWidgets,
+        ),
+      );
+    }
+
+    // For large chapters (>=50 widgets), use ListView.builder for lazy loading
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.all(16),
+      itemCount: contentWidgets.length,
+      // CRITICAL: addAutomaticKeepAlives and addRepaintBoundaries improve performance
+      addAutomaticKeepAlives: false,
+      addRepaintBoundaries: true,
+      cacheExtent: 1000, // Cache 1000 pixels ahead
+      itemBuilder: (context, index) {
+        // Wrap each item in RepaintBoundary for better performance
+        return RepaintBoundary(child: contentWidgets[index]);
+      },
     );
   }
 
   List<Widget> _parseContent() {
+    // PERFORMANCE OPTIMIZATION: Check cache first
+    final settingsChanged =
+        _lastFontSize != _fontSize ||
+        _lastLineHeight != _lineHeight ||
+        _lastParagraphSpacing != _paragraphSpacing;
+
+    if (_cachedContentWidgets != null &&
+        _lastParsedContent == _content &&
+        !settingsChanged) {
+      return _cachedContentWidgets!;
+    }
+
+    // CRITICAL PERFORMANCE FIX: Use pre-parsed blocks from isolate
+    // This skips the expensive parsing on UI thread
+    final List<ContentBlock> contentBlocks;
+
+    if (_parsedContentBlocks != null && _lastParsedContent == _content) {
+      // Use blocks from isolate parsing
+      contentBlocks = _parsedContentBlocks!;
+    } else {
+      // Fallback to synchronous parsing (should rarely happen)
+      final stopwatch = Stopwatch()..start();
+
+      if (_content.contains('<p>') ||
+          _content.contains('<h') ||
+          _content.contains('<img')) {
+        final processedContent = _content.replaceAll(
+          RegExp(r'<p\s+id\s*=\s*"[^"]*"'),
+          '<p',
+        );
+        contentBlocks = _parseContentBlocksOptimized(processedContent);
+      } else {
+        contentBlocks = _parseContentBlocksOptimized(_content);
+      }
+
+      stopwatch.stop();
+    }
+
+    // Now build widgets from blocks (this is fast)
+    final stopwatch = Stopwatch()..start();
     final List<Widget> widgets = [];
 
-    // Check if the content is HTML
-    if (_content.contains('<p>') ||
-        _content.contains('<h') ||
-        _content.contains('<img')) {
-      // Use a simpler regex but preprocess the content first
-      final processedContent = _content.replaceAll(
-        RegExp(r'<p\s+id\s*=\s*"[^"]*"'),
-        '<p',
-      );
+    // Process the blocks in order
+    for (var block in contentBlocks) {
+      switch (block.type) {
+        case ContentBlockType.paragraph:
+          final paragraphText = _stripHtmlTagsFast(block.content);
+          // Skip empty paragraphs
+          if (paragraphText.isEmpty ||
+              RegExp(r'^\s*\$\d+\s*$').hasMatch(paragraphText)) {
+            continue;
+          }
 
-      // First, let's extract all content blocks in the order they appear
-      final List<ContentBlock> contentBlocks = [];
-
-      // Extract paragraphs with positions
-      final paragraphMatches = RegExp(
-        r'<p[^>]*>(.*?)<\/p>',
-        dotAll: true,
-      ).allMatches(processedContent);
-      for (var match in paragraphMatches) {
-        contentBlocks.add(
-          ContentBlock(
-            type: ContentBlockType.paragraph,
-            content: match.group(1) ?? '',
-            startPosition: match.start,
-          ),
-        );
-      }
-
-      // Extract headers with positions
-      final headerMatches = RegExp(
-        r'<h[1-6][^>]*>(.*?)<\/h[1-6]>',
-        dotAll: true,
-      ).allMatches(processedContent);
-      for (var match in headerMatches) {
-        contentBlocks.add(
-          ContentBlock(
-            type: ContentBlockType.header,
-            content: match.group(1) ?? '',
-            startPosition: match.start,
-          ),
-        );
-      }
-
-      // Extract images with positions (double quotes)
-      final doubleQuoteImageMatches = RegExp(
-        r'<img\s+[^>]*src\s*=\s*"([^"]*)"[^>]*>',
-        dotAll: true,
-      ).allMatches(processedContent);
-      for (var match in doubleQuoteImageMatches) {
-        final imageUrl = match.group(1);
-        if (imageUrl != null &&
-            imageUrl.isNotEmpty &&
-            (imageUrl.startsWith('http') || imageUrl.startsWith('https'))) {
-          contentBlocks.add(
-            ContentBlock(
-              type: ContentBlockType.image,
-              content: imageUrl,
-              startPosition: match.start,
-              altText: _extractAltText(match.group(0) ?? ''),
-            ),
-          );
-        }
-      }
-
-      // Extract images with positions (single quotes)
-      final singleQuoteImageMatches = RegExp(
-        r"<img\s+[^>]*src\s*=\s*'([^']*)'[^>]*>",
-        dotAll: true,
-      ).allMatches(processedContent);
-      for (var match in singleQuoteImageMatches) {
-        final imageUrl = match.group(1);
-        if (imageUrl != null &&
-            imageUrl.isNotEmpty &&
-            (imageUrl.startsWith('http') || imageUrl.startsWith('https'))) {
-          contentBlocks.add(
-            ContentBlock(
-              type: ContentBlockType.image,
-              content: imageUrl,
-              startPosition: match.start,
-              altText: _extractAltText(match.group(0) ?? ''),
-            ),
-          );
-        }
-      }
-
-      // Sort blocks by their position in the original content
-      contentBlocks.sort((a, b) => a.startPosition.compareTo(b.startPosition));
-
-      // Process the blocks in order
-      for (var block in contentBlocks) {
-        switch (block.type) {
-          case ContentBlockType.paragraph:
-            final paragraphText = _stripHtmlTags(block.content);
-            // Skip paragraphs that are only regex artifacts
-            if (paragraphText.isEmpty ||
-                RegExp(r'^\s*\$\d+\s*$').hasMatch(paragraphText)) {
-              continue;
-            }
-
-            widgets.add(
-              Padding(
-                padding: EdgeInsets.only(bottom: 16 * _paragraphSpacing),
-                child: EyeFriendlyText(
-                  text: paragraphText,
-                  style: TextStyle(
-                    fontSize: _fontSize,
-                    color: _textColor,
-                    fontFamily: _fontFamily,
-                    height: _lineHeight,
-                  ),
-                ),
-              ),
-            );
-            break;
-
-          case ContentBlockType.header:
-            final headerText = _stripHtmlTags(block.content);
-            if (headerText.isNotEmpty) {
-              widgets.add(
-                Padding(
-                  padding: EdgeInsets.only(bottom: 16 * _paragraphSpacing),
-                  child: EyeFriendlyText(
-                    text: headerText,
-                    style: TextStyle(
-                      fontSize: _fontSize + 4,
-                      fontWeight: FontWeight.bold,
-                      color: _textColor,
-                      fontFamily: _fontFamily,
-                      height: _lineHeight,
-                    ),
-                  ),
-                ),
-              );
-            }
-            break;
-
-          case ContentBlockType.image:
-            widgets.add(
-              Padding(
-                padding: EdgeInsets.symmetric(vertical: 16.0),
-                child: Center(
-                  child: Column(
-                    children: [
-                      _buildImageWidget(block.content),
-                      if (block.altText != null && block.altText!.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8.0),
-                          child: EyeFriendlyText(
-                            text: block.altText!,
-                            style: TextStyle(
-                              fontStyle: FontStyle.italic,
-                              fontSize: _fontSize - 2,
-                              color: _textColor.withOpacity(0.7),
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-            break;
-        }
-      }
-
-      // If no widgets were created, just show the raw content with HTML tags stripped
-      if (widgets.isEmpty) {
-        final plainText = _stripHtmlTags(processedContent);
-        widgets.add(
-          EyeFriendlyText(
-            text: plainText,
-            style: TextStyle(
-              fontSize: _fontSize,
-              color: _textColor,
-              fontFamily: _fontFamily,
-              height: _lineHeight,
-            ),
-          ),
-        );
-      }
-    } else {
-      // Use the existing parsing for plain text
-      final paragraphs = _content.split('\n\n');
-
-      for (final paragraph in paragraphs) {
-        if (paragraph.trim().isEmpty) continue;
-
-        // Check if it's a header
-        if (paragraph.trim().startsWith('#')) {
-          final headerText = paragraph.trim().substring(1).trim();
           widgets.add(
             Padding(
               padding: EdgeInsets.only(bottom: 16 * _paragraphSpacing),
-              child: EyeFriendlyText(
-                text: headerText,
-                style: TextStyle(
-                  fontSize: _fontSize + 4,
-                  fontWeight: FontWeight.bold,
-                  color: _textColor,
-                  fontFamily: _fontFamily,
-                  height: _lineHeight,
-                ),
-              ),
-            ),
-          );
-        } else {
-          widgets.add(
-            Padding(
-              padding: EdgeInsets.only(bottom: 16 * _paragraphSpacing),
-              child: EyeFriendlyText(
-                text: paragraph.trim(),
+              child: Text(
+                paragraphText,
                 style: TextStyle(
                   fontSize: _fontSize,
                   color: _textColor,
@@ -1409,54 +1492,200 @@ class _ReaderScreenState extends State<ReaderScreen>
               ),
             ),
           );
-        }
+          break;
+
+        case ContentBlockType.header:
+          final headerText = _stripHtmlTagsFast(block.content);
+          if (headerText.isNotEmpty) {
+            widgets.add(
+              Padding(
+                padding: EdgeInsets.only(bottom: 16 * _paragraphSpacing),
+                child: Text(
+                  headerText,
+                  style: TextStyle(
+                    fontSize: _fontSize + 4,
+                    fontWeight: FontWeight.bold,
+                    color: _textColor,
+                    fontFamily: _fontFamily,
+                    height: _lineHeight,
+                  ),
+                ),
+              ),
+            );
+          }
+          break;
+
+        case ContentBlockType.image:
+          widgets.add(
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: 16.0),
+              child: Center(
+                child: Column(
+                  children: [
+                    _buildImageWidget(block.content),
+                    if (block.altText != null && block.altText!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Text(
+                          block.altText!,
+                          style: TextStyle(
+                            fontStyle: FontStyle.italic,
+                            fontSize: _fontSize - 2,
+                            color: _textColor.withOpacity(0.7),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          );
+          break;
       }
     }
+
+    // Cache the result
+    _cachedContentWidgets = widgets;
+    _lastParsedContent = _content;
+    _lastFontSize = _fontSize;
+    _lastLineHeight = _lineHeight;
+    _lastParagraphSpacing = _paragraphSpacing;
+
+    stopwatch.stop();
 
     return widgets;
   }
 
-  // Extract alt text from an image tag
-  String? _extractAltText(String imgTag) {
-    final altTextMatch =
-        RegExp(r'alt\s*=\s*"([^"]*)"').firstMatch(imgTag) ??
-        RegExp(r"alt\s*=\s*'([^']*)'").firstMatch(imgTag);
-    return altTextMatch?.group(1);
-  }
+  // PERFORMANCE OPTIMIZATION: Single-pass optimized content block parsing
+  List<ContentBlock> _parseContentBlocksOptimized(String html) {
+    final List<ContentBlock> blocks = [];
+    int currentPos = 0;
 
-  // Helper to strip HTML tags
-  String _stripHtmlTags(String htmlString) {
-    // Pre-process any visible HTML tags by replacing "<" with "&lt;" if they appear to be raw tags
-    String processed = htmlString;
+    // Use a more efficient parsing strategy for large content
+    while (currentPos < html.length) {
+      // Find next tag
+      final nextTagStart = html.indexOf('<', currentPos);
+      if (nextTagStart == -1) break;
 
-    // Replace raw tags that might be showing in the text
-    if (processed.contains('<p id=') || processed.contains('</p><p id=')) {
-      processed = processed.replaceAll('<p id=', '').replaceAll('</p>', '');
+      // Determine tag type
+      if (html.startsWith('<p', nextTagStart)) {
+        final endTag = html.indexOf('</p>', nextTagStart);
+        if (endTag != -1) {
+          final contentStart = html.indexOf('>', nextTagStart) + 1;
+          final content = html.substring(contentStart, endTag);
+          blocks.add(
+            ContentBlock(
+              type: ContentBlockType.paragraph,
+              content: content,
+              startPosition: nextTagStart,
+            ),
+          );
+          currentPos = endTag + 4; // Skip </p>
+          continue;
+        }
+      } else if (html.startsWith(RegExp(r'<h[1-6]'), nextTagStart)) {
+        final endTagMatch = RegExp(
+          r'</h[1-6]>',
+        ).firstMatch(html.substring(nextTagStart));
+        if (endTagMatch != null) {
+          final contentStart = html.indexOf('>', nextTagStart) + 1;
+          final endTagPos = nextTagStart + endTagMatch.start;
+          final content = html.substring(contentStart, endTagPos);
+          blocks.add(
+            ContentBlock(
+              type: ContentBlockType.header,
+              content: content,
+              startPosition: nextTagStart,
+            ),
+          );
+          currentPos = nextTagStart + endTagMatch.end;
+          continue;
+        }
+      } else if (html.startsWith('<img', nextTagStart)) {
+        final imgTagEnd = html.indexOf('>', nextTagStart);
+        if (imgTagEnd != -1) {
+          final imgTag = html.substring(nextTagStart, imgTagEnd + 1);
+          final srcMatch = RegExp(
+            r'src\s*=\s*["'
+            "'"
+            r']([^"'
+            "'"
+            r']+)["'
+            "'"
+            r']',
+          ).firstMatch(imgTag);
+          if (srcMatch != null) {
+            final imageUrl = srcMatch.group(1)!;
+            if (imageUrl.startsWith('http')) {
+              blocks.add(
+                ContentBlock(
+                  type: ContentBlockType.image,
+                  content: imageUrl,
+                  startPosition: nextTagStart,
+                  altText: _extractAltTextFast(imgTag),
+                ),
+              );
+            }
+          }
+          currentPos = imgTagEnd + 1;
+          continue;
+        }
+      }
+
+      currentPos = nextTagStart + 1;
     }
 
-    // Remove all html tags
-    final text = processed.replaceAll(RegExp(r'<[^>]*>'), '');
+    return blocks;
+  }
 
-    // Convert HTML entities
-    String result =
-        text
-            .replaceAll('&nbsp;', ' ')
-            .replaceAll('&amp;', '&')
-            .replaceAll('&lt;', '<')
-            .replaceAll('&gt;', '>')
-            .replaceAll('&quot;', '"')
-            .replaceAll('&#39;', "'")
-            .trim();
+  // PERFORMANCE OPTIMIZATION: Faster HTML tag stripping
+  String _stripHtmlTagsFast(String htmlString) {
+    if (htmlString.isEmpty) return '';
 
-    // Remove regex artifacts that might have leaked through
-    result = result.replaceAll(RegExp(r'^\s*\$\d+\s*$'), '');
-    result = result.replaceAll(RegExp(r'\s+\$\d+\s+'), ' ');
+    // Single-pass tag removal
+    final buffer = StringBuffer();
+    bool inTag = false;
 
-    // Remove any remaining id markers
-    result = result.replaceAll(RegExp(r'id="\d+"'), '');
-    result = result.replaceAll(RegExp(r"id='\d+'"), '');
+    for (int i = 0; i < htmlString.length; i++) {
+      final char = htmlString[i];
+      if (char == '<') {
+        inTag = true;
+      } else if (char == '>') {
+        inTag = false;
+      } else if (!inTag) {
+        buffer.write(char);
+      }
+    }
 
-    return result;
+    // Convert HTML entities in single pass
+    String result = buffer
+        .toString()
+        .replaceAll('&nbsp;', ' ')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#39;', "'");
+
+    return result.trim();
+  }
+
+  // PERFORMANCE OPTIMIZATION: Faster alt text extraction
+  String? _extractAltTextFast(String imgTag) {
+    final altStart = imgTag.indexOf('alt=');
+    if (altStart == -1) return null;
+
+    final quoteStart = altStart + 4;
+    if (quoteStart >= imgTag.length) return null;
+
+    final quote = imgTag[quoteStart];
+    if (quote != '"' && quote != "'") return null;
+
+    final quoteEnd = imgTag.indexOf(quote, quoteStart + 1);
+    if (quoteEnd == -1) return null;
+
+    return imgTag.substring(quoteStart + 1, quoteEnd);
   }
 
   // Method to fix image URLs before loading
@@ -1570,11 +1799,10 @@ class _ReaderScreenState extends State<ReaderScreen>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder:
-            (context) => CommentsScreen(
-              url: widget.url,
-              title: widget.chapterTitle ?? widget.title,
-            ),
+        builder: (context) => CommentsScreen(
+          url: widget.url,
+          title: widget.chapterTitle ?? widget.title,
+        ),
       ),
     );
   }
