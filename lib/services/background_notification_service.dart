@@ -7,7 +7,6 @@ import 'package:html/parser.dart' show parse;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'novel_database_service.dart';
 import 'notification_service.dart';
-import 'preferences_service.dart';
 import '../modules/light_novel.dart';
 
 /// Background service that monitors bookmarked novels for updates
@@ -20,7 +19,7 @@ class BackgroundNotificationService {
 
   static const String _taskName = 'novel_update_check';
   static const String _uniqueTaskName = 'novel_periodic_check';
-  
+
   // Check interval (15 minutes minimum on Android)
   static const Duration _checkInterval = Duration(minutes: 15);
 
@@ -57,7 +56,6 @@ class BackgroundNotificationService {
           networkType: NetworkType.connected, // Require internet
         ),
         initialDelay: const Duration(minutes: 1), // First check after 1 minute
-        existingWorkPolicy: ExistingWorkPolicy.replace,
       );
 
       debugPrint('✅ Periodic novel update checks started');
@@ -74,6 +72,30 @@ class BackgroundNotificationService {
       debugPrint('⏹️ Periodic novel update checks stopped');
     } catch (e) {
       debugPrint('❌ Error stopping periodic checks: $e');
+    }
+  }
+
+  /// Check if notifications are enabled for a specific novel
+  Future<bool> isNovelNotificationEnabled(String novelId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool('notification_enabled_$novelId') ?? true;
+    } catch (e) {
+      debugPrint('❌ Error checking notification status: $e');
+      return true; // Default to enabled
+    }
+  }
+
+  /// Enable/disable notifications for a specific novel
+  Future<void> setNovelNotificationEnabled(String novelId, bool enabled) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('notification_enabled_$novelId', enabled);
+      debugPrint(
+        '${enabled ? '🔔' : '🔕'} Notifications ${enabled ? 'enabled' : 'disabled'} for novel $novelId',
+      );
+    } catch (e) {
+      debugPrint('❌ Error setting notification status: $e');
     }
   }
 
@@ -147,25 +169,37 @@ void callbackDispatcher() {
 
       // Get current server URL
       final prefs = await SharedPreferences.getInstance();
-      final currentServer = prefs.getString('selected_server') ?? 'https://docln.net';
+      final currentServer =
+          prefs.getString('selected_server') ?? 'https://docln.net';
 
       // Initialize database
       final db = NovelDatabaseService();
       await db.initialize();
 
-      // Get all bookmarked novels with notification enabled
-      final bookmarks = await db.getAllBookmarks(currentServer);
+      // Get all bookmarked novels
+      final bookmarks = await db.getBookmarks(currentServer);
 
       if (bookmarks.isEmpty) {
         debugPrint('ℹ️ No bookmarked novels to check');
         return Future.value(true);
       }
 
-      debugPrint('📚 Checking ${bookmarks.length} bookmarked novels for updates');
+      debugPrint(
+        '📚 Checking ${bookmarks.length} bookmarked novels for updates',
+      );
 
       // Check each bookmarked novel for updates
       for (final novel in bookmarks) {
         try {
+          // Check if notifications are enabled for this novel
+          final isEnabled =
+              prefs.getBool('notification_enabled_${novel.id}') ?? true;
+
+          if (!isEnabled) {
+            debugPrint('🔕 Skipping ${novel.title} (notifications disabled)');
+            continue;
+          }
+
           await _checkNovelForUpdates(novel, currentServer, db, prefs);
         } catch (e) {
           debugPrint('❌ Error checking novel ${novel.title}: $e');
@@ -200,9 +234,9 @@ Future<void> _checkNovelForUpdates(
     debugPrint('🔍 Checking: ${novel.title}');
 
     // Fetch the novel page
-    final response = await http.get(Uri.parse(fullUrl)).timeout(
-      const Duration(seconds: 10),
-    );
+    final response = await http
+        .get(Uri.parse(fullUrl))
+        .timeout(const Duration(seconds: 10));
 
     if (response.statusCode != 200) {
       debugPrint('⚠️ Failed to fetch novel: ${response.statusCode}');
@@ -221,7 +255,7 @@ Future<void> _checkNovelForUpdates(
     // Get last known state
     final lastKnownKey = 'novel_last_state_${novel.id}';
     final lastKnownStateJson = prefs.getString(lastKnownKey);
-    
+
     Map<String, dynamic>? lastKnownState;
     if (lastKnownStateJson != null) {
       lastKnownState = jsonDecode(lastKnownStateJson) as Map<String, dynamic>;
@@ -255,11 +289,16 @@ LightNovel? _parseNovelFromHtml(dynamic document, String id, String url) {
   try {
     // This is a simplified parser - adjust based on actual HTML structure
     final title = document.querySelector('h1.novel-title')?.text.trim() ?? '';
-    final coverUrl = document.querySelector('img.novel-cover')?.attributes['src'] ?? '';
-    final chaptersText = document.querySelector('.chapter-count')?.text.trim() ?? '0';
-    final chapters = int.tryParse(chaptersText.replaceAll(RegExp(r'[^\d]'), '')) ?? 0;
-    final latestChapter = document.querySelector('.latest-chapter')?.text.trim() ?? '';
-    final lastUpdated = document.querySelector('.last-updated')?.text.trim() ?? '';
+    final coverUrl =
+        document.querySelector('img.novel-cover')?.attributes['src'] ?? '';
+    final chaptersText =
+        document.querySelector('.chapter-count')?.text.trim() ?? '0';
+    final chapters =
+        int.tryParse(chaptersText.replaceAll(RegExp(r'[^\d]'), '')) ?? 0;
+    final latestChapter =
+        document.querySelector('.latest-chapter')?.text.trim() ?? '';
+    final lastUpdated =
+        document.querySelector('.last-updated')?.text.trim() ?? '';
 
     if (title.isEmpty) return null;
 
@@ -292,13 +331,16 @@ Future<void> _compareAndNotify(
   final notificationId = oldNovel.id.hashCode;
 
   // Check for new chapters
-  if (newNovel.chapters > (lastKnownState['chapters'] ?? 0)) {
-    final chaptersAdded = newNovel.chapters - (lastKnownState['chapters'] ?? 0);
+  final oldChapters = lastKnownState['chapters'] as int? ?? 0;
+  final newChapters = newNovel.chapters ?? 0;
+
+  if (newChapters > oldChapters) {
+    final chaptersAdded = newChapters - oldChapters;
     await BackgroundNotificationService._sendNotification(
       id: notificationId + 1,
       title: '📖 ${newNovel.title}',
       body: chaptersAdded == 1
-          ? 'Chapter ${newNovel.chapters} has been released!'
+          ? 'Chapter $newChapters has been released!'
           : '$chaptersAdded new chapters released!',
       payload: 'novel:${newNovel.id}',
     );
@@ -306,7 +348,7 @@ Future<void> _compareAndNotify(
 
   // Check for chapter updates
   if (newNovel.latestChapter != (lastKnownState['latestChapter'] ?? '') &&
-      newNovel.chapters == (lastKnownState['chapters'] ?? 0)) {
+      newChapters == oldChapters) {
     await BackgroundNotificationService._sendNotification(
       id: notificationId + 2,
       title: '✏️ ${newNovel.title}',
@@ -327,14 +369,15 @@ Future<void> _compareAndNotify(
 
   // Check for rating/review changes (significant changes only)
   final oldRating = lastKnownState['rating'] as double? ?? 0.0;
+  final newRating = newNovel.rating ?? 0.0;
   final oldReviews = lastKnownState['reviews'] as int? ?? 0;
-  
-  if ((newNovel.rating - oldRating).abs() > 0.5 ||
-      (newNovel.reviews ?? 0) - oldReviews > 10) {
+  final newReviews = newNovel.reviews ?? 0;
+
+  if ((newRating - oldRating).abs() > 0.5 || newReviews - oldReviews > 10) {
     await BackgroundNotificationService._sendNotification(
       id: notificationId + 4,
       title: '⭐ ${newNovel.title}',
-      body: 'Rating: ${newNovel.rating?.toStringAsFixed(1)} (${newNovel.reviews} reviews)',
+      body: 'Rating: ${newRating.toStringAsFixed(1)} ($newReviews reviews)',
       payload: 'novel:${newNovel.id}',
     );
   }

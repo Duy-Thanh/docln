@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../modules/light_novel.dart';
 import 'novel_database_service.dart';
 import 'server_management_service.dart';
+import 'notification_service.dart';
+import 'background_notification_service.dart';
 
 /// Bookmark Service V2
 ///
@@ -15,6 +17,9 @@ class BookmarkServiceV2 extends ChangeNotifier {
 
   final NovelDatabaseService _dbService = NovelDatabaseService();
   final ServerManagementService _serverService = ServerManagementService();
+  final NotificationService _notificationService = NotificationService();
+  final BackgroundNotificationService _backgroundService =
+      BackgroundNotificationService();
 
   List<LightNovel> _bookmarkedNovels = [];
 
@@ -56,6 +61,10 @@ class BookmarkServiceV2 extends ChangeNotifier {
       if (success) {
         await loadBookmarks(); // Reload to get updated list
         debugPrint('✅ Added bookmark: ${novel.title}');
+
+        // Auto-enable notifications for this novel
+        await _enableNotificationsForNovel(novel);
+
         return true;
       }
 
@@ -63,6 +72,39 @@ class BookmarkServiceV2 extends ChangeNotifier {
     } catch (e) {
       debugPrint('❌ Error adding bookmark: $e');
       return false;
+    }
+  }
+
+  /// Auto-enable notifications when bookmarking
+  Future<void> _enableNotificationsForNovel(LightNovel novel) async {
+    try {
+      // Initialize notification service if needed
+      await _notificationService.init();
+
+      // Check if notifications are globally enabled
+      final isEnabled = await _notificationService.isNotificationEnabled();
+
+      if (!isEnabled) {
+        // Request permission first
+        debugPrint('📢 Requesting notification permission for ${novel.title}');
+        final granted = await _notificationService.requestPermission();
+
+        if (granted) {
+          await _notificationService.setNotificationEnabled(true);
+
+          // Start background service
+          await _backgroundService.initialize();
+          await _backgroundService.startPeriodicChecks();
+
+          debugPrint('✅ Notifications enabled for ${novel.title}');
+        } else {
+          debugPrint('⚠️ Notification permission denied');
+        }
+      } else {
+        debugPrint('✅ Notifications already enabled for ${novel.title}');
+      }
+    } catch (e) {
+      debugPrint('❌ Error enabling notifications: $e');
     }
   }
 

@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 // Services
 import 'services/notification_service.dart';
+import 'services/background_notification_service.dart';
 import 'services/theme_services.dart';
 import 'services/language_service.dart';
 import 'services/bookmark_service.dart';
@@ -140,6 +141,89 @@ Future<void> migrateNovelData() async {
   }
 }
 
+// Function to enable notifications for existing bookmarks (one-time migration)
+Future<void> enableNotificationsForExistingBookmarks() async {
+  try {
+    final prefs = PreferencesService();
+    await prefs.initialize();
+
+    // Check if migration has already been done
+    final migrationDone = prefs.getBool(
+      'notifications_enabled_for_existing_bookmarks',
+      defaultValue: false,
+    );
+
+    if (migrationDone) {
+      debugPrint('✅ Notifications already enabled for existing bookmarks');
+      return;
+    }
+
+    debugPrint('🔔 Enabling notifications for existing bookmarks...');
+
+    final bookmarkService = BookmarkServiceV2();
+    await bookmarkService.init();
+
+    final bookmarkCount = bookmarkService.bookmarkCount;
+
+    if (bookmarkCount == 0) {
+      debugPrint('ℹ️ No existing bookmarks, skipping migration');
+      await prefs.setBool('notifications_enabled_for_existing_bookmarks', true);
+      return;
+    }
+
+    debugPrint('📚 Found $bookmarkCount existing bookmarks');
+
+    // Initialize notification service
+    final notificationService = NotificationService();
+    await notificationService.init();
+
+    // Check if we can enable notifications
+    final hasPermission = await notificationService.checkPermission();
+
+    if (!hasPermission) {
+      debugPrint(
+        '⚠️ Requesting notification permission for existing bookmarks...',
+      );
+      final granted = await notificationService.requestPermission();
+
+      if (!granted) {
+        debugPrint('⚠️ Notification permission denied, skipping migration');
+        await prefs.setBool(
+          'notifications_enabled_for_existing_bookmarks',
+          true,
+        );
+        return;
+      }
+    }
+
+    // Enable notifications
+    await notificationService.setNotificationEnabled(true);
+
+    // Start background service
+    final backgroundService = BackgroundNotificationService();
+    await backgroundService.initialize();
+    await backgroundService.startPeriodicChecks();
+
+    // Mark migration as complete
+    await prefs.setBool('notifications_enabled_for_existing_bookmarks', true);
+
+    debugPrint(
+      '✅ Notifications enabled for $bookmarkCount existing bookmarks!',
+    );
+
+    // Send a welcome notification
+    await notificationService.showNotification(
+      id: 888888,
+      title: '🔔 Notifications Enabled!',
+      body:
+          'You\'ll now receive updates for your $bookmarkCount bookmarked novels',
+      payload: 'welcome_notification',
+    );
+  } catch (e) {
+    debugPrint('❌ Error enabling notifications for existing bookmarks: $e');
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -179,6 +263,7 @@ void main() async {
   final themeService = ThemeServices();
   final languageService = LanguageService();
   final notificationService = NotificationService();
+  final backgroundNotificationService = BackgroundNotificationService();
   final bookmarkService = BookmarkService();
   final bookmarkServiceV2 = BookmarkServiceV2();
   // final historyService = HistoryService(); // Old service removed
@@ -194,15 +279,23 @@ void main() async {
     themeService.init(),
     languageService.init(),
     notificationService.init(),
+    backgroundNotificationService.initialize(),
     bookmarkService.init(),
     bookmarkServiceV2.init(),
-    // historyService.loadHistory(), // Old service removed
+    // historyService.loadHistory(); // Old service removed
     historyServiceV2.init(),
     proxyService.initialize(),
     httpClient.initialize(),
     dnsService.initialize(),
     crawlerService.initialize(),
   ]);
+
+  // Start periodic background checks for novel updates
+  // This runs even when the app is closed
+  await backgroundNotificationService.startPeriodicChecks();
+
+  // Enable notifications for existing bookmarks (one-time migration for users updating from old versions)
+  await enableNotificationsForExistingBookmarks();
 
   // Set initial system UI styling
   SystemChrome.setSystemUIOverlayStyle(

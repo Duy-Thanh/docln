@@ -164,6 +164,7 @@ class NotificationService extends ChangeNotifier {
   }
 
   Future<bool> showNotification({
+    int? id,
     required String title,
     required String body,
     String? payload,
@@ -202,7 +203,7 @@ class NotificationService extends ChangeNotifier {
       );
 
       await _notifications.show(
-        DateTime.now().millisecondsSinceEpoch.remainder(100000),
+        id ?? DateTime.now().millisecondsSinceEpoch.remainder(100000),
         title,
         body,
         notificationDetails,

@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/bookmark_service_v2.dart';
 import '../services/history_service_v2.dart';
+import '../services/background_notification_service.dart';
 import 'package:provider/provider.dart';
 import '../widgets/network_image.dart';
 
@@ -31,7 +32,10 @@ class LightNovelDetailsScreen extends StatefulWidget {
 
 class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
   final CrawlerService _crawlerService = CrawlerService();
+  final BackgroundNotificationService _backgroundService =
+      BackgroundNotificationService();
   bool _isLoading = true;
+  bool _notificationEnabled = true;
   List<String> _genres = [];
   String _description = '';
   List<Map<String, dynamic>> _chapters = [];
@@ -50,6 +54,7 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
   void initState() {
     super.initState();
     _loadNovelDetails();
+    _loadNotificationStatus();
 
     // Add to reading history
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -61,6 +66,17 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
         ).addToHistory(widget.novel, widget.novel.latestChapter);
       }
     });
+  }
+
+  Future<void> _loadNotificationStatus() async {
+    final enabled = await _backgroundService.isNovelNotificationEnabled(
+      widget.novel.id,
+    );
+    if (mounted) {
+      setState(() {
+        _notificationEnabled = enabled;
+      });
+    }
   }
 
   Future<void> _loadNovelDetails() async {
@@ -591,18 +607,62 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
                 Expanded(
                   flex: 2,
                   child: OutlinedButton.icon(
-                    onPressed: () {
-                      CustomToast.show(context, 'Notifications disabled');
+                    onPressed: () async {
+                      // Check if the novel is bookmarked
+                      final bookmarkService = Provider.of<BookmarkServiceV2>(
+                        context,
+                        listen: false,
+                      );
+                      final isBookmarked = bookmarkService.isBookmarked(
+                        widget.novel.id,
+                      );
+
+                      if (!isBookmarked) {
+                        CustomToast.show(
+                          context,
+                          'Please bookmark this novel first to enable notifications',
+                        );
+                        return;
+                      }
+
+                      // Toggle notification status
+                      final newStatus = !_notificationEnabled;
+                      await _backgroundService.setNovelNotificationEnabled(
+                        widget.novel.id,
+                        newStatus,
+                      );
+
+                      setState(() {
+                        _notificationEnabled = newStatus;
+                      });
+
+                      CustomToast.show(
+                        context,
+                        newStatus
+                            ? '🔔 Notifications enabled for ${widget.novel.title}'
+                            : '🔕 Notifications disabled for ${widget.novel.title}',
+                      );
                     },
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      foregroundColor: colorScheme.primary,
-                      side: BorderSide(color: colorScheme.outline),
+                      foregroundColor: _notificationEnabled
+                          ? colorScheme.primary
+                          : colorScheme.onSurface.withOpacity(0.6),
+                      side: BorderSide(
+                        color: _notificationEnabled
+                            ? colorScheme.primary
+                            : colorScheme.outline,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    icon: const Icon(Icons.notifications_off, size: 18),
+                    icon: Icon(
+                      _notificationEnabled
+                          ? Icons.notifications_active
+                          : Icons.notifications_off,
+                      size: 18,
+                    ),
                     label: const Text('Thông báo'),
                   ),
                 ),
