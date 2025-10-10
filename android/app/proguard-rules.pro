@@ -82,10 +82,6 @@
 -keep class android.webkit.** { *; }
 -keep class androidx.webkit.** { *; }
 
-# Sentry flutter
--keep class io.sentry.** { *; }
--dontwarn io.sentry.**
-
 # Wireguard flutter
 -keep class billion.group.wireguard_flutter.** { *; }
 
