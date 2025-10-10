@@ -356,94 +356,115 @@ Future<void> _checkNovelForUpdates(
     Map<String, dynamic> novelDetails = {};
     
     debugPrint('   🌐 Fetching HTML directly...');
-    try {
-      final startTime = DateTime.now();
-      
-      // Simple direct HTTP request with generous timeout
-      final response = await http.get(
-        Uri.parse(fullUrl),
-        headers: {
-          'User-Agent':
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml',
-          'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
-        },
-      ).timeout(
-        const Duration(seconds: 30),
-        onTimeout: () {
-          final elapsed = DateTime.now().difference(startTime);
-          debugPrint('   ❌ HTTP request timed out after ${elapsed.inSeconds}s');
-          throw TimeoutException('HTTP timeout after ${elapsed.inSeconds}s');
-        },
-      );
+    
+    // Retry logic for DNS/network failures
+    const maxRetries = 3;
+    int retryCount = 0;
+    Duration retryDelay = const Duration(seconds: 2);
+    
+    while (retryCount < maxRetries) {
+      try {
+        final startTime = DateTime.now();
+        
+        // Simple direct HTTP request with generous timeout
+        final response = await http.get(
+          Uri.parse(fullUrl),
+          headers: {
+            'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml',
+            'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+          },
+        ).timeout(
+          const Duration(seconds: 30),
+          onTimeout: () {
+            final elapsed = DateTime.now().difference(startTime);
+            debugPrint('   ❌ HTTP request timed out after ${elapsed.inSeconds}s');
+            throw TimeoutException('HTTP timeout after ${elapsed.inSeconds}s');
+          },
+        );
 
-      final elapsed = DateTime.now().difference(startTime);
-      debugPrint('   ✅ Got response (${response.statusCode}) in ${elapsed.inSeconds}s');
+        final elapsed = DateTime.now().difference(startTime);
+        debugPrint('   ✅ Got response (${response.statusCode}) in ${elapsed.inSeconds}s');
 
-      if (response.statusCode != 200) {
-        debugPrint('   ❌ Bad status code: ${response.statusCode}');
-        return;
-      }
+        if (response.statusCode != 200) {
+          debugPrint('   ❌ Bad status code: ${response.statusCode}');
+          return;
+        }
 
-      // Parse HTML directly without using CrawlerService
-      debugPrint('   📝 Parsing HTML...');
-      final document = html_parser.parse(response.body);
+        // Parse HTML directly without using CrawlerService
+        debugPrint('   📝 Parsing HTML...');
+        final document = html_parser.parse(response.body);
 
-      // Extract title
-      final titleElement = document.querySelector('.series-name a');
-      final title = titleElement?.text.trim() ?? novel.title;
+        // Extract title
+        final titleElement = document.querySelector('.series-name a');
+        final title = titleElement?.text.trim() ?? novel.title;
 
-      // Extract cover
-      final coverElement = document.querySelector('.series-cover .content.img-in-ratio');
-      String? coverUrl = novel.coverUrl;
-      if (coverElement != null) {
-        final style = coverElement.attributes['style'] ?? '';
-        final urlMatch = RegExp(r"url\('([^']+)'\)").firstMatch(style);
-        if (urlMatch != null) {
-          coverUrl = urlMatch.group(1);
+        // Extract cover
+        final coverElement = document.querySelector('.series-cover .content.img-in-ratio');
+        String? coverUrl = novel.coverUrl;
+        if (coverElement != null) {
+          final style = coverElement.attributes['style'] ?? '';
+          final urlMatch = RegExp(r"url\('([^']+)'\)").firstMatch(style);
+          if (urlMatch != null) {
+            coverUrl = urlMatch.group(1);
+          }
+        }
+
+        // Extract chapters
+        final chapterElements = document.querySelectorAll('.chapter-name');
+        final chapters = <Map<String, dynamic>>[];
+
+        for (var element in chapterElements) {
+          final titleElement = element.querySelector('a');
+          final linkElement = element.querySelector('a');
+
+          if (titleElement != null && linkElement != null) {
+            final chapterTitle = titleElement.text.trim();
+            final chapterLink = linkElement.attributes['href'] ?? '';
+
+            chapters.add({
+              'title': chapterTitle,
+              'url': chapterLink,
+            });
+          }
+        }
+
+        debugPrint('   ✅ Found ${chapters.length} chapters');
+
+        // Extract actual last updated time from the website
+        // Look for the latest chapter's time
+        String? lastUpdated;
+        final firstChapterTime = document.querySelector('.chapter-time');
+        if (firstChapterTime != null) {
+          lastUpdated = firstChapterTime.text.trim();
+        }
+
+        novelDetails = {
+          'title': title,
+          'cover': coverUrl,
+          'chapters': chapters,
+          'lastUpdated': lastUpdated, // Use actual time from website, not current time
+        };
+
+        debugPrint('   ✅ Parsed successfully');
+        break; // Success! Exit retry loop
+        
+      } catch (e) {
+        retryCount++;
+        final isDnsError = e.toString().contains('Failed host lookup') || 
+                          e.toString().contains('SocketException');
+        
+        if (retryCount < maxRetries && isDnsError) {
+          debugPrint('   ⚠️ DNS/Network error (attempt $retryCount/$maxRetries): $e');
+          debugPrint('   🔄 Retrying in ${retryDelay.inSeconds}s...');
+          await Future.delayed(retryDelay);
+          retryDelay = retryDelay * 2; // Exponential backoff
+        } else {
+          debugPrint('   ❌ Failed to fetch/parse: $e');
+          return; // Give up after max retries
         }
       }
-
-      // Extract chapters
-      final chapterElements = document.querySelectorAll('.chapter-name');
-      final chapters = <Map<String, dynamic>>[];
-
-      for (var element in chapterElements) {
-        final titleElement = element.querySelector('a');
-        final linkElement = element.querySelector('a');
-
-        if (titleElement != null && linkElement != null) {
-          final chapterTitle = titleElement.text.trim();
-          final chapterLink = linkElement.attributes['href'] ?? '';
-
-          chapters.add({
-            'title': chapterTitle,
-            'url': chapterLink,
-          });
-        }
-      }
-
-      debugPrint('   ✅ Found ${chapters.length} chapters');
-
-      // Extract actual last updated time from the website
-      // Look for the latest chapter's time
-      String? lastUpdated;
-      final firstChapterTime = document.querySelector('.chapter-time');
-      if (firstChapterTime != null) {
-        lastUpdated = firstChapterTime.text.trim();
-      }
-
-      novelDetails = {
-        'title': title,
-        'cover': coverUrl,
-        'chapters': chapters,
-        'lastUpdated': lastUpdated, // Use actual time from website, not current time
-      };
-
-      debugPrint('   ✅ Parsed successfully');
-    } catch (e) {
-      debugPrint('   ❌ Failed to fetch/parse: $e');
-      return;
     }
 
     if (novelDetails.isEmpty ||
