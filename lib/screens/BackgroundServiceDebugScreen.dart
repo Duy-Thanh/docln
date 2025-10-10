@@ -18,6 +18,7 @@ class _BackgroundServiceDebugScreenState
   bool _isEnabled = false;
   DateTime? _lastCheckTime;
   DateTime? _registeredTime;
+  DateTime? _lastUiRefresh;
   Timer? _updateTimer;
 
   @override
@@ -37,10 +38,13 @@ class _BackgroundServiceDebugScreenState
   }
 
   Future<void> _loadStatus() async {
+    // Force SharedPreferences to reload from disk to get updates from background isolate
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload(); // This ensures we get the latest values
+    
     final enabled = await _service.areBackgroundChecksEnabled();
     final lastCheck = await _service.getLastCheckTime();
 
-    final prefs = await SharedPreferences.getInstance();
     final registeredTimestamp = prefs.getInt('background_checks_started_at');
     final registeredTime = registeredTimestamp != null
         ? DateTime.fromMillisecondsSinceEpoch(registeredTimestamp)
@@ -50,6 +54,7 @@ class _BackgroundServiceDebugScreenState
       _isEnabled = enabled;
       _lastCheckTime = lastCheck;
       _registeredTime = registeredTime;
+      _lastUiRefresh = DateTime.now(); // Track when UI was refreshed
     });
   }
 
@@ -87,6 +92,16 @@ class _BackgroundServiceDebugScreenState
     } else {
       return 'in ~${timeUntil.inSeconds}s';
     }
+  }
+
+  Color _getLastCheckColor() {
+    // If last check was before service registration, it's from a previous session
+    if (_lastCheckTime != null && 
+        _registeredTime != null && 
+        _lastCheckTime!.isBefore(_registeredTime!)) {
+      return Colors.orange.shade700; // Warning color
+    }
+    return Colors.orange; // Normal color
   }
 
   @override
@@ -157,9 +172,23 @@ class _BackgroundServiceDebugScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Timing Information',
-              style: Theme.of(context).textTheme.titleLarge,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Timing Information',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                if (_lastUiRefresh != null)
+                  Text(
+                    'Updated ${_formatTimeAgo(_lastUiRefresh)}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey.shade600,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+              ],
             ),
             const Divider(),
             _buildInfoRow(
@@ -170,12 +199,17 @@ class _BackgroundServiceDebugScreenState
               Colors.blue,
             ),
             const SizedBox(height: 8),
+            // Show label based on whether check is from previous session or current
             _buildInfoRow(
-              'Last Background Check',
+              _lastCheckTime != null && 
+                  _registeredTime != null && 
+                  _lastCheckTime!.isBefore(_registeredTime!)
+                  ? 'Last Check (Old Session)'
+                  : 'Last Check (This Session)',
               _lastCheckTime != null
                   ? '${_lastCheckTime!.toString().split('.')[0]}\n${_formatTimeAgo(_lastCheckTime)}'
-                  : 'No checks yet',
-              Colors.orange,
+                  : (_registeredTime != null ? 'Waiting for first check...' : 'No checks yet'),
+              _getLastCheckColor(),
             ),
             const SizedBox(height: 8),
             _buildInfoRow(
@@ -407,8 +441,13 @@ class _BackgroundServiceDebugScreenState
         ),
       );
 
-      // Refresh status after a few seconds
-      await Future.delayed(const Duration(seconds: 3));
+      // Refresh status after background task completes
+      // Background tasks take ~15-20 seconds for 6 novels
+      await Future.delayed(const Duration(seconds: 5));
+      await _loadStatus();
+      
+      // Refresh again to ensure we catch any late updates
+      await Future.delayed(const Duration(seconds: 2));
       await _loadStatus();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(

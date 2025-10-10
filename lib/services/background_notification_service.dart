@@ -89,9 +89,11 @@ class BackgroundNotificationService {
     try {
       await Workmanager().cancelByUniqueName(_uniqueTaskName);
       
-      // Save registration status
+      // Save registration status and clear timestamps
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('background_checks_enabled', false);
+      await prefs.remove('background_checks_started_at'); // Clear registration time
+      // Note: Keep last_background_check for reference (shows last successful run)
       
       debugPrint('⏹️ Periodic novel update checks stopped');
     } catch (e) {
@@ -114,6 +116,7 @@ class BackgroundNotificationService {
   Future<DateTime?> getLastCheckTime() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      await prefs.reload(); // Force reload to get updates from background isolate
       final timestamp = prefs.getInt('last_background_check');
       return timestamp != null 
           ? DateTime.fromMillisecondsSinceEpoch(timestamp)
@@ -241,9 +244,14 @@ void callbackDispatcher() {
     debugPrint('═══════════════════════════════════════════════════════');
 
     try {
-      // Save last check time
+      // Save last check time IMMEDIATELY
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('last_background_check', startTime.millisecondsSinceEpoch);
+      final savedSuccessfully = await prefs.setInt('last_background_check', startTime.millisecondsSinceEpoch);
+      debugPrint('💾 Saved timestamp: ${startTime.toString()} (Success: $savedSuccessfully)');
+      
+      // Verify it was saved
+      final verifyTimestamp = prefs.getInt('last_background_check');
+      debugPrint('✅ Verified timestamp: ${verifyTimestamp != null ? DateTime.fromMillisecondsSinceEpoch(verifyTimestamp) : "NOT SAVED!"}');
 
       // Check app version
       await BackgroundNotificationService._checkAppVersion();
@@ -304,6 +312,10 @@ void callbackDispatcher() {
 
       final endTime = DateTime.now();
       final duration = endTime.difference(startTime);
+      
+      // Save completion time as the "last check" time
+      final savedCompletion = await prefs.setInt('last_background_check', endTime.millisecondsSinceEpoch);
+      debugPrint('💾 Saved completion timestamp: ${endTime.toString()} (Success: $savedCompletion)');
       
       debugPrint('═══════════════════════════════════════════════════════');
       debugPrint('✅ BACKGROUND TASK COMPLETED');
