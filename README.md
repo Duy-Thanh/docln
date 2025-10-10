@@ -1,8 +1,10 @@
 # docln
 
-Light Novel Reader written in Flutter (for Android)
+Light Novel Reader (for Hako sites only) written in Flutter (for Android)
 
-Latest version is **2025.10.09-rev2.0**. Please make sure that you have latest version installed
+Latest version is **2025.10.10-rev1.0**
+
+# Important notice
 
 You should only download software from the home page, and the same goes for this software. This GitHub is the only place you should download this software.
 
