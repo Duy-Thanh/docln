@@ -26,6 +26,7 @@ import '../services/preferences_recovery_service.dart';
 import 'package:file_picker/file_picker.dart';
 import '../screens/wallpaper_colors_screen.dart';
 import '../screens/ServerDiagnosticScreen.dart';
+import '../screens/BackgroundServiceDebugScreen.dart';
 import '../services/server_management_service.dart';
 
 // GridPainter class at the top level
@@ -1633,6 +1634,23 @@ class SettingsScreenState extends State<SettingsScreen>
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildBackgroundServiceDebugTile() {
+    return ListTile(
+      leading: const Icon(Icons.bug_report_rounded),
+      title: const Text('Background Service Monitor'),
+      subtitle: const Text('Monitor background notification service status'),
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const BackgroundServiceDebugScreen(),
+          ),
+        );
+      },
     );
   }
 
@@ -3625,6 +3643,7 @@ class SettingsScreenState extends State<SettingsScreen>
                     (value) => _toggleNotifications(value),
                   ),
                 ]),
+                _buildSection('Developer Tools', [_buildBackgroundServiceDebugTile()]),
                 _buildSection('Language', [_buildLanguageTile()]),
                 _buildSection('About', [_buildAboutTile()]),
                 const SizedBox(height: 80), // Space for FAB

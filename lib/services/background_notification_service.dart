@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:workmanager/workmanager.dart';
-import 'package:http/http.dart' as http;
-import 'package:html/parser.dart' show parse;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'package:html/parser.dart' as html_parser;
 import 'novel_database_service.dart';
 import 'notification_service.dart';
 import '../modules/light_novel.dart';
@@ -20,7 +20,9 @@ class BackgroundNotificationService {
   static const String _taskName = 'novel_update_check';
   static const String _uniqueTaskName = 'novel_periodic_check';
 
-  // Check interval (15 minutes minimum on Android)
+  // Android WorkManager MINIMUM is 15 minutes (PeriodicWorkRequest.MIN_PERIODIC_INTERVAL_MILLIS)
+  // Setting lower values will be automatically increased to 15 minutes by Android
+  // See: https://developer.android.com/reference/androidx/work/PeriodicWorkRequest
   static const Duration _checkInterval = Duration(minutes: 15);
 
   bool _initialized = false;
@@ -48,17 +50,34 @@ class BackgroundNotificationService {
     await initialize();
 
     try {
+      // Cancel any existing task first to ensure clean registration
+      await Workmanager().cancelByUniqueName(_uniqueTaskName);
+      
+      // Register periodic task with proper constraints
+      // ExistingWorkPolicy is handled automatically by WorkManager
       await Workmanager().registerPeriodicTask(
         _uniqueTaskName,
         _taskName,
         frequency: _checkInterval,
         constraints: Constraints(
           networkType: NetworkType.connected, // Require internet
+          requiresBatteryNotLow: false, // Run even on low battery
+          requiresCharging: false, // Run even when not charging
+          requiresDeviceIdle: false, // Run even when device is active
         ),
         initialDelay: const Duration(minutes: 1), // First check after 1 minute
+        backoffPolicy: BackoffPolicy.linear,
+        backoffPolicyDelay: const Duration(minutes: 5),
       );
 
-      debugPrint('✅ Periodic novel update checks started');
+      // Save registration status
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('background_checks_enabled', true);
+      await prefs.setInt('background_checks_started_at', DateTime.now().millisecondsSinceEpoch);
+
+      debugPrint('✅ Periodic novel update checks registered (15-minute interval)');
+      debugPrint('⏰ First check will run in ~1 minute, then every ~15 minutes');
+      debugPrint('📱 WorkManager will optimize timing based on battery and network');
     } catch (e) {
       debugPrint('❌ Error starting periodic checks: $e');
       rethrow;
@@ -69,9 +88,39 @@ class BackgroundNotificationService {
   Future<void> stopPeriodicChecks() async {
     try {
       await Workmanager().cancelByUniqueName(_uniqueTaskName);
+      
+      // Save registration status
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('background_checks_enabled', false);
+      
       debugPrint('⏹️ Periodic novel update checks stopped');
     } catch (e) {
       debugPrint('❌ Error stopping periodic checks: $e');
+    }
+  }
+
+  /// Check if background checks are enabled
+  Future<bool> areBackgroundChecksEnabled() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool('background_checks_enabled') ?? false;
+    } catch (e) {
+      debugPrint('❌ Error checking background status: $e');
+      return false;
+    }
+  }
+
+  /// Get last background check time
+  Future<DateTime?> getLastCheckTime() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final timestamp = prefs.getInt('last_background_check');
+      return timestamp != null 
+          ? DateTime.fromMillisecondsSinceEpoch(timestamp)
+          : null;
+    } catch (e) {
+      debugPrint('❌ Error getting last check time: $e');
+      return null;
     }
   }
 
@@ -96,6 +145,30 @@ class BackgroundNotificationService {
       );
     } catch (e) {
       debugPrint('❌ Error setting notification status: $e');
+    }
+  }
+
+  /// Trigger a one-time manual check NOW (for testing/debugging)
+  Future<void> triggerManualCheck() async {
+    await initialize();
+
+    try {
+      debugPrint('⚡ Triggering manual background check...');
+      
+      // Register a one-time task with no delay
+      await Workmanager().registerOneOffTask(
+        'manual_check_${DateTime.now().millisecondsSinceEpoch}',
+        _taskName,
+        constraints: Constraints(
+          networkType: NetworkType.connected,
+        ),
+        initialDelay: Duration.zero, // Run immediately
+      );
+
+      debugPrint('✅ Manual check triggered! Watch logcat for results.');
+    } catch (e) {
+      debugPrint('❌ Error triggering manual check: $e');
+      rethrow;
     }
   }
 
@@ -161,16 +234,25 @@ class BackgroundNotificationService {
 @pragma('vm:entry-point')
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
-    debugPrint('🔄 Background task started: $task');
+    final startTime = DateTime.now();
+    debugPrint('═══════════════════════════════════════════════════════');
+    debugPrint('🔄 BACKGROUND TASK STARTED: $task');
+    debugPrint('⏰ Time: ${startTime.toString()}');
+    debugPrint('═══════════════════════════════════════════════════════');
 
     try {
+      // Save last check time
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('last_background_check', startTime.millisecondsSinceEpoch);
+
       // Check app version
       await BackgroundNotificationService._checkAppVersion();
 
       // Get current server URL
-      final prefs = await SharedPreferences.getInstance();
       final currentServer =
-          prefs.getString('selected_server') ?? 'https://docln.net';
+          prefs.getString('selected_server') ?? 'https://docln.sbs';
+
+      debugPrint('🌐 Server: $currentServer');
 
       // Initialize database
       final db = NovelDatabaseService();
@@ -187,6 +269,17 @@ void callbackDispatcher() {
       debugPrint(
         '📚 Checking ${bookmarks.length} bookmarked novels for updates',
       );
+
+      // Test basic connectivity first
+      debugPrint('🌐 Testing basic connectivity...');
+      try {
+        final testResponse = await http.get(Uri.parse('$currentServer/'))
+            .timeout(const Duration(seconds: 10));
+        debugPrint('   ✅ Server reachable (status: ${testResponse.statusCode})');
+      } catch (e) {
+        debugPrint('   ❌ Server connectivity test failed: $e');
+        debugPrint('   ⚠️ Background tasks may fail due to network issues');
+      }
 
       // Check each bookmarked novel for updates
       for (final novel in bookmarks) {
@@ -209,10 +302,20 @@ void callbackDispatcher() {
         await Future.delayed(const Duration(seconds: 2));
       }
 
-      debugPrint('✅ Background task completed');
+      final endTime = DateTime.now();
+      final duration = endTime.difference(startTime);
+      
+      debugPrint('═══════════════════════════════════════════════════════');
+      debugPrint('✅ BACKGROUND TASK COMPLETED');
+      debugPrint('⏱️ Duration: ${duration.inSeconds} seconds');
+      debugPrint('⏰ Next check: ~15 minutes (Android-controlled)');
+      debugPrint('═══════════════════════════════════════════════════════');
+      
       return Future.value(true);
     } catch (e) {
-      debugPrint('❌ Background task failed: $e');
+      debugPrint('═══════════════════════════════════════════════════════');
+      debugPrint('❌ BACKGROUND TASK FAILED: $e');
+      debugPrint('═══════════════════════════════════════════════════════');
       return Future.value(false);
     }
   });
@@ -232,25 +335,127 @@ Future<void> _checkNovelForUpdates(
         : '$currentServer${novel.url}';
 
     debugPrint('🔍 Checking: ${novel.title}');
+    debugPrint('   URL: $fullUrl');
 
-    // Fetch the novel page
-    final response = await http
-        .get(Uri.parse(fullUrl))
-        .timeout(const Duration(seconds: 10));
+    // IMPORTANT: Background tasks run in a separate isolate
+    // Complex services (DNS, Proxy) may not work properly in background
+    // Use simple direct HTTP connection for reliability
+    
+    Map<String, dynamic> novelDetails = {};
+    
+    debugPrint('   🌐 Fetching HTML directly...');
+    try {
+      final startTime = DateTime.now();
+      
+      // Simple direct HTTP request with generous timeout
+      final response = await http.get(
+        Uri.parse(fullUrl),
+        headers: {
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml',
+          'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+        },
+      ).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          final elapsed = DateTime.now().difference(startTime);
+          debugPrint('   ❌ HTTP request timed out after ${elapsed.inSeconds}s');
+          throw TimeoutException('HTTP timeout after ${elapsed.inSeconds}s');
+        },
+      );
 
-    if (response.statusCode != 200) {
-      debugPrint('⚠️ Failed to fetch novel: ${response.statusCode}');
+      final elapsed = DateTime.now().difference(startTime);
+      debugPrint('   ✅ Got response (${response.statusCode}) in ${elapsed.inSeconds}s');
+
+      if (response.statusCode != 200) {
+        debugPrint('   ❌ Bad status code: ${response.statusCode}');
+        return;
+      }
+
+      // Parse HTML directly without using CrawlerService
+      debugPrint('   📝 Parsing HTML...');
+      final document = html_parser.parse(response.body);
+
+      // Extract title
+      final titleElement = document.querySelector('.series-name a');
+      final title = titleElement?.text.trim() ?? novel.title;
+
+      // Extract cover
+      final coverElement = document.querySelector('.series-cover .content.img-in-ratio');
+      String? coverUrl = novel.coverUrl;
+      if (coverElement != null) {
+        final style = coverElement.attributes['style'] ?? '';
+        final urlMatch = RegExp(r"url\('([^']+)'\)").firstMatch(style);
+        if (urlMatch != null) {
+          coverUrl = urlMatch.group(1);
+        }
+      }
+
+      // Extract chapters
+      final chapterElements = document.querySelectorAll('.chapter-name');
+      final chapters = <Map<String, dynamic>>[];
+
+      for (var element in chapterElements) {
+        final titleElement = element.querySelector('a');
+        final linkElement = element.querySelector('a');
+
+        if (titleElement != null && linkElement != null) {
+          final chapterTitle = titleElement.text.trim();
+          final chapterLink = linkElement.attributes['href'] ?? '';
+
+          chapters.add({
+            'title': chapterTitle,
+            'url': chapterLink,
+          });
+        }
+      }
+
+      debugPrint('   ✅ Found ${chapters.length} chapters');
+
+      // Extract actual last updated time from the website
+      // Look for the latest chapter's time
+      String? lastUpdated;
+      final firstChapterTime = document.querySelector('.chapter-time');
+      if (firstChapterTime != null) {
+        lastUpdated = firstChapterTime.text.trim();
+      }
+
+      novelDetails = {
+        'title': title,
+        'cover': coverUrl,
+        'chapters': chapters,
+        'lastUpdated': lastUpdated, // Use actual time from website, not current time
+      };
+
+      debugPrint('   ✅ Parsed successfully');
+    } catch (e) {
+      debugPrint('   ❌ Failed to fetch/parse: $e');
       return;
     }
 
-    // Parse the HTML
-    final document = parse(response.body);
-    final updatedNovel = _parseNovelFromHtml(document, novel.id, fullUrl);
-
-    if (updatedNovel == null) {
-      debugPrint('⚠️ Failed to parse novel data');
+    if (novelDetails.isEmpty ||
+        novelDetails['title'] == null ||
+        (novelDetails['title'] as String).isEmpty) {
+      debugPrint('⚠️ No valid novel details returned');
       return;
     }
+
+    // Create updated LightNovel object
+    final updatedNovel = LightNovel(
+      id: novel.id,
+      title: novelDetails['title'] ?? novel.title,
+      url: fullUrl,
+      coverUrl: novelDetails['cover'] ?? novel.coverUrl,
+      chapters: (novelDetails['chapters'] as List?)?.length ?? novel.chapters,
+      latestChapter: (novelDetails['chapters'] as List?)?.isNotEmpty == true
+          ? (novelDetails['chapters'] as List).first['title']
+          : novel.latestChapter,
+      lastUpdated: novelDetails['lastUpdated'] ?? novel.lastUpdated,
+      rating: novelDetails['rating'] ?? novel.rating,
+      reviews: novelDetails['reviews'] ?? novel.reviews,
+      views: novelDetails['views'] ?? novel.views,
+    );
 
     // Get last known state
     final lastKnownKey = 'novel_last_state_${novel.id}';
@@ -281,39 +486,6 @@ Future<void> _checkNovelForUpdates(
     debugPrint('✅ Updated: ${novel.title}');
   } catch (e) {
     debugPrint('❌ Error checking novel ${novel.title}: $e');
-  }
-}
-
-/// Parse novel data from HTML
-LightNovel? _parseNovelFromHtml(dynamic document, String id, String url) {
-  try {
-    // This is a simplified parser - adjust based on actual HTML structure
-    final title = document.querySelector('h1.novel-title')?.text.trim() ?? '';
-    final coverUrl =
-        document.querySelector('img.novel-cover')?.attributes['src'] ?? '';
-    final chaptersText =
-        document.querySelector('.chapter-count')?.text.trim() ?? '0';
-    final chapters =
-        int.tryParse(chaptersText.replaceAll(RegExp(r'[^\d]'), '')) ?? 0;
-    final latestChapter =
-        document.querySelector('.latest-chapter')?.text.trim() ?? '';
-    final lastUpdated =
-        document.querySelector('.last-updated')?.text.trim() ?? '';
-
-    if (title.isEmpty) return null;
-
-    return LightNovel(
-      id: id,
-      title: title,
-      url: url,
-      coverUrl: coverUrl,
-      chapters: chapters,
-      latestChapter: latestChapter,
-      lastUpdated: lastUpdated,
-    );
-  } catch (e) {
-    debugPrint('❌ Error parsing novel HTML: $e');
-    return null;
   }
 }
 
