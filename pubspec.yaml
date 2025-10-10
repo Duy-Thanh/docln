@@ -1,7 +1,7 @@
 name: docln
 description: "Light Novel Reader written in Flutter (for Android and iOS)"
 publish_to: 'none'
-version: 2025.10.09-rev2.0
+version: 2025.10.10-rev1.0
 
 environment:
   sdk: ^3.9.0
@@ -11,9 +11,9 @@ dependencies:
     sdk: flutter
   flutter:
     sdk: flutter
-  dynamic_color: ^1.7.0
-  palette_generator: ^0.3.3+4
-  image_picker: ^1.1.2
+  dynamic_color: ^1.8.1
+  palette_generator: ^0.3.3+7
+  image_picker: ^1.2.0
   sqflite: ^2.4.2
   http: ^1.5.0
   html: ^0.15.6
@@ -39,7 +39,7 @@ dependencies:
   # Persistent cache storage
   cached_network_image: ^3.4.1
   # Error tracking
-  sentry_flutter: ^9.6.0
+  # sentry_flutter: ^9.6.0
   # Efficient image loading and caching
   flutter_cache_manager: ^3.4.1
   # Image compression
