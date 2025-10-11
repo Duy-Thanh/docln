@@ -26,11 +26,8 @@ import 'services/crawler_service.dart';
 import 'services/preferences_service.dart';
 import 'services/preferences_recovery_service.dart';
 
-// Firebase
-// import 'package:firebase_core/firebase_core.dart';
-// import 'firebase_options.dart';
-// import 'package:firebase_crashlytics/firebase_crashlytics.dart';
-// import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
 // Dart libs
 import 'dart:ui';
@@ -244,6 +241,10 @@ void main() async {
   //   name: 'app_opened',
   //   parameters: {'time': DateTime.now().toString()},
   // );
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   // Initialize and repair SQLite preferences if needed (before initializing other services)
   await PreferencesService.repairIfNeeded();
