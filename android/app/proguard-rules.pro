@@ -71,6 +71,29 @@
 -dontwarn com.google.firebase.perf.**
 -dontwarn com.google.firebase.perf.network.FirebasePerfUrlConnection
 
+# --- Firebase Core & Messaging (critical rules) ---
+-keep class com.google.firebase.** { *; }
+-keep class com.google.android.gms.** { *; }
+-dontwarn com.google.firebase.**
+-dontwarn com.google.android.gms.**
+
+# Keep Firebase initialization provider
+-keepnames class com.google.firebase.provider.FirebaseInitProvider
+
+# Keep Firebase Messaging Service and related components
+-keep class com.google.firebase.messaging.FirebaseMessagingService { *; }
+-keep class com.google.firebase.iid.FirebaseInstanceIdReceiver { *; }
+-keep class * extends com.google.firebase.messaging.FirebaseMessagingService { *; }
+
+# Keep all classes annotated with @Keep
+-keep @com.google.firebase.annotations.Keep class * { *; }
+-keepclassmembers class * {
+    @com.google.firebase.annotations.Keep *;
+}
+
+# Keep attributes for Crashlytics / Analytics stack traces (optional but safe)
+# -keepattributes SourceFile,LineNumberTable
+
 # XML handling (fix for R8 missing classes)
 -dontwarn javax.xml.stream.**
 -dontwarn org.apache.tika.**
