@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/bookmark_service_v2.dart';
 import '../services/history_service_v2.dart';
 import '../services/background_notification_service.dart';
+import '../services/novel_database_service.dart';
 import 'package:provider/provider.dart';
 import '../widgets/network_image.dart';
 
@@ -171,6 +172,35 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
         final int? reviews = novelDetails['reviews'];
         final String? lastUpdated = novelDetails['lastUpdated'];
 
+        // 🔧 FIX: Create updated novel object with fetched data
+        // This ensures the bookmark saves complete data, not just what was passed in
+        final updatedNovel = LightNovel(
+          id: widget.novel.id,
+          title: widget.novel.title,
+          url: widget.novel.url,
+          coverUrl: widget.novel.coverUrl,
+          chapters: cleanedChapters.length,  // Use fetched chapter count
+          latestChapter: cleanedChapters.isNotEmpty 
+              ? cleanedChapters.first['title'] 
+              : widget.novel.latestChapter,
+          rating: rating,
+          reviews: reviews,
+          wordCount: wordCount,
+          views: views,
+          lastUpdated: lastUpdated,
+          alternativeTitles: altTitles.isNotEmpty ? altTitles : null,
+        );
+        
+        // 💾 Save updated novel to database immediately
+        // This ensures bookmarks will have complete data
+        try {
+          final db = Provider.of<NovelDatabaseService>(context, listen: false);
+          await db.saveNovel(updatedNovel);
+          debugPrint('✅ Saved updated novel data: ${cleanedChapters.length} chapters');
+        } catch (e) {
+          debugPrint('⚠️ Failed to save novel data: $e');
+        }
+
         setState(() {
           _genres =
               (novelDetails['genres'] as List<dynamic>?)?.cast<String>() ??
@@ -192,7 +222,7 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
           Provider.of<HistoryServiceV2>(
             context,
             listen: false,
-          ).addToHistory(widget.novel, widget.novel.latestChapter);
+          ).addToHistory(updatedNovel, updatedNovel.latestChapter);  // Use updated novel
         });
 
         // Debug information

@@ -286,6 +286,7 @@ void main() async {
   final bookmarkServiceV2 = BookmarkServiceV2();
   // final historyService = HistoryService(); // Old service removed
   final historyServiceV2 = HistoryServiceV2();
+  final novelDatabaseService = NovelDatabaseService(); // Novel database service
   final proxyService = ProxyService();
   final httpClient = AppHttpClient();
   final dnsService = DnsService();
@@ -302,6 +303,7 @@ void main() async {
     bookmarkServiceV2.init(),
     // historyService.loadHistory(); // Old service removed
     historyServiceV2.init(),
+    novelDatabaseService.initialize(), // Initialize novel database
     proxyService.initialize(),
     httpClient.initialize(),
     dnsService.initialize(),
@@ -347,6 +349,7 @@ void main() async {
         ),
         // ChangeNotifierProvider<HistoryService>.value(value: historyService), // Old service removed
         ChangeNotifierProvider<HistoryServiceV2>.value(value: historyServiceV2),
+        Provider<NovelDatabaseService>.value(value: novelDatabaseService), // Novel database provider
         ChangeNotifierProvider<ServerManagementService>.value(
           value: serverManagement,
         ),
