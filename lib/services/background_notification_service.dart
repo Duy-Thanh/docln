@@ -1,103 +1,270 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:workmanager/workmanager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' as html_parser;
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'novel_database_service.dart';
 import 'notification_service.dart';
 import '../modules/light_novel.dart';
 
 /// Background service that monitors bookmarked novels for updates
-/// Runs even when the app is closed
+/// Uses FCM (Firebase Cloud Messaging) for reliable push notifications
 class BackgroundNotificationService {
   static final BackgroundNotificationService _instance =
       BackgroundNotificationService._internal();
   factory BackgroundNotificationService() => _instance;
   BackgroundNotificationService._internal();
 
-  static const String _taskName = 'novel_update_check';
-  static const String _uniqueTaskName = 'novel_periodic_check';
-
-  // Android WorkManager MINIMUM is 15 minutes (PeriodicWorkRequest.MIN_PERIODIC_INTERVAL_MILLIS)
-  // Setting lower values will be automatically increased to 15 minutes by Android
-  // See: https://developer.android.com/reference/androidx/work/PeriodicWorkRequest
-  static const Duration _checkInterval = Duration(minutes: 15);
-
+  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   bool _initialized = false;
 
-  /// Initialize the background service
+  /// Initialize FCM and notification handlers
   Future<void> initialize() async {
     if (_initialized) return;
 
     try {
-      await Workmanager().initialize(
-        callbackDispatcher,
-        isInDebugMode: kDebugMode,
+      // Request notification permissions
+      final settings = await _fcm.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+        provisional: false,
       );
 
-      _initialized = true;
-      debugPrint('✅ BackgroundNotificationService initialized');
+      debugPrint('✅ FCM Permission status: ${settings.authorizationStatus}');
+
+      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+        // Get FCM token
+        final token = await _fcm.getToken();
+        debugPrint('📱 FCM Token: $token');
+
+        // Save token for server registration
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('fcm_token', token ?? '');
+
+        // Setup message handlers
+        _setupMessageHandlers();
+
+        _initialized = true;
+        debugPrint('✅ BackgroundNotificationService (FCM) initialized');
+      } else {
+        debugPrint('⚠️ FCM notifications not authorized');
+      }
     } catch (e) {
-      debugPrint('❌ Error initializing background service: $e');
+      debugPrint('❌ Error initializing FCM service: $e');
       rethrow;
     }
   }
 
-  /// Start periodic background checks
+  /// Setup FCM message handlers
+  void _setupMessageHandlers() {
+    // Handle foreground messages
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      debugPrint('📨 Foreground message received: ${message.notification?.title}');
+      _handleMessage(message);
+    });
+
+    // Handle background messages (when app is in background but not terminated)
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      debugPrint('📬 Background message opened: ${message.notification?.title}');
+      _handleMessage(message);
+    });
+
+    // Handle messages when app is terminated (setup in main.dart)
+    // FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  }
+
+  /// Handle incoming FCM messages
+  void _handleMessage(RemoteMessage message) async {
+    try {
+      final notification = message.notification;
+      final data = message.data;
+
+      if (notification != null) {
+        // Show local notification
+        await _sendNotification(
+          id: message.hashCode,
+          title: notification.title ?? 'Novel Update',
+          body: notification.body ?? '',
+          payload: data['novelId'],
+        );
+
+        // Update last check time
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('last_background_check', DateTime.now().millisecondsSinceEpoch);
+      }
+
+      // Handle data payload
+      if (data.containsKey('action')) {
+        await _handleDataPayload(data);
+      }
+    } catch (e) {
+      debugPrint('❌ Error handling FCM message: $e');
+    }
+  }
+
+  /// Handle data-only payload from FCM
+  Future<void> _handleDataPayload(Map<String, dynamic> data) async {
+    final action = data['action'];
+
+    switch (action) {
+      case 'novel_update':
+        final novelId = data['novelId'];
+        debugPrint('📖 Novel update received for: $novelId');
+        // Optionally fetch latest novel details from server
+        break;
+
+      case 'force_refresh':
+        debugPrint('🔄 Force refresh requested from server');
+        // Trigger a manual refresh of all bookmarks
+        break;
+
+      case 'sync_bookmarks':
+        debugPrint('🔄 Syncing bookmarks with server');
+        await _syncBookmarksWithServer();
+        break;
+
+      default:
+        debugPrint('⚠️ Unknown action: $action');
+    }
+  }
+
+  /// Start FCM-based monitoring by registering bookmarks with server
   Future<void> startPeriodicChecks() async {
     await initialize();
 
     try {
-      // Cancel any existing task first to ensure clean registration
-      await Workmanager().cancelByUniqueName(_uniqueTaskName);
-      
-      // Register periodic task with proper constraints
-      // ExistingWorkPolicy is handled automatically by WorkManager
-      await Workmanager().registerPeriodicTask(
-        _uniqueTaskName,
-        _taskName,
-        frequency: _checkInterval,
-        constraints: Constraints(
-          networkType: NetworkType.connected, // Require internet
-          requiresBatteryNotLow: false, // Run even on low battery
-          requiresCharging: false, // Run even when not charging
-          requiresDeviceIdle: false, // Run even when device is active
-        ),
-        initialDelay: const Duration(minutes: 1), // First check after 1 minute
-        backoffPolicy: BackoffPolicy.linear,
-        backoffPolicyDelay: const Duration(minutes: 5),
-      );
+      final prefs = await SharedPreferences.getInstance();
+      final fcmToken = prefs.getString('fcm_token');
+
+      if (fcmToken == null || fcmToken.isEmpty) {
+        throw Exception('FCM token not available');
+      }
+
+      // Register bookmarks with your backend server
+      await _syncBookmarksWithServer();
 
       // Save registration status
-      final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('background_checks_enabled', true);
       await prefs.setInt('background_checks_started_at', DateTime.now().millisecondsSinceEpoch);
 
-      debugPrint('✅ Periodic novel update checks registered (15-minute interval)');
-      debugPrint('⏰ First check will run in ~1 minute, then every ~15 minutes');
-      debugPrint('📱 WorkManager will optimize timing based on battery and network');
+      debugPrint('✅ FCM monitoring enabled');
+      debugPrint('📡 Server will monitor your bookmarks and send push notifications');
+      debugPrint('⚡ Instant notifications when updates are detected!');
     } catch (e) {
-      debugPrint('❌ Error starting periodic checks: $e');
+      debugPrint('❌ Error starting FCM monitoring: $e');
       rethrow;
     }
   }
 
-  /// Stop periodic background checks
+  /// Stop FCM monitoring
   Future<void> stopPeriodicChecks() async {
     try {
-      await Workmanager().cancelByUniqueName(_uniqueTaskName);
-      
-      // Save registration status and clear timestamps
+      // Unregister from server
+      await _unregisterFromServer();
+
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('background_checks_enabled', false);
-      await prefs.remove('background_checks_started_at'); // Clear registration time
-      // Note: Keep last_background_check for reference (shows last successful run)
-      
-      debugPrint('⏹️ Periodic novel update checks stopped');
+      await prefs.remove('background_checks_started_at');
+
+      debugPrint('⏹️ FCM monitoring stopped');
     } catch (e) {
-      debugPrint('❌ Error stopping periodic checks: $e');
+      debugPrint('❌ Error stopping FCM monitoring: $e');
+    }
+  }
+
+  /// Sync bookmarks with backend server
+  Future<void> _syncBookmarksWithServer() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final fcmToken = prefs.getString('fcm_token');
+      final currentServer = prefs.getString('selected_server') ?? 'https://docln.sbs';
+
+      // Get all bookmarks
+      final db = NovelDatabaseService();
+      await db.initialize();
+      final bookmarks = await db.getBookmarks(currentServer);
+
+      if (bookmarks.isEmpty) {
+        debugPrint('ℹ️ No bookmarks to sync');
+        return;
+      }
+
+      // Prepare bookmark data for server
+      final bookmarkData = bookmarks.map((novel) {
+        return {
+          'novelId': novel.id,
+          'title': novel.title,
+          'url': novel.url,
+          'lastUpdated': novel.lastUpdated,
+          'chapters': novel.chapters,
+          'notificationEnabled': prefs.getBool('notification_enabled_${novel.id}') ?? true,
+        };
+      }).toList();
+
+      // TODO: Replace with your actual backend server URL after deployment
+      // Examples:
+      // - Railway: 'https://your-app.up.railway.app/api/sync-bookmarks'
+      // - Render: 'https://docln-notification-server.onrender.com/api/sync-bookmarks'
+      // - Heroku: 'https://docln-notification-server.herokuapp.com/api/sync-bookmarks'
+      // - VPS: 'https://your-domain.com/api/sync-bookmarks'
+      // 
+      // For local testing:
+      // - Android Emulator: 'http://10.0.2.2:3000/api/sync-bookmarks'
+      // - iOS Simulator: 'http://localhost:3000/api/sync-bookmarks'
+      // - Physical Device: 'http://YOUR_COMPUTER_IP:3000/api/sync-bookmarks'
+      final serverUrl = 'http://10.0.2.2:3000/api/sync-bookmarks'; // Android Emulator
+
+      debugPrint('📤 Syncing ${bookmarks.length} bookmarks with server...');
+
+      final response = await http.post(
+        Uri.parse(serverUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'fcmToken': fcmToken,
+          'bookmarks': bookmarkData,
+          'server': currentServer,
+        }),
+      ).timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        debugPrint('✅ Bookmarks synced with server');
+      } else {
+        debugPrint('⚠️ Server returned status ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('❌ Error syncing bookmarks: $e');
+      // Fallback to local monitoring if server is unavailable
+      debugPrint('⚠️ Falling back to local monitoring');
+    }
+  }
+
+  /// Unregister from server
+  Future<void> _unregisterFromServer() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final fcmToken = prefs.getString('fcm_token');
+
+      if (fcmToken == null) return;
+
+      // TODO: Replace with your actual backend server URL after deployment
+      // For local testing:
+      // - Android Emulator: 'http://10.0.2.2:3000/api/unregister'
+      // - iOS Simulator: 'http://localhost:3000/api/unregister'
+      // - Physical Device: 'http://YOUR_COMPUTER_IP:3000/api/unregister'
+      final serverUrl = 'http://10.0.2.2:3000/api/unregister'; // Android Emulator
+
+      await http.post(
+        Uri.parse(serverUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'fcmToken': fcmToken}),
+      ).timeout(const Duration(seconds: 10));
+
+      debugPrint('✅ Unregistered from server');
+    } catch (e) {
+      debugPrint('⚠️ Error unregistering from server: $e');
     }
   }
 
@@ -116,7 +283,7 @@ class BackgroundNotificationService {
   Future<DateTime?> getLastCheckTime() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.reload(); // Force reload to get updates from background isolate
+      await prefs.reload(); // Force reload to get updates
       final timestamp = prefs.getInt('last_background_check');
       return timestamp != null 
           ? DateTime.fromMillisecondsSinceEpoch(timestamp)
@@ -143,6 +310,10 @@ class BackgroundNotificationService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('notification_enabled_$novelId', enabled);
+      
+      // Re-sync with server to update notification preferences
+      await _syncBookmarksWithServer();
+      
       debugPrint(
         '${enabled ? '🔔' : '🔕'} Notifications ${enabled ? 'enabled' : 'disabled'} for novel $novelId',
       );
@@ -151,37 +322,87 @@ class BackgroundNotificationService {
     }
   }
 
-  /// Trigger a one-time manual check NOW (for testing/debugging)
+  /// Trigger a manual check (useful for testing or immediate refresh)
+  /// This will fetch and check all bookmarks locally
   Future<void> triggerManualCheck() async {
     await initialize();
 
     try {
-      debugPrint('⚡ Triggering manual background check...');
+      debugPrint('⚡ Triggering manual check...');
       
-      // Register a one-time task with no delay
-      await Workmanager().registerOneOffTask(
-        'manual_check_${DateTime.now().millisecondsSinceEpoch}',
-        _taskName,
-        constraints: Constraints(
-          networkType: NetworkType.connected,
-        ),
-        initialDelay: Duration.zero, // Run immediately
-      );
+      final prefs = await SharedPreferences.getInstance();
+      final currentServer = prefs.getString('selected_server') ?? 'https://docln.sbs';
+      
+      // Get all bookmarks
+      final db = NovelDatabaseService();
+      await db.initialize();
+      final bookmarks = await db.getBookmarks(currentServer);
 
-      debugPrint('✅ Manual check triggered! Watch logcat for results.');
+      if (bookmarks.isEmpty) {
+        debugPrint('ℹ️ No bookmarked novels to check');
+        return;
+      }
+
+      debugPrint('📚 Checking ${bookmarks.length} bookmarked novels...');
+
+      // Check app version
+      await _checkAppVersion();
+
+      // Check each bookmark
+      for (final novel in bookmarks) {
+        try {
+          final isEnabled = prefs.getBool('notification_enabled_${novel.id}') ?? true;
+          if (!isEnabled) {
+            debugPrint('🔕 Skipping ${novel.title} (notifications disabled)');
+            continue;
+          }
+
+          await _checkNovelForUpdates(novel, currentServer, db, prefs);
+        } catch (e) {
+          debugPrint('❌ Error checking novel ${novel.title}: $e');
+        }
+
+        // Small delay to avoid rate limiting
+        await Future.delayed(const Duration(seconds: 1));
+      }
+
+      // Update last check time
+      await prefs.setInt('last_background_check', DateTime.now().millisecondsSinceEpoch);
+
+      debugPrint('✅ Manual check completed!');
     } catch (e) {
-      debugPrint('❌ Error triggering manual check: $e');
+      debugPrint('❌ Error during manual check: $e');
       rethrow;
     }
   }
 
-  /// Cancel all background tasks
-  Future<void> cancelAll() async {
+  /// Get FCM token
+  Future<String?> getFcmToken() async {
     try {
-      await Workmanager().cancelAll();
-      debugPrint('🗑️ All background tasks cancelled');
+      return await _fcm.getToken();
     } catch (e) {
-      debugPrint('❌ Error cancelling tasks: $e');
+      debugPrint('❌ Error getting FCM token: $e');
+      return null;
+    }
+  }
+
+  /// Subscribe to a topic (for broadcast notifications)
+  Future<void> subscribeToTopic(String topic) async {
+    try {
+      await _fcm.subscribeToTopic(topic);
+      debugPrint('✅ Subscribed to topic: $topic');
+    } catch (e) {
+      debugPrint('❌ Error subscribing to topic: $e');
+    }
+  }
+
+  /// Unsubscribe from a topic
+  Future<void> unsubscribeFromTopic(String topic) async {
+    try {
+      await _fcm.unsubscribeFromTopic(topic);
+      debugPrint('✅ Unsubscribed from topic: $topic');
+    } catch (e) {
+      debugPrint('❌ Error unsubscribing from topic: $e');
     }
   }
 
@@ -233,104 +454,20 @@ class BackgroundNotificationService {
   }
 }
 
-/// Background task callback (must be top-level function)
+/// Background message handler for FCM (must be top-level function)
+/// This handles messages when the app is terminated
 @pragma('vm:entry-point')
-void callbackDispatcher() {
-  Workmanager().executeTask((task, inputData) async {
-    final startTime = DateTime.now();
-    debugPrint('═══════════════════════════════════════════════════════');
-    debugPrint('🔄 BACKGROUND TASK STARTED: $task');
-    debugPrint('⏰ Time: ${startTime.toString()}');
-    debugPrint('═══════════════════════════════════════════════════════');
-
-    try {
-      // Save last check time IMMEDIATELY
-      final prefs = await SharedPreferences.getInstance();
-      final savedSuccessfully = await prefs.setInt('last_background_check', startTime.millisecondsSinceEpoch);
-      debugPrint('💾 Saved timestamp: ${startTime.toString()} (Success: $savedSuccessfully)');
-      
-      // Verify it was saved
-      final verifyTimestamp = prefs.getInt('last_background_check');
-      debugPrint('✅ Verified timestamp: ${verifyTimestamp != null ? DateTime.fromMillisecondsSinceEpoch(verifyTimestamp) : "NOT SAVED!"}');
-
-      // Check app version
-      await BackgroundNotificationService._checkAppVersion();
-
-      // Get current server URL
-      final currentServer =
-          prefs.getString('selected_server') ?? 'https://docln.sbs';
-
-      debugPrint('🌐 Server: $currentServer');
-
-      // Initialize database
-      final db = NovelDatabaseService();
-      await db.initialize();
-
-      // Get all bookmarked novels
-      final bookmarks = await db.getBookmarks(currentServer);
-
-      if (bookmarks.isEmpty) {
-        debugPrint('ℹ️ No bookmarked novels to check');
-        return Future.value(true);
-      }
-
-      debugPrint(
-        '📚 Checking ${bookmarks.length} bookmarked novels for updates',
-      );
-
-      // Test basic connectivity first
-      debugPrint('🌐 Testing basic connectivity...');
-      try {
-        final testResponse = await http.get(Uri.parse('$currentServer/'))
-            .timeout(const Duration(seconds: 10));
-        debugPrint('   ✅ Server reachable (status: ${testResponse.statusCode})');
-      } catch (e) {
-        debugPrint('   ❌ Server connectivity test failed: $e');
-        debugPrint('   ⚠️ Background tasks may fail due to network issues');
-      }
-
-      // Check each bookmarked novel for updates
-      for (final novel in bookmarks) {
-        try {
-          // Check if notifications are enabled for this novel
-          final isEnabled =
-              prefs.getBool('notification_enabled_${novel.id}') ?? true;
-
-          if (!isEnabled) {
-            debugPrint('🔕 Skipping ${novel.title} (notifications disabled)');
-            continue;
-          }
-
-          await _checkNovelForUpdates(novel, currentServer, db, prefs);
-        } catch (e) {
-          debugPrint('❌ Error checking novel ${novel.title}: $e');
-        }
-
-        // Small delay between requests to avoid rate limiting
-        await Future.delayed(const Duration(seconds: 2));
-      }
-
-      final endTime = DateTime.now();
-      final duration = endTime.difference(startTime);
-      
-      // Save completion time as the "last check" time
-      final savedCompletion = await prefs.setInt('last_background_check', endTime.millisecondsSinceEpoch);
-      debugPrint('💾 Saved completion timestamp: ${endTime.toString()} (Success: $savedCompletion)');
-      
-      debugPrint('═══════════════════════════════════════════════════════');
-      debugPrint('✅ BACKGROUND TASK COMPLETED');
-      debugPrint('⏱️ Duration: ${duration.inSeconds} seconds');
-      debugPrint('⏰ Next check: ~15 minutes (Android-controlled)');
-      debugPrint('═══════════════════════════════════════════════════════');
-      
-      return Future.value(true);
-    } catch (e) {
-      debugPrint('═══════════════════════════════════════════════════════');
-      debugPrint('❌ BACKGROUND TASK FAILED: $e');
-      debugPrint('═══════════════════════════════════════════════════════');
-      return Future.value(false);
-    }
-  });
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  debugPrint('📬 Handling background message: ${message.notification?.title}');
+  
+  // Initialize services if needed
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setInt('last_background_check', DateTime.now().millisecondsSinceEpoch);
+  
+  // You can handle data payload here if needed
+  if (message.data.isNotEmpty) {
+    debugPrint('📦 Message data: ${message.data}');
+  }
 }
 
 /// Check a single novel for updates

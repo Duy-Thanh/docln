@@ -27,10 +27,24 @@ import 'services/preferences_service.dart';
 import 'services/preferences_recovery_service.dart';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Dart libs
 import 'dart:ui';
+
+/// Background message handler for FCM (must be top-level function)
+/// This handles messages when the app is terminated
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  debugPrint('📬 Background message: ${message.notification?.title}');
+  
+  // Update last check time
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setInt('last_background_check', DateTime.now().millisecondsSinceEpoch);
+}
 
 // Function to migrate from old preferences to new SQLite-based preferences
 Future<void> migratePreferences() async {
@@ -245,6 +259,9 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // Register FCM background message handler
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   // Initialize and repair SQLite preferences if needed (before initializing other services)
   await PreferencesService.repairIfNeeded();
