@@ -65,6 +65,9 @@ class BookmarkServiceV2 extends ChangeNotifier {
         // Auto-enable notifications for this novel
         await _enableNotificationsForNovel(novel);
 
+        // 📤 IMPORTANT: Sync with server immediately to register for notifications
+        await _syncWithServer();
+
         return true;
       }
 
@@ -116,6 +119,10 @@ class BookmarkServiceV2 extends ChangeNotifier {
       if (success) {
         await loadBookmarks(); // Reload to get updated list
         debugPrint('✅ Removed bookmark: $novelId');
+        
+        // 📤 IMPORTANT: Sync with server immediately to unregister notifications
+        await _syncWithServer();
+        
         return true;
       }
 
@@ -123,6 +130,23 @@ class BookmarkServiceV2 extends ChangeNotifier {
     } catch (e) {
       debugPrint('❌ Error removing bookmark: $e');
       return false;
+    }
+  }
+
+  /// Sync bookmarks with server for notifications
+  Future<void> _syncWithServer() async {
+    try {
+      debugPrint('📤 Syncing bookmarks with notification server...');
+      await _backgroundService.initialize();
+      
+      // Use the background service's sync method
+      // This will send all current bookmarks to the server
+      await _backgroundService.startPeriodicChecks();
+      
+      debugPrint('✅ Bookmarks synced with server');
+    } catch (e) {
+      debugPrint('⚠️ Error syncing with server (will retry later): $e');
+      // Don't throw - bookmark operation already succeeded locally
     }
   }
 

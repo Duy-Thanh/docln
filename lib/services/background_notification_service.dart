@@ -19,6 +19,8 @@ class BackgroundNotificationService {
 
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   bool _initialized = false;
+  int? _lastKnownServerStartTime; // Track server restarts
+  Timer? _heartbeatTimer; // TIER 3: Periodic heartbeat
 
   /// Initialize FCM and notification handlers
   Future<void> initialize() async {
@@ -46,6 +48,9 @@ class BackgroundNotificationService {
 
         // Setup message handlers
         _setupMessageHandlers();
+
+        // 🔒 TIER 3: Start heartbeat to detect server restarts
+        _startHeartbeat();
 
         _initialized = true;
         debugPrint('✅ BackgroundNotificationService (FCM) initialized');
@@ -162,6 +167,10 @@ class BackgroundNotificationService {
   /// Stop FCM monitoring
   Future<void> stopPeriodicChecks() async {
     try {
+      // Stop heartbeat
+      _heartbeatTimer?.cancel();
+      _heartbeatTimer = null;
+      
       // Unregister from server
       await _unregisterFromServer();
 
@@ -172,6 +181,43 @@ class BackgroundNotificationService {
       debugPrint('⏹️ FCM monitoring stopped');
     } catch (e) {
       debugPrint('❌ Error stopping FCM monitoring: $e');
+    }
+  }
+
+  /// 🔒 TIER 3: Heartbeat to detect server restarts
+  void _startHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 60), (_) async {
+      await _checkServerHealth();
+    });
+    debugPrint('💓 Heartbeat started (60s interval)');
+  }
+
+  /// Check if server has restarted and re-sync if needed
+  Future<void> _checkServerHealth() async {
+    try {
+      // final serverUrl = 'http://10.0.2.2:3000/health';
+      final serverUrl = 'https://docln.javalorant.xyz/health';
+      final response = await http.get(Uri.parse(serverUrl))
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final currentServerStartTime = data['serverStartTime'];
+
+        if (currentServerStartTime != null) {
+          if (_lastKnownServerStartTime != null && 
+              _lastKnownServerStartTime != currentServerStartTime) {
+            // 🔒 TIER 2: Server restarted! Re-sync bookmarks
+            debugPrint('🔄 Server restart detected! Re-syncing bookmarks...');
+            await _syncBookmarksWithServer();
+          }
+          _lastKnownServerStartTime = currentServerStartTime;
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ Heartbeat check failed: $e');
+      // Server might be down, will retry in next interval
     }
   }
 
@@ -215,7 +261,8 @@ class BackgroundNotificationService {
       // - Android Emulator: 'http://10.0.2.2:3000/api/sync-bookmarks'
       // - iOS Simulator: 'http://localhost:3000/api/sync-bookmarks'
       // - Physical Device: 'http://YOUR_COMPUTER_IP:3000/api/sync-bookmarks'
-      final serverUrl = 'http://10.0.2.2:3000/api/sync-bookmarks'; // Android Emulator
+      // final serverUrl = 'http://10.0.2.2:3000/api/sync-bookmarks'; // Android Emulator
+      final serverUrl = 'https://docln.javalorant.xyz/api/sync-bookmarks'; // Android Emulator
 
       debugPrint('📤 Syncing ${bookmarks.length} bookmarks with server...');
 
@@ -230,6 +277,12 @@ class BackgroundNotificationService {
       ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
+        // 🔒 TIER 2: Track server start time for restart detection
+        final responseData = jsonDecode(response.body);
+        if (responseData['serverStartTime'] != null) {
+          _lastKnownServerStartTime = responseData['serverStartTime'];
+          debugPrint('✅ Server start time tracked: $_lastKnownServerStartTime');
+        }
         debugPrint('✅ Bookmarks synced with server');
       } else {
         debugPrint('⚠️ Server returned status ${response.statusCode}');
@@ -254,7 +307,8 @@ class BackgroundNotificationService {
       // - Android Emulator: 'http://10.0.2.2:3000/api/unregister'
       // - iOS Simulator: 'http://localhost:3000/api/unregister'
       // - Physical Device: 'http://YOUR_COMPUTER_IP:3000/api/unregister'
-      final serverUrl = 'http://10.0.2.2:3000/api/unregister'; // Android Emulator
+      // final serverUrl = 'http://10.0.2.2:3000/api/unregister'; // Android Emulator
+      final serverUrl = 'https://docln.javalorant.xyz/api/unregister'; // Android Emulator
 
       await http.post(
         Uri.parse(serverUrl),
@@ -411,7 +465,7 @@ class BackgroundNotificationService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final lastKnownVersion = prefs.getString('last_known_app_version') ?? '';
-      const currentVersion = '2025.10.10'; // From pubspec.yaml
+      const currentVersion = '2025.10.11'; // From pubspec.yaml
 
       if (lastKnownVersion.isNotEmpty && lastKnownVersion != currentVersion) {
         // New version detected
