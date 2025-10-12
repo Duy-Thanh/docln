@@ -74,6 +74,7 @@ class SettingsScreenState extends State<SettingsScreen>
   String? currentServer;
   double textSize = 16.0;
   bool isNotificationsEnabled = true;
+  String notificationSound = 'pixie_dust'; // Default notification sound
   String? selectedLanguage;
   bool isDataSaverEnabled = false;
 
@@ -97,6 +98,7 @@ class SettingsScreenState extends State<SettingsScreen>
   late bool _initialDarkMode = false;
   late double _initialTextSize = 16.0;
   late bool _initialNotifications = true;
+  late String _initialNotificationSound = 'pixie_dust';
   late String? _initialLanguage = 'English';
   late bool _initialDataSaver = false;
   late String? _initialServer;
@@ -166,6 +168,9 @@ class SettingsScreenState extends State<SettingsScreen>
 
       // Check notification permission status
       final hasPermission = await notificationService.checkPermission();
+      
+      // Load notification sound preference
+      final savedSound = await notificationService.getNotificationSound();
 
       setState(() {
         isDarkMode = prefsService.getBool('darkMode', defaultValue: false);
@@ -174,6 +179,7 @@ class SettingsScreenState extends State<SettingsScreen>
         isNotificationsEnabled =
             hasPermission &&
             prefsService.getBool('isNotifications', defaultValue: true);
+        notificationSound = savedSound; // Load saved sound
         selectedLanguage = prefsService.getString(
           'language',
           defaultValue: 'English',
@@ -186,6 +192,7 @@ class SettingsScreenState extends State<SettingsScreen>
         _initialDarkMode = isDarkMode;
         _initialTextSize = textSize;
         _initialNotifications = isNotificationsEnabled;
+        _initialNotificationSound = notificationSound; // Save initial sound
         _initialLanguage = selectedLanguage;
         _initialDataSaver = isDataSaverEnabled;
       });
@@ -248,6 +255,7 @@ class SettingsScreenState extends State<SettingsScreen>
           isDarkMode != _initialDarkMode ||
           textSize != _initialTextSize ||
           isNotificationsEnabled != _initialNotifications ||
+          notificationSound != _initialNotificationSound ||
           selectedLanguage != _initialLanguage ||
           isDataSaverEnabled != _initialDataSaver ||
           currentServer != _initialServer ||
@@ -269,6 +277,7 @@ class SettingsScreenState extends State<SettingsScreen>
         isDarkMode != _initialDarkMode ||
         textSize != _initialTextSize ||
         isNotificationsEnabled != _initialNotifications ||
+        notificationSound != _initialNotificationSound ||
         selectedLanguage != _initialLanguage ||
         isDataSaverEnabled != _initialDataSaver ||
         currentServer != _initialServer ||
@@ -327,6 +336,7 @@ class SettingsScreenState extends State<SettingsScreen>
         prefsService.setDouble('textSize', textSize),
         Future(() => themeService.setTextSize(textSize)),
         notificationService.setNotificationEnabled(isNotificationsEnabled),
+        notificationService.setNotificationSound(notificationSound), // Save notification sound
         prefsService.setString('language', selectedLanguage ?? 'English'),
         prefsService.setBool('dataSaver', isDataSaverEnabled),
         serverManagement.setServer(currentServer ?? 'https://docln.sbs'),
@@ -345,6 +355,11 @@ class SettingsScreenState extends State<SettingsScreen>
         _settingsService.setDnsProvider(dnsProvider),
         _settingsService.setCustomDns(customDnsController.text),
       ]);
+      
+      // Update notification channel if sound changed
+      if (notificationSound != _initialNotificationSound) {
+        await notificationService.updateNotificationChannel();
+      }
 
       // Update proxy, DNS, and crawler services with new settings
       await proxyService.updateProxySettings();
@@ -619,6 +634,351 @@ class SettingsScreenState extends State<SettingsScreen>
         ],
       ),
     );
+  }
+
+  Widget _buildNotificationSoundTile() {
+    String soundLabel = NotificationService.availableSounds[notificationSound] ?? 'Unknown';
+    
+    // If custom sound, show file name
+    if (notificationSound == 'custom') {
+      soundLabel = 'Custom Sound File';
+    }
+    
+    return ListTile(
+      leading: Icon(
+        notificationSound == 'custom' ? Icons.folder_open : Icons.volume_up_rounded,
+        color: Theme.of(context).colorScheme.primary,
+      ),
+      title: const Text('Notification Sound'),
+      subtitle: Text(soundLabel),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () => _showNotificationSoundPicker(),
+    );
+  }
+
+  Widget _buildTestNotificationButton() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: () async {
+            final notificationService = Provider.of<NotificationService>(
+              context,
+              listen: false,
+            );
+            await notificationService.testNotificationSound();
+            if (mounted) {
+              CustomToast.show(context, '🔊 Test notification sent!');
+            }
+          },
+          icon: const Icon(Icons.notifications_active, size: 20),
+          label: const Text('Test Notification Sound'),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            alignment: Alignment.center,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showNotificationSoundPicker() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              Icons.music_note,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: 8),
+            const Text('Notification Sound'),
+          ],
+        ),
+        contentPadding: const EdgeInsets.symmetric(vertical: 16),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Built-in sounds
+              ...NotificationService.availableSounds.entries
+                  .where((e) => e.key != 'custom' && e.key != 'system_picker')
+                  .map((entry) {
+                final soundKey = entry.key;
+                final soundLabel = entry.value;
+                final isSelected = notificationSound == soundKey;
+                
+                return RadioListTile<String>(
+                  value: soundKey,
+                  groupValue: notificationSound,
+                  title: Text(soundLabel),
+                  subtitle: soundKey != 'default' 
+                      ? Text('@raw/$soundKey', style: const TextStyle(fontSize: 12))
+                      : null,
+                  selected: isSelected,
+                  activeColor: Theme.of(context).colorScheme.primary,
+                  onChanged: (value) async {
+                    if (value != null) {
+                      await _handleSoundSelection(value);
+                    }
+                  },
+                );
+              }),
+              
+              const Divider(),
+              
+              // Custom sound file option - redirects to system picker
+              ListTile(
+                leading: Icon(
+                  Icons.audio_file,
+                  color: Colors.orange,
+                ),
+                title: const Text('Use Custom Sound'),
+                subtitle: const Text('Opens system settings for custom sounds'),
+                trailing: const Icon(Icons.open_in_new),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _pickCustomSoundFile();
+                },
+              ),
+              
+              // System picker option
+              ListTile(
+                leading: Icon(
+                  Icons.settings,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                title: const Text('Use System Picker'),
+                subtitle: const Text('Open Android notification settings'),
+                trailing: const Icon(Icons.open_in_new),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _openSystemNotificationSettings();
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleSoundSelection(String soundKey) async {
+    Navigator.pop(context);
+    _onSettingChanged(() {
+      setState(() => notificationSound = soundKey);
+    });
+    
+    final notificationService = Provider.of<NotificationService>(
+      context,
+      listen: false,
+    );
+    
+    // Save and test the sound
+    await notificationService.setNotificationSound(soundKey);
+    await notificationService.updateNotificationChannel();
+    await notificationService.testNotificationSound();
+  }
+
+  Future<void> _pickCustomSoundFile() async {
+    // Show info dialog explaining limitation
+    if (mounted) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.info_outline, color: Colors.orange),
+              SizedBox(width: 8),
+              Text('Custom Sounds'),
+            ],
+          ),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Android notifications can only use:',
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+              SizedBox(height: 12),
+              Text('• Built-in app sounds (Pixie Dust, Default)'),
+              SizedBox(height: 8),
+              Text('• System sounds via Android Settings'),
+              SizedBox(height: 16),
+              Text(
+                'To use your own custom sound file, you need to:',
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+              SizedBox(height: 12),
+              Text('1. Use "System Picker" option'),
+              SizedBox(height: 8),
+              Text('2. Android will show all available sounds'),
+              SizedBox(height: 8),
+              Text('3. Some devices let you add custom sounds there'),
+              SizedBox(height: 16),
+              Text(
+                'Would you like to open System Settings now?',
+                style: TextStyle(fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Open Settings'),
+            ),
+          ],
+        ),
+      );
+      
+      if (proceed == true) {
+        await _openSystemNotificationSettings();
+      }
+    }
+    
+    /* OLD CODE - File picker not supported for notifications
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.audio,
+        allowMultiple: false,
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        final filePath = file.path;
+        
+        if (filePath != null) {
+          final notificationService = Provider.of<NotificationService>(
+            context,
+            listen: false,
+          );
+          
+          // Save custom sound path
+          await notificationService.setCustomSoundPath(filePath);
+          
+          _onSettingChanged(() {
+            setState(() => notificationSound = 'custom');
+          });
+          
+          await notificationService.setNotificationSound('custom');
+          
+          if (mounted) {
+            CustomToast.show(
+              context,
+              '✅ Custom sound selected: ${file.name}',
+            );
+            
+            // Show option to test
+            final shouldTest = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Sound Selected'),
+                content: Text('Test notification with "${file.name}"?'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Later'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('Test Now'),
+                  ),
+                ],
+              ),
+            );
+            
+            if (shouldTest == true && mounted) {
+              // Note: Custom file playback may require copying to app directory
+              CustomToast.show(
+                context,
+                '🔔 Custom sound files require app restart to take effect',
+              );
+            }
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        CustomToast.show(
+          context,
+          '❌ Error selecting sound file: $e',
+        );
+      }
+    }
+    */
+  }
+
+  Future<void> _openSystemNotificationSettings() async {
+    try {
+      final notificationService = Provider.of<NotificationService>(
+        context,
+        listen: false,
+      );
+      
+      await notificationService.openNotificationChannelSettings();
+      
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.blue),
+                SizedBox(width: 8),
+                Text('System Settings'),
+              ],
+            ),
+            content: const Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'You can change the notification sound in Android\'s system settings:',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+                SizedBox(height: 16),
+                Text('1. Find "High Importance Notifications" channel'),
+                SizedBox(height: 8),
+                Text('2. Tap "Sound"'),
+                SizedBox(height: 8),
+                Text('3. Choose from all available system sounds'),
+                SizedBox(height: 16),
+                Text(
+                  'This will override the app\'s sound setting.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Got It'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        CustomToast.show(
+          context,
+          '❌ Error opening system settings: $e',
+        );
+      }
+    }
   }
 
   void _showTextSizeDialog() {
@@ -3642,6 +4002,10 @@ class SettingsScreenState extends State<SettingsScreen>
                     isNotificationsEnabled,
                     (value) => _toggleNotifications(value),
                   ),
+                  if (isNotificationsEnabled) ...[
+                    _buildNotificationSoundTile(),
+                    _buildTestNotificationButton(),
+                  ],
                 ]),
                 _buildSection('Developer Tools', [_buildBackgroundServiceDebugTile()]),
                 _buildSection('Language', [_buildLanguageTile()]),
