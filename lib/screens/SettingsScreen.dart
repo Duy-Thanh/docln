@@ -356,10 +356,8 @@ class SettingsScreenState extends State<SettingsScreen>
         _settingsService.setCustomDns(customDnsController.text),
       ]);
       
-      // Update notification channel if sound changed
-      if (notificationSound != _initialNotificationSound) {
-        await notificationService.updateNotificationChannel();
-      }
+      // Note: Notification channel is automatically recreated when sound changes
+      // via setNotificationSound() in _handleSoundSelection()
 
       // Update proxy, DNS, and crawler services with new settings
       await proxyService.updateProxySettings();
@@ -783,8 +781,8 @@ class SettingsScreenState extends State<SettingsScreen>
     );
     
     // Save and test the sound
+    // Note: setNotificationSound() automatically recreates the channel with new sound
     await notificationService.setNotificationSound(soundKey);
-    await notificationService.updateNotificationChannel();
     await notificationService.testNotificationSound();
   }
 

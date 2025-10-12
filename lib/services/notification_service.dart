@@ -49,12 +49,62 @@ class NotificationService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Set notification sound preference
+  /// Set notification sound preference and recreate channel
   Future<void> setNotificationSound(String sound) async {
     await _prefsService.initialize();
     await _prefsService.setString('notification_sound', sound);
+    
+    // Recreate notification channel with new sound
+    await _recreateNotificationChannel(sound);
+    
     notifyListeners();
     debugPrint('🔔 Notification sound changed to: $sound');
+  }
+  
+  /// Recreate notification channel with new sound
+  /// IMPORTANT: On Android 8.0+, once a user sees a channel, its settings are locked
+  /// The only way to change them is to delete and recreate with a new ID or
+  /// have the user change them manually in Settings
+  Future<void> _recreateNotificationChannel(String soundName) async {
+    try {
+      final platform = _notifications
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+
+      if (platform != null) {
+        // Delete ALL existing channels to ensure clean slate
+        await platform.deleteNotificationChannel('high_importance_channel');
+        await platform.deleteNotificationChannel('high_importance_channel_v2');
+        await platform.deleteNotificationChannel('high_importance_channel_v3');
+        debugPrint('🔔 Deleted old notification channels');
+        
+        // Wait for Android to process the deletion
+        await Future.delayed(const Duration(milliseconds: 1000));
+        
+        // Create new channel with updated sound
+        // Use versioned channel ID to force recreation
+        final channelId = 'high_importance_channel_v3';
+        final channel = AndroidNotificationChannel(
+          channelId,
+          'High Importance Notifications',
+          description: 'This channel is used for important notifications',
+          importance: Importance.max,
+          playSound: true,
+          sound: (soundName != 'default' && soundName != 'custom' && soundName != 'system_picker')
+              ? RawResourceAndroidNotificationSound(soundName)
+              : null, // null uses system default
+          enableVibration: true,
+          enableLights: true,
+          showBadge: true,
+        );
+
+        await platform.createNotificationChannel(channel);
+        debugPrint('🔔 Created new notification channel ($channelId) with sound: $soundName');
+      }
+    } catch (e) {
+      debugPrint('🔔 Error recreating notification channel: $e');
+    }
   }
 
   Future<void> init() async {
@@ -100,14 +150,19 @@ class NotificationService extends ChangeNotifier {
         // Get user's preferred notification sound
         final soundName = await getNotificationSound();
         
-        // Create notification channel with custom sound
+        // Delete old channel versions to ensure clean state
+        await platform.deleteNotificationChannel('high_importance_channel');
+        await platform.deleteNotificationChannel('high_importance_channel_v2');
+        
+        // Create notification channel with custom sound (using v3)
+        final channelId = 'high_importance_channel_v3';
         final channel = AndroidNotificationChannel(
-          'high_importance_channel',
+          channelId,
           'High Importance Notifications',
           description: 'This channel is used for important notifications',
           importance: Importance.max,
           playSound: true,
-          sound: soundName != 'default' 
+          sound: (soundName != 'default' && soundName != 'custom' && soundName != 'system_picker')
               ? RawResourceAndroidNotificationSound(soundName)
               : null, // null uses system default
           enableVibration: true,
@@ -116,7 +171,7 @@ class NotificationService extends ChangeNotifier {
         );
 
         await platform.createNotificationChannel(channel);
-        print('🔔 High importance notification channel created with sound: $soundName');
+        print('🔔 High importance notification channel ($channelId) created with sound: $soundName');
       }
 
       _isInitialized = true;
@@ -249,7 +304,7 @@ class NotificationService extends ChangeNotifier {
       final soundName = await getNotificationSound();
 
       final androidDetails = AndroidNotificationDetails(
-        'high_importance_channel',
+        'high_importance_channel_v3', // Use same channel ID as created
         'High Importance Notifications',
         channelDescription: 'This channel is used for important notifications',
         importance: Importance.max,
@@ -258,7 +313,7 @@ class NotificationService extends ChangeNotifier {
         enableVibration: true,
         enableLights: true,
         playSound: true,
-        sound: soundName != 'default' 
+        sound: (soundName != 'default' && soundName != 'custom' && soundName != 'system_picker')
             ? RawResourceAndroidNotificationSound(soundName)
             : null, // null uses system default
         icon: '@mipmap/ic_launcher',
@@ -290,57 +345,23 @@ class NotificationService extends ChangeNotifier {
     }
   }
 
-  /// Recreate notification channel with new sound (Android only)
-  /// Call this after changing notification sound preference
-  Future<void> updateNotificationChannel() async {
-    try {
-      final platform =
-          _notifications
-              .resolvePlatformSpecificImplementation<
-                AndroidFlutterLocalNotificationsPlugin
-              >();
-
-      if (platform != null) {
-        // Get user's preferred notification sound
-        final soundName = await getNotificationSound();
-        
-        // Delete old channel
-        await platform.deleteNotificationChannel('high_importance_channel');
-        
-        // Create new channel with updated sound
-        final channel = AndroidNotificationChannel(
-          'high_importance_channel',
-          'High Importance Notifications',
-          description: 'This channel is used for important notifications',
-          importance: Importance.max,
-          playSound: true,
-          sound: soundName != 'default' 
-              ? RawResourceAndroidNotificationSound(soundName)
-              : null,
-          enableVibration: true,
-          enableLights: true,
-          showBadge: true,
-        );
-
-        await platform.createNotificationChannel(channel);
-        debugPrint('🔔 Notification channel updated with sound: $soundName');
-      }
-    } catch (e) {
-      debugPrint('❌ Error updating notification channel: $e');
-    }
-  }
-
   /// Test notification with current sound setting
   Future<void> testNotificationSound() async {
+    debugPrint('🔔 ========== TEST NOTIFICATION START ==========');
     final soundName = await getNotificationSound();
     final soundLabel = availableSounds[soundName] ?? 'Unknown';
+    debugPrint('🔔 Current sound preference: $soundName ($soundLabel)');
+    debugPrint('🔔 Channel ID: high_importance_channel_v3');
     
-    await showNotification(
+    final result = await showNotification(
       id: 999999,
       title: '🔊 Sound Test',
       body: 'Testing: $soundLabel',
       payload: 'sound_test',
     );
+    
+    debugPrint('🔔 Test notification result: ${result ? "SUCCESS" : "FAILED"}');
+    debugPrint('🔔 ========== TEST NOTIFICATION END ==========');
   }
 }
 
