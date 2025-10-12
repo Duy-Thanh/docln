@@ -10,6 +10,10 @@ You should only download software from the home page, and the same goes for this
 
 Other websites are fake or have viruses!
 
+# Report broken Light Novel/Web Novel/Story
+
+Please visit [https://github.com/Duy-Thanh/docln/issues/5](https://github.com/Duy-Thanh/docln/issues/5) for more details
+
 # License
 
 You can view the license of the application at [LICENSE](LICENSE)
