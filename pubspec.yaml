@@ -68,6 +68,7 @@ dependencies:
   json_annotation: ^4.9.0
   firebase_messaging: ^16.0.2
   firebase_core: ^4.1.1
+  app_links: ^6.4.1  # Deep linking support for custom URL schemes
 
 dev_dependencies:
   flutter_test:

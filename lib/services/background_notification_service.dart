@@ -465,7 +465,7 @@ class BackgroundNotificationService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final lastKnownVersion = prefs.getString('last_known_app_version') ?? '';
-      const currentVersion = '2025.10.11'; // From pubspec.yaml
+      const currentVersion = '2025.10.12'; // From pubspec.yaml
 
       if (lastKnownVersion.isNotEmpty && lastKnownVersion != currentVersion) {
         // New version detected

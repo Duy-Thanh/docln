@@ -52,12 +52,25 @@
 	</array>
 	<key>CFBundleURLTypes</key>
    	<array>
+     <!-- Login callback scheme -->
      <dict>
        <key>CFBundleTypeRole</key>
        <string>Editor</string>
        <key>CFBundleURLSchemes</key>
        <array>
          <string>com.cyberdaystudios.apps.docln</string>
+       </array>
+     </dict>
+     <!-- Custom app schemes: docln:// and hako:// -->
+     <dict>
+       <key>CFBundleTypeRole</key>
+       <string>Editor</string>
+       <key>CFBundleURLName</key>
+       <string>com.cyberdaystudios.apps.docln.url</string>
+       <key>CFBundleURLSchemes</key>
+       <array>
+         <string>docln</string>
+         <string>hako</string>
        </array>
      </dict>
    	</array>

@@ -19,6 +19,7 @@ import 'services/http_client.dart';
 import 'services/dns_service.dart';
 import 'services/server_management_service.dart';
 import 'services/novel_url_migration_service.dart';
+import 'services/deep_link_service.dart'; // Deep linking for custom URL schemes
 import 'screens/HistoryScreen.dart';
 import 'handler/system_ui_handler.dart';
 import 'screens/HomeScreen.dart';
@@ -287,6 +288,7 @@ void main() async {
   // final historyService = HistoryService(); // Old service removed
   final historyServiceV2 = HistoryServiceV2();
   final novelDatabaseService = NovelDatabaseService(); // Novel database service
+  final deepLinkService = DeepLinkService(); // Deep link service for custom URLs
   final proxyService = ProxyService();
   final httpClient = AppHttpClient();
   final dnsService = DnsService();
@@ -304,6 +306,7 @@ void main() async {
     // historyService.loadHistory(); // Old service removed
     historyServiceV2.init(),
     novelDatabaseService.initialize(), // Initialize novel database
+    deepLinkService.initialize(), // Initialize deep linking
     proxyService.initialize(),
     httpClient.initialize(),
     dnsService.initialize(),
@@ -316,6 +319,13 @@ void main() async {
 
   // Enable notifications for existing bookmarks (one-time migration for users updating from old versions)
   await enableNotificationsForExistingBookmarks();
+
+  // Setup deep link handler (navigate to appropriate screen when app opens via URL)
+  deepLinkService.onLinkReceived = (Uri uri) {
+    debugPrint('🔗 Deep link received: $uri');
+    // Navigation will be handled in HomeScreen or via a global navigator key
+    // For now, just log it - you can implement navigation later
+  };
 
   // Set initial system UI styling
   SystemChrome.setSystemUIOverlayStyle(
@@ -350,6 +360,7 @@ void main() async {
         // ChangeNotifierProvider<HistoryService>.value(value: historyService), // Old service removed
         ChangeNotifierProvider<HistoryServiceV2>.value(value: historyServiceV2),
         Provider<NovelDatabaseService>.value(value: novelDatabaseService), // Novel database provider
+        Provider<DeepLinkService>.value(value: deepLinkService), // Deep link service provider
         ChangeNotifierProvider<ServerManagementService>.value(
           value: serverManagement,
         ),
