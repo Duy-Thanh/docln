@@ -3,10 +3,15 @@ import 'package:http/http.dart' as http;
 import '../models/hako_models.dart';
 
 class ApiService {
-  // ĐỔI CÁI NÀY NẾU CHẠY MÁY THẬT (VD: http://192.168.1.5:3500)
-  static const String baseUrl = "http://10.0.2.2:3500/api";
+  // Thay đổi IP này nếu chạy trên thiết bị thật
+  static const String baseUrl = "https://docln.javalorant.xyz/api";
 
-  // 1. LẤY TRANG CHỦ (LEVEL 1)
+  // Singleton instance
+  static final ApiService _instance = ApiService._internal();
+  factory ApiService() => _instance;
+  ApiService._internal();
+
+  // 1. LẤY TRANG CHỦ
   Future<Map<String, List<NovelBasic>>> fetchHome() async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/home'));
@@ -37,10 +42,9 @@ class ApiService {
     }
   }
 
-  // 2. LẤY CHI TIẾT TRUYỆN (LEVEL 2)
+  // 2. LẤY CHI TIẾT TRUYỆN
   Future<NovelDetail> fetchNovelDetail(String url) async {
     try {
-      // Gửi URL truyện lên server để nó cào
       final response = await http.get(Uri.parse('$baseUrl/novel?url=$url'));
 
       if (response.statusCode == 200) {
@@ -59,7 +63,7 @@ class ApiService {
     }
   }
 
-  // 3. LẤY NỘI DUNG CHƯƠNG (LEVEL 3)
+  // 3. LẤY NỘI DUNG CHƯƠNG
   Future<List<ChapterContent>> fetchChapterContent(String url) async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/chapter?url=$url'));

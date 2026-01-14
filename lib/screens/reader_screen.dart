@@ -14,6 +14,8 @@ import '../screens/EyeCareScreen.dart';
 import '../services/settings_services.dart';
 import 'comments_screen.dart';
 import '../services/preferences_service.dart';
+import '../services/api_service.dart';
+import '../models/hako_models.dart';
 
 // Define content block types
 enum ContentBlockType { paragraph, header, image }
@@ -578,106 +580,31 @@ class _ReaderScreenState extends State<ReaderScreen>
     }
   }
 
+  final ApiService _apiService = ApiService();
+  List<ChapterContent> _chapterContentList = []; // Dữ liệu mới từ API
+
   Future<void> _fetchContent() async {
     setState(() {
       _isLoading = true;
     });
 
     try {
-      debugPrint('🔄 Starting content fetch...');
-      final fetchStopwatch = Stopwatch()..start();
+      debugPrint('🔄 Fetching via API...');
 
-      // Fetch real content from the crawler service
-      final chapterData = await _crawlerService.getChapterContent(
-        widget.url,
-        context,
-      );
-
-      fetchStopwatch.stop();
-      debugPrint(
-        '📥 Content fetched in ${fetchStopwatch.elapsedMilliseconds}ms',
-      );
+      // GỌI API LẤY LIST TEXT/IMAGE
+      final content = await _apiService.fetchChapterContent(widget.url);
 
       if (!mounted) return;
 
-      final rawContent = chapterData['content'] ?? '';
-
-      // CRITICAL PERFORMANCE FIX: Parse content in background isolate
-      // This keeps the UI thread responsive during heavy parsing
-      debugPrint(
-        '🔄 Starting async content parsing (${rawContent.length} chars)...',
-      );
-      final parseStopwatch = Stopwatch()..start();
-
-      final parseParams = _ParseParams(
-        content: rawContent,
-        fontSize: _fontSize,
-        fontFamily: _fontFamily,
-        lineHeight: _lineHeight,
-        paragraphSpacing: _paragraphSpacing,
-        textColor: _textColor,
-      );
-
-      // Parse in separate isolate - UI stays responsive!
-      final contentBlocks = await compute(_parseContentInIsolate, parseParams);
-
-      parseStopwatch.stop();
-      debugPrint(
-        '✅ Content parsed in ${parseStopwatch.elapsedMilliseconds}ms (${contentBlocks.length} blocks)',
-      );
-
-      // DEBUG: Check for images
-      final imageBlocks = contentBlocks
-          .where((b) => b.type == ContentBlockType.image)
-          .length;
-      debugPrint('🖼️ Found $imageBlocks image blocks');
-      if (imageBlocks > 0) {
-        final firstImage = contentBlocks.firstWhere(
-          (b) => b.type == ContentBlockType.image,
-        );
-        debugPrint('🖼️ First image URL: ${firstImage.content}');
-      }
-
-      if (!mounted) return;
-
-      // Now update state with parsed data
       setState(() {
-        _content = rawContent;
-
-        // Store parsed blocks for widget building
-        _parsedContentBlocks = contentBlocks;
-
-        // PERFORMANCE OPTIMIZATION: Invalidate cache when content changes
-        _cachedContentWidgets = null;
-        // Keep _lastParsedContent synchronized so isolate blocks are used
-        _lastParsedContent = rawContent;
-
-        // Update chapter navigation info
-        if (!_hasNextChapter &&
-            chapterData['nextChapterUrl'] != null &&
-            chapterData['nextChapterUrl'].isNotEmpty) {
-          _hasNextChapter = true;
-          _nextChapterUrl = chapterData['nextChapterUrl'];
-          _nextChapterTitle = chapterData['nextChapterTitle'] ?? 'Next Chapter';
-        }
-
-        if (!_hasPreviousChapter &&
-            chapterData['prevChapterUrl'] != null &&
-            chapterData['prevChapterUrl'].isNotEmpty) {
-          _hasPreviousChapter = true;
-          _prevChapterUrl = chapterData['prevChapterUrl'];
-          _prevChapterTitle =
-              chapterData['prevChapterTitle'] ?? 'Previous Chapter';
-        }
-
+        _chapterContentList = content; // Lưu vào list
         _isLoading = false;
+
+        // Logic next/prev chapter mày tự xử lý ở backend hoặc call API detail để lấy list
+        // (Tạm thời bỏ qua hoặc giữ logic cũ nếu muốn)
       });
 
-      debugPrint(
-        '🎉 Total load time: ${fetchStopwatch.elapsedMilliseconds + parseStopwatch.elapsedMilliseconds}ms',
-      );
-
-      // Reset scroll position after content is loaded
+      // Reset scroll
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients) {
           _scrollController.jumpTo(0);
@@ -688,9 +615,11 @@ class _ReaderScreenState extends State<ReaderScreen>
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _content = '<p>Error loading content: $e</p>';
+          _chapterContentList = [
+            ChapterContent(type: 'text', content: 'Lỗi tải chương: $e'),
+          ];
         });
-        CustomToast.show(context, 'Error loading chapter: $e');
+        CustomToast.show(context, 'Error: $e');
       }
     }
   }
@@ -1465,32 +1394,34 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   // PERFORMANCE OPTIMIZATION: Build optimized content view with lazy loading
   Widget _buildOptimizedContentView() {
-    final contentWidgets = _parseContent();
-
-    // For small chapters (<50 widgets), use SingleChildScrollView (faster)
-    if (contentWidgets.length < 50) {
-      return SingleChildScrollView(
-        controller: _scrollController,
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: contentWidgets,
-        ),
-      );
-    }
-
-    // For large chapters (>=50 widgets), use ListView.builder for lazy loading
+    // Dùng ListView.builder render list text/image
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.all(16),
-      itemCount: contentWidgets.length,
-      // CRITICAL: addAutomaticKeepAlives and addRepaintBoundaries improve performance
-      addAutomaticKeepAlives: false,
-      addRepaintBoundaries: true,
-      cacheExtent: 1000, // Cache 1000 pixels ahead
+      itemCount: _chapterContentList.length,
       itemBuilder: (context, index) {
-        // Wrap each item in RepaintBoundary for better performance
-        return RepaintBoundary(child: contentWidgets[index]);
+        final item = _chapterContentList[index];
+
+        if (item.type == 'image') {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16.0),
+            child: _buildImageWidget(item.content), // Hàm build ảnh cũ của mày
+          );
+        } else {
+          // Render Text
+          return Padding(
+            padding: EdgeInsets.only(bottom: 16 * _paragraphSpacing),
+            child: Text(
+              item.content,
+              style: TextStyle(
+                fontSize: _fontSize,
+                color: _textColor,
+                fontFamily: _fontFamily,
+                height: _lineHeight,
+              ),
+            ),
+          );
+        }
       },
     );
   }

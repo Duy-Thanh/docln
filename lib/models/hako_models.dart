@@ -3,8 +3,8 @@ class NovelBasic {
   final String title;
   final String cover;
   final String url;
-  final String? latestChapter; // Dành cho list mới nhất
-  final String? summary; // Dành cho list vừa đăng
+  final String? latestChapter;
+  final String? summary;
 
   NovelBasic({
     required this.id,
@@ -33,6 +33,7 @@ class NovelDetail {
   final String cover;
   final String author;
   final String illustrator;
+  final String status;
   final List<String> genres;
   final String summary;
   final List<Volume> volumes;
@@ -43,6 +44,7 @@ class NovelDetail {
     required this.cover,
     required this.author,
     required this.illustrator,
+    required this.status,
     required this.genres,
     required this.summary,
     required this.volumes,
@@ -53,8 +55,9 @@ class NovelDetail {
       id: json['id']?.toString() ?? '',
       title: json['title'] ?? '',
       cover: json['cover'] ?? '',
-      author: json['author'] ?? '',
+      author: json['author'] ?? 'Unknown',
       illustrator: json['illustrator'] ?? '',
+      status: json['status'] ?? '',
       genres: List<String>.from(json['genres'] ?? []),
       summary: json['summary'] ?? '',
       volumes:

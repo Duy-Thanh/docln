@@ -15,6 +15,8 @@ import '../services/background_notification_service.dart';
 import '../services/novel_database_service.dart';
 import 'package:provider/provider.dart';
 import '../widgets/network_image.dart';
+import '../services/api_service.dart';
+import '../models/hako_models.dart';
 
 class LightNovelDetailsScreen extends StatefulWidget {
   final LightNovel novel;
@@ -80,6 +82,8 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
     }
   }
 
+  final ApiService _apiService = ApiService();
+
   Future<void> _loadNovelDetails() async {
     setState(() {
       _isLoading = true;
@@ -87,165 +91,74 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
     });
 
     try {
-      final novelDetails = await _crawlerService.getNovelDetails(
+      // GỌI API THAY VÌ CRAWL
+      final NovelDetail detail = await _apiService.fetchNovelDetail(
         widget.novelUrl,
-        context,
       );
 
       if (mounted) {
-        // Extract genres from the summary if none were found directly
-        List<String> extractedGenres = [];
-        String summary = novelDetails['summary'] ?? '';
-
-        // Get novel type if available
-        String novelType = novelDetails['novelType'] ?? 'Truyện dịch';
-
-        // Attempt to extract genres from the summary text
-        if ((novelDetails['genres'] as List<dynamic>?)?.isEmpty ?? true) {
-          final genreKeywords = [
-            'Drama',
-            'Harem',
-            'Romance',
-            'Comedy',
-            'School Life',
-            'Fantasy',
-            'Netorare',
-            'Misunderstanding',
-            'Action',
-            'Adventure',
-            'Slice of Life',
-          ];
-
-          for (var genre in genreKeywords) {
-            if (summary.contains(genre)) {
-              extractedGenres.add(genre);
-            }
-          }
-
-          // Check if we can find genre words in specific patterns
-          final regex = RegExp(
-            r'(Drama|Harem|Romance|Comedy|School Life|Fantasy|Netorare|Misunderstanding|Action|Adventure|Slice of Life)',
-          );
-          final matches = regex.allMatches(summary);
-          for (var match in matches) {
-            final genre = match.group(0);
-            if (genre != null && !extractedGenres.contains(genre)) {
-              extractedGenres.add(genre);
-            }
+        // Flatten chapters from volumes to match UI expectation
+        final List<Map<String, dynamic>> flatChapters = [];
+        for (var vol in detail.volumes) {
+          for (var chap in vol.chapters) {
+            flatChapters.add({
+              'title': chap.title,
+              'url': chap.url,
+              'date': chap.time,
+              'volume': vol.title, // Nếu mày muốn hiện tên tập
+            });
           }
         }
 
-        // Extract chapters if they have empty URLs
-        final List<Map<String, dynamic>> cleanedChapters = [];
-        final chapters =
-            (novelDetails['chapters'] as List<dynamic>?)
-                ?.cast<Map<String, dynamic>>() ??
-            [];
-
-        // Only use chapters with non-empty URLs
-        for (var chapter in chapters) {
-          if (chapter['url']?.isNotEmpty == true) {
-            cleanedChapters.add(chapter);
-          }
-        }
-
-        // Construct a cleaner description by removing junk
-        String cleanDescription = summary;
-        if (cleanDescription.contains('Truyện dịch')) {
-          cleanDescription = cleanDescription
-              .replaceAll('Truyện dịch', '')
-              .trim();
-        }
-
-        // Extract additional info like wordCount, views, etc.
-        final List<String> altTitles =
-            (novelDetails['alternativeTitles'] as List<dynamic>?)
-                ?.cast<String>() ??
-            [];
-        final int? wordCount =
-            novelDetails['wordCount'] ??
-            _extractNumberFromString(summary, r'Số từ[:\s]*([0-9,.]+)');
-        final int? views =
-            novelDetails['views'] ??
-            _extractNumberFromString(summary, r'Lượt xem[:\s]*([0-9,.]+)');
-        final double? rating = novelDetails['rating'];
-        final int? reviews = novelDetails['reviews'];
-        final String? lastUpdated = novelDetails['lastUpdated'];
-
-        // 🔧 FIX: Create updated novel object with fetched data
-        // This ensures the bookmark saves complete data, not just what was passed in
+        // Tạo object LightNovel mới để lưu vào DB (giữ nguyên logic cũ của mày)
         final updatedNovel = LightNovel(
-          id: widget.novel.id,
-          title: widget.novel.title,
+          id: detail.id.isNotEmpty ? detail.id : widget.novel.id,
+          title: detail.title,
           url: widget.novel.url,
-          coverUrl: widget.novel.coverUrl,
-          chapters: cleanedChapters.length,  // Use fetched chapter count
-          latestChapter: cleanedChapters.isNotEmpty 
-              ? cleanedChapters.first['title'] 
+          coverUrl: detail.cover,
+          chapters: flatChapters.length,
+          latestChapter: flatChapters.isNotEmpty
+              ? flatChapters.last['title']
               : widget.novel.latestChapter,
-          rating: rating,
-          reviews: reviews,
-          wordCount: wordCount,
-          views: views,
-          lastUpdated: lastUpdated,
-          alternativeTitles: altTitles.isNotEmpty ? altTitles : null,
+          // Mấy cái rating/views API chưa trả về thì tạm thời lấy cũ hoặc null
+          rating: null,
+          reviews: null,
+          wordCount: null,
+          views: null,
+          lastUpdated: null,
+          alternativeTitles: [],
         );
-        
-        // 💾 Save updated novel to database immediately
-        // This ensures bookmarks will have complete data
+
+        // Save to DB (Logic cũ của mày)
         try {
           final db = Provider.of<NovelDatabaseService>(context, listen: false);
           await db.saveNovel(updatedNovel);
-          debugPrint('✅ Saved updated novel data: ${cleanedChapters.length} chapters');
         } catch (e) {
           debugPrint('⚠️ Failed to save novel data: $e');
         }
 
         setState(() {
-          _genres =
-              (novelDetails['genres'] as List<dynamic>?)?.cast<String>() ??
-              extractedGenres;
-          _description = cleanDescription;
-          _chapters = cleanedChapters;
-          _author = novelDetails['author'] ?? 'Unknown';
-          _status = novelDetails['status'] ?? '';
-          _alternativeTitles = altTitles;
-          _wordCount = wordCount;
-          _views = views;
-          _lastUpdated = lastUpdated;
-          _novelType = novelType;
+          _genres = detail.genres;
+          _description = detail.summary; // API đã trả về text sạch
+          _chapters = flatChapters;
+          _author = detail.author;
+          _status = detail.status;
+          _alternativeTitles = []; // API hiện tại chưa parse cái này, kệ nó
+          _novelType = 'Truyện dịch'; // Mặc định hoặc parse từ API nếu cần
           _isLoading = false;
-          _rating = rating;
-          _reviews = reviews;
 
-          // Update history with the loaded chapter information
+          // Add to history
           Provider.of<HistoryServiceV2>(
             context,
             listen: false,
-          ).addToHistory(updatedNovel, updatedNovel.latestChapter);  // Use updated novel
+          ).addToHistory(updatedNovel, updatedNovel.latestChapter);
         });
-
-        // Debug information
-        print('Novel details loaded:');
-        print('Genres: $_genres');
-        print('Author: $_author');
-        print('Status: $_status');
-        print('Novel Type: $_novelType');
-        print('Description length: ${_description.length}');
-        print('Chapters count: ${_chapters.length}');
-
-        // Check if we got meaningful data
-        if ((_description.isEmpty || _description.contains('\n\n\n\n')) &&
-            _chapters.isEmpty &&
-            _genres.isEmpty) {
-          _handleEmptyData();
-        }
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _description = 'Error loading novel details';
+          _description = 'Error loading novel details: $e';
           CustomToast.show(context, 'Error: ${e.toString()}');
         });
       }

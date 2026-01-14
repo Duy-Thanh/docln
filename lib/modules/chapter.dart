@@ -1,18 +1,22 @@
 class Chapter {
+  final String id; // Thêm cái này
   final String title;
   final String url;
   final String coverUrl;
   final String seriesTitle;
   final String seriesUrl;
   final String? volumeTitle;
+  final String time; // Thêm cái này
 
   Chapter({
+    this.id = '', // Mặc định rỗng để không lỗi code cũ
     required this.title,
     required this.url,
     required this.coverUrl,
     required this.seriesTitle,
     required this.seriesUrl,
     this.volumeTitle,
+    this.time = '', // Mặc định rỗng
   });
 
   factory Chapter.fromHtml(String html) {
@@ -30,12 +34,14 @@ class Chapter {
     final volumeTitleMatch = volumeTitleRegex.firstMatch(html);
 
     return Chapter(
+      id: '', // Mặc định
       title: titleMatch?.group(1) ?? '',
       url: urlMatch?.group(1) ?? '',
       coverUrl: coverMatch?.group(1) ?? 'https://docln.sbs/img/nocover.jpg',
       seriesTitle: seriesTitleMatch?.group(1) ?? '',
       seriesUrl: '', // Extract from series link
       volumeTitle: volumeTitleMatch?.group(1),
+      time: '', // Mặc định
     );
   }
 }
