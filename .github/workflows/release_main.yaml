@@ -13,8 +13,8 @@ jobs:
   build:
     if: "contains(github.event.head_commit.message, '[release]')"
     name: Build & Release
-    runs-on: macos-latest
-    
+    runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v3
 
@@ -22,23 +22,34 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v3
         with:
-          distribution: 'temurin'
-          java-version: '21'
-      
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Cache Gradle & Pub
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.pub-cache
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-pub-${{ hashFiles('**/pubspec.lock') }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-pub-
+
       - name: Create necessary files
         run: |
           echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/rel.jks
-      
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.35.5'
-          channel: 'stable'
-      
+          flutter-version: "3.38.7"
+          channel: "stable"
+
       - name: Get dependencies
         run: flutter pub get
-        
+
       - name: Build APK
         env:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
@@ -52,7 +63,7 @@ jobs:
       #     KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
       #     STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
       #   run: flutter build appbundle --release --obfuscate --split-debug-info=build/app/outputs/symbols
-        
+
       - name: Generate Release Tag
         id: tag
         run: |
