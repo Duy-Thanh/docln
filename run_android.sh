@@ -19,7 +19,7 @@ export PATH="$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator"
 
 echo "Starting Android Emulator with cold boot..."
 # The -no-snapshot-load flag forces a cold boot
-emulator -avd Medium_Phone_API_36.1 -no-snapshot-load -no-snapshot-save &
+emulator -avd Medium_Phone -no-snapshot-load -no-snapshot-save -dns-server 8.8.8.8 &
 
 # Wait for the emulator to fully boot
 echo "Waiting for emulator to boot..."
