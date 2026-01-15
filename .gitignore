@@ -134,3 +134,7 @@ android/app/README.md
 NOTIFICATION_SOUND_FIX.md
 TROUBLESHOOTING_NOTIFICATION_SOUND.md
 notification_sound_fix_diagram.html
+ios/Flutter/flutter_export_environment.sh
+ios/Flutter/Generated.xcconfig
+macos/Flutter/ephemeral/flutter_export_environment.sh
+macos/Flutter/ephemeral/Flutter-Generated.xcconfig

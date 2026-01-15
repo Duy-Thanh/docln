@@ -1,6 +1,6 @@
 // This is a generated file; do not edit or check into version control.
-FLUTTER_ROOT=D:\flutter
-FLUTTER_APPLICATION_PATH=D:\Project3\docln
+FLUTTER_ROOT=/home/nekkochan/flutter
+FLUTTER_APPLICATION_PATH=/home/nekkochan/docln
 COCOAPODS_PARALLEL_CODE_SIGN=true
 FLUTTER_BUILD_DIR=build
 FLUTTER_BUILD_NAME=2025.10.12
