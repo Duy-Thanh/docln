@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart'; // For compute()
 import '../screens/custom_toast.dart';
 import '../modules/light_novel.dart';
 import '../services/history_service_v2.dart';
-import '../services/crawler_service.dart';
 import '../services/eye_protection_service.dart';
 import '../widgets/eye_protection_overlay.dart';
 import '../widgets/eye_friendly_text.dart';
@@ -322,8 +321,6 @@ class _ReaderScreenState extends State<ReaderScreen>
   late EyeProtectionService _eyeProtectionService;
   DateTime _readingStartTime = DateTime.now();
 
-  final CrawlerService _crawlerService = CrawlerService();
-
   @override
   void initState() {
     super.initState();
@@ -377,45 +374,48 @@ class _ReaderScreenState extends State<ReaderScreen>
     if (widget.novel == null) return;
 
     try {
-      final novelDetails = await _crawlerService.getNovelDetails(
+      // 1. Dùng ApiService gọi data về (Object NovelDetail chuẩn chỉ)
+      final novelDetails = await _apiService.fetchNovelDetail(
         widget.novel!.url,
-        context,
       );
 
       if (mounted) {
-        final List<Map<String, dynamic>> chapters =
-            (novelDetails['chapters'] as List<dynamic>?)
-                ?.cast<Map<String, dynamic>>() ??
-            [];
+        // 2. Làm phẳng danh sách chương (Gộp tất cả Volume lại thành 1 list)
+        // Vì trong model mới: NovelDetail -> List<Volume> -> List<Chapter>
+        final List<Chapter> allChapters = [];
+        for (var vol in novelDetails.volumes) {
+          allChapters.addAll(vol.chapters);
+        }
 
-        if (chapters.isNotEmpty) {
-          // Find current chapter index
+        if (allChapters.isNotEmpty) {
+          // 3. Tìm vị trí chương hiện tại
           int currentIndex = -1;
-          for (int i = 0; i < chapters.length; i++) {
-            if (chapters[i]['title'] == widget.chapterTitle) {
+          for (int i = 0; i < allChapters.length; i++) {
+            // So sánh tiêu đề để tìm chương đang đọc
+            if (allChapters[i].title == widget.chapterTitle) {
               currentIndex = i;
               break;
             }
           }
 
           if (currentIndex != -1) {
-            // Check if has next chapter
-            if (currentIndex < chapters.length - 1) {
+            // 4. Xử lý chương TIẾP THEO
+            if (currentIndex < allChapters.length - 1) {
               setState(() {
                 _hasNextChapter = true;
-                final nextChapter = chapters[currentIndex + 1];
-                _nextChapterUrl = nextChapter['url'] ?? '';
-                _nextChapterTitle = nextChapter['title'] ?? 'Next Chapter';
+                final nextChapter = allChapters[currentIndex + 1];
+                _nextChapterUrl = nextChapter.url;
+                _nextChapterTitle = nextChapter.title;
               });
             }
 
-            // Check if has previous chapter
+            // 5. Xử lý chương TRƯỚC ĐÓ
             if (currentIndex > 0) {
               setState(() {
                 _hasPreviousChapter = true;
-                final prevChapter = chapters[currentIndex - 1];
-                _prevChapterUrl = prevChapter['url'] ?? '';
-                _prevChapterTitle = prevChapter['title'] ?? 'Previous Chapter';
+                final prevChapter = allChapters[currentIndex - 1];
+                _prevChapterUrl = prevChapter.url;
+                _prevChapterTitle = prevChapter.title;
               });
             }
           }
@@ -1700,7 +1700,7 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   // Method to fix image URLs before loading
   String _fixImageUrl(String url) {
-    // First check if the URL is from a known problematic domain
+    // Giữ lại logic thay thế domain lỗi (docln -> hako)
     final domainPatterns = {
       'i.docln.net': 'i.hako.vn',
       'i2.docln.net': 'i.hako.vn',
@@ -1714,13 +1714,9 @@ class _ReaderScreenState extends State<ReaderScreen>
       }
     }
 
-    // Use the crawler service's fixImageUrl if available
-    try {
-      return _crawlerService.fixImageUrl(url);
-    } catch (e) {
-      print('Error fixing image URL: $e');
-      return url;
-    }
+    // XÓA ĐOẠN GỌI CRAWLER SERVICE ĐI
+    // Trả về URL gốc nếu không cần fix
+    return url;
   }
 
   // Custom image widget that handles redirects and fallbacks

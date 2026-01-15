@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../modules/light_novel.dart';
 import './widgets/light_novel_card.dart';
 import './widgets/chapter_card.dart';
-import '../services/crawler_service.dart';
 import '../screens/custom_toast.dart';
 import '../screens/webview_screen.dart';
 import '../screens/reader_screen.dart';
@@ -34,7 +33,6 @@ class LightNovelDetailsScreen extends StatefulWidget {
 }
 
 class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
-  final CrawlerService _crawlerService = CrawlerService();
   final BackgroundNotificationService _backgroundService =
       BackgroundNotificationService();
   bool _isLoading = true;
@@ -165,14 +163,14 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
     }
   }
 
-  int? _extractNumberFromString(String text, String pattern) {
-    final regex = RegExp(pattern);
-    final match = regex.firstMatch(text);
-    if (match != null && match.group(1) != null) {
-      return int.tryParse(match.group(1)!.replaceAll(RegExp(r'[,.]'), ''));
-    }
-    return null;
-  }
+  // int? _extractNumberFromString(String text, String pattern) {
+  //   final regex = RegExp(pattern);
+  //   final match = regex.firstMatch(text);
+  //   if (match != null && match.group(1) != null) {
+  //     return int.tryParse(match.group(1)!.replaceAll(RegExp(r'[,.]'), ''));
+  //   }
+  //   return null;
+  // }
 
   // Handle case when data is empty
   void _handleEmptyData() {
