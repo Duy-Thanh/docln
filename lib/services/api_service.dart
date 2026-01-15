@@ -9,7 +9,7 @@ import '../modules/comment.dart';
 
 class ApiService {
   // Thay đổi IP này nếu chạy trên thiết bị thật
-  static const String baseUrl = "http://10.0.2.2:3500/api";
+  static const String baseUrl = "https://docln.javalorant.xyz/api";
 
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
