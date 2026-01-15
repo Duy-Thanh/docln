@@ -41,10 +41,13 @@ import 'dart:ui';
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   debugPrint('📬 Background message: ${message.notification?.title}');
-  
+
   // Update last check time
   final prefs = await SharedPreferences.getInstance();
-  await prefs.setInt('last_background_check', DateTime.now().millisecondsSinceEpoch);
+  await prefs.setInt(
+    'last_background_check',
+    DateTime.now().millisecondsSinceEpoch,
+  );
 }
 
 // Function to migrate from old preferences to new SQLite-based preferences
@@ -257,9 +260,7 @@ void main() async {
   //   parameters: {'time': DateTime.now().toString()},
   // );
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   // Register FCM background message handler
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
@@ -288,11 +289,11 @@ void main() async {
   // final historyService = HistoryService(); // Old service removed
   final historyServiceV2 = HistoryServiceV2();
   final novelDatabaseService = NovelDatabaseService(); // Novel database service
-  final deepLinkService = DeepLinkService(); // Deep link service for custom URLs
+  final deepLinkService =
+      DeepLinkService(); // Deep link service for custom URLs
   final proxyService = ProxyService();
   final httpClient = AppHttpClient();
   final dnsService = DnsService();
-  final crawlerService = CrawlerService();
   final preferencesService = PreferencesService();
 
   await Future.wait([
@@ -310,7 +311,6 @@ void main() async {
     proxyService.initialize(),
     httpClient.initialize(),
     dnsService.initialize(),
-    crawlerService.initialize(),
   ]);
 
   // Start periodic background checks for novel updates
@@ -359,8 +359,12 @@ void main() async {
         ),
         // ChangeNotifierProvider<HistoryService>.value(value: historyService), // Old service removed
         ChangeNotifierProvider<HistoryServiceV2>.value(value: historyServiceV2),
-        Provider<NovelDatabaseService>.value(value: novelDatabaseService), // Novel database provider
-        Provider<DeepLinkService>.value(value: deepLinkService), // Deep link service provider
+        Provider<NovelDatabaseService>.value(
+          value: novelDatabaseService,
+        ), // Novel database provider
+        Provider<DeepLinkService>.value(
+          value: deepLinkService,
+        ), // Deep link service provider
         ChangeNotifierProvider<ServerManagementService>.value(
           value: serverManagement,
         ),

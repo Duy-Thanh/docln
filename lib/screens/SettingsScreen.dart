@@ -6,7 +6,6 @@ import '../services/notification_service.dart';
 import '../services/proxy_service.dart';
 import '../services/dns_service.dart';
 import '../services/settings_services.dart';
-import '../services/crawler_service.dart';
 import '../screens/custom_toast.dart';
 import '../services/preferences_service.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -27,7 +26,7 @@ import 'package:file_picker/file_picker.dart';
 import '../screens/wallpaper_colors_screen.dart';
 import '../screens/ServerDiagnosticScreen.dart';
 import '../screens/BackgroundServiceDebugScreen.dart';
-import '../services/server_management_service.dart';
+import '../services/api_service.dart';
 
 // GridPainter class at the top level
 class GridPainter extends CustomPainter {
@@ -68,10 +67,8 @@ class SettingsScreen extends StatefulWidget {
 class SettingsScreenState extends State<SettingsScreen>
     with SingleTickerProviderStateMixin {
   final SettingsService _settingsService = SettingsService();
-  final CrawlerService _crawlerService = CrawlerService();
   static const String _appVersion = 'Version: 2025.10.12-rev1.0';
   bool isDarkMode = false;
-  String? currentServer;
   double textSize = 16.0;
   bool isNotificationsEnabled = true;
   String notificationSound = 'pixie_dust'; // Default notification sound
@@ -101,7 +98,6 @@ class SettingsScreenState extends State<SettingsScreen>
   late String _initialNotificationSound = 'pixie_dust';
   late String? _initialLanguage = 'English';
   late bool _initialDataSaver = false;
-  late String? _initialServer;
 
   // Initial proxy settings
   late bool _initialProxyEnabled = false;
@@ -168,7 +164,7 @@ class SettingsScreenState extends State<SettingsScreen>
 
       // Check notification permission status
       final hasPermission = await notificationService.checkPermission();
-      
+
       // Load notification sound preference
       final savedSound = await notificationService.getNotificationSound();
 
@@ -197,7 +193,6 @@ class SettingsScreenState extends State<SettingsScreen>
         _initialDataSaver = isDataSaverEnabled;
       });
 
-      await _loadCurrentServer();
       await _loadProxySettings();
       await _loadDnsSettings();
     } catch (e) {
@@ -258,7 +253,6 @@ class SettingsScreenState extends State<SettingsScreen>
           notificationSound != _initialNotificationSound ||
           selectedLanguage != _initialLanguage ||
           isDataSaverEnabled != _initialDataSaver ||
-          currentServer != _initialServer ||
           isProxyEnabled != _initialProxyEnabled ||
           proxyType != _initialProxyType ||
           proxyAddressController.text != _initialProxyAddress ||
@@ -280,7 +274,6 @@ class SettingsScreenState extends State<SettingsScreen>
         notificationSound != _initialNotificationSound ||
         selectedLanguage != _initialLanguage ||
         isDataSaverEnabled != _initialDataSaver ||
-        currentServer != _initialServer ||
         isProxyEnabled != _initialProxyEnabled ||
         proxyType != _initialProxyType ||
         proxyAddressController.text != _initialProxyAddress ||
@@ -295,14 +288,6 @@ class SettingsScreenState extends State<SettingsScreen>
       _hasUnsavedChanges = hasChanges;
     });
     widget.onSettingsChanged?.call(hasChanges);
-  }
-
-  Future<void> _loadCurrentServer() async {
-    final server = await _settingsService.getCurrentServer();
-    setState(() {
-      currentServer = server;
-      _initialServer = server;
-    });
   }
 
   Future<void> saveSettings() async {
@@ -325,10 +310,6 @@ class SettingsScreenState extends State<SettingsScreen>
       );
       final proxyService = ProxyService();
       final dnsService = DnsService();
-      final serverManagement = Provider.of<ServerManagementService>(
-        context,
-        listen: false,
-      );
 
       // Save all settings
       await Future.wait([
@@ -336,11 +317,11 @@ class SettingsScreenState extends State<SettingsScreen>
         prefsService.setDouble('textSize', textSize),
         Future(() => themeService.setTextSize(textSize)),
         notificationService.setNotificationEnabled(isNotificationsEnabled),
-        notificationService.setNotificationSound(notificationSound), // Save notification sound
+        notificationService.setNotificationSound(
+          notificationSound,
+        ), // Save notification sound
         prefsService.setString('language', selectedLanguage ?? 'English'),
         prefsService.setBool('dataSaver', isDataSaverEnabled),
-        serverManagement.setServer(currentServer ?? 'https://docln.sbs'),
-        _settingsService.saveCurrentServer(currentServer ?? ''),
 
         // Save proxy settings
         _settingsService.setProxyEnabled(isProxyEnabled),
@@ -355,14 +336,13 @@ class SettingsScreenState extends State<SettingsScreen>
         _settingsService.setDnsProvider(dnsProvider),
         _settingsService.setCustomDns(customDnsController.text),
       ]);
-      
+
       // Note: Notification channel is automatically recreated when sound changes
       // via setNotificationSound() in _handleSoundSelection()
 
       // Update proxy, DNS, and crawler services with new settings
       await proxyService.updateProxySettings();
       await dnsService.updateDnsSettings();
-      await _crawlerService.refreshSettings();
 
       // If notifications were just enabled, request permission
       if (isNotificationsEnabled && !_initialNotifications) {
@@ -392,7 +372,6 @@ class SettingsScreenState extends State<SettingsScreen>
         _initialNotifications = isNotificationsEnabled;
         _initialLanguage = selectedLanguage;
         _initialDataSaver = isDataSaverEnabled;
-        _initialServer = currentServer;
 
         // Update initial proxy settings
         _initialProxyEnabled = isProxyEnabled;
@@ -432,7 +411,6 @@ class SettingsScreenState extends State<SettingsScreen>
       isNotificationsEnabled = _initialNotifications;
       selectedLanguage = _initialLanguage;
       isDataSaverEnabled = _initialDataSaver;
-      currentServer = _initialServer;
 
       // Revert proxy settings
       isProxyEnabled = _initialProxyEnabled;
@@ -635,16 +613,19 @@ class SettingsScreenState extends State<SettingsScreen>
   }
 
   Widget _buildNotificationSoundTile() {
-    String soundLabel = NotificationService.availableSounds[notificationSound] ?? 'Unknown';
-    
+    String soundLabel =
+        NotificationService.availableSounds[notificationSound] ?? 'Unknown';
+
     // If custom sound, show file name
     if (notificationSound == 'custom') {
       soundLabel = 'Custom Sound File';
     }
-    
+
     return ListTile(
       leading: Icon(
-        notificationSound == 'custom' ? Icons.folder_open : Icons.volume_up_rounded,
+        notificationSound == 'custom'
+            ? Icons.folder_open
+            : Icons.volume_up_rounded,
         color: Theme.of(context).colorScheme.primary,
       ),
       title: const Text('Notification Sound'),
@@ -704,35 +685,35 @@ class SettingsScreenState extends State<SettingsScreen>
               ...NotificationService.availableSounds.entries
                   .where((e) => e.key != 'custom' && e.key != 'system_picker')
                   .map((entry) {
-                final soundKey = entry.key;
-                final soundLabel = entry.value;
-                final isSelected = notificationSound == soundKey;
-                
-                return RadioListTile<String>(
-                  value: soundKey,
-                  groupValue: notificationSound,
-                  title: Text(soundLabel),
-                  subtitle: soundKey != 'default' 
-                      ? Text('@raw/$soundKey', style: const TextStyle(fontSize: 12))
-                      : null,
-                  selected: isSelected,
-                  activeColor: Theme.of(context).colorScheme.primary,
-                  onChanged: (value) async {
-                    if (value != null) {
-                      await _handleSoundSelection(value);
-                    }
-                  },
-                );
-              }),
-              
+                    final soundKey = entry.key;
+                    final soundLabel = entry.value;
+                    final isSelected = notificationSound == soundKey;
+
+                    return RadioListTile<String>(
+                      value: soundKey,
+                      groupValue: notificationSound,
+                      title: Text(soundLabel),
+                      subtitle: soundKey != 'default'
+                          ? Text(
+                              '@raw/$soundKey',
+                              style: const TextStyle(fontSize: 12),
+                            )
+                          : null,
+                      selected: isSelected,
+                      activeColor: Theme.of(context).colorScheme.primary,
+                      onChanged: (value) async {
+                        if (value != null) {
+                          await _handleSoundSelection(value);
+                        }
+                      },
+                    );
+                  }),
+
               const Divider(),
-              
+
               // Custom sound file option - redirects to system picker
               ListTile(
-                leading: Icon(
-                  Icons.audio_file,
-                  color: Colors.orange,
-                ),
+                leading: Icon(Icons.audio_file, color: Colors.orange),
                 title: const Text('Use Custom Sound'),
                 subtitle: const Text('Opens system settings for custom sounds'),
                 trailing: const Icon(Icons.open_in_new),
@@ -741,7 +722,7 @@ class SettingsScreenState extends State<SettingsScreen>
                   await _pickCustomSoundFile();
                 },
               ),
-              
+
               // System picker option
               ListTile(
                 leading: Icon(
@@ -774,12 +755,12 @@ class SettingsScreenState extends State<SettingsScreen>
     _onSettingChanged(() {
       setState(() => notificationSound = soundKey);
     });
-    
+
     final notificationService = Provider.of<NotificationService>(
       context,
       listen: false,
     );
-    
+
     // Save and test the sound
     // Note: setNotificationSound() automatically recreates the channel with new sound
     await notificationService.setNotificationSound(soundKey);
@@ -841,12 +822,12 @@ class SettingsScreenState extends State<SettingsScreen>
           ],
         ),
       );
-      
+
       if (proceed == true) {
         await _openSystemNotificationSettings();
       }
     }
-    
+
     /* OLD CODE - File picker not supported for notifications
     try {
       final result = await FilePicker.platform.pickFiles(
@@ -925,9 +906,9 @@ class SettingsScreenState extends State<SettingsScreen>
         context,
         listen: false,
       );
-      
+
       await notificationService.openNotificationChannelSettings();
-      
+
       if (mounted) {
         showDialog(
           context: context,
@@ -971,10 +952,7 @@ class SettingsScreenState extends State<SettingsScreen>
       }
     } catch (e) {
       if (mounted) {
-        CustomToast.show(
-          context,
-          '❌ Error opening system settings: $e',
-        );
+        CustomToast.show(context, '❌ Error opening system settings: $e');
       }
     }
   }
@@ -1120,6 +1098,42 @@ class SettingsScreenState extends State<SettingsScreen>
     );
   }
 
+  Future<void> _changeLanguage(String newLanguage) async {
+    try {
+      _onSettingChanged(() async {
+        setState(() => selectedLanguage = newLanguage);
+
+        // Show loading indicator
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) =>
+              const Center(child: CircularProgressIndicator()),
+        );
+
+        try {
+          final languageService = Provider.of<LanguageService>(
+            context,
+            listen: false,
+          );
+          await languageService.setLanguage(newLanguage);
+
+          // Pop loading dialog
+          Navigator.pop(context);
+          CustomToast.show(context, 'Language changed to $newLanguage');
+        } catch (e) {
+          // Pop loading dialog
+          Navigator.pop(context);
+          rethrow;
+        }
+      });
+    } catch (e) {
+      CustomToast.show(context, 'Failed to change language: ${e.toString()}');
+      // Revert the change
+      setState(() => selectedLanguage = _initialLanguage);
+    }
+  }
+
   void _showAboutDialog() {
     showDialog(
       context: context,
@@ -1186,225 +1200,6 @@ class SettingsScreenState extends State<SettingsScreen>
             child: const Text('Close'),
           ),
         ],
-      ),
-    );
-  }
-
-  void _showServerBottomSheet() {
-    const servers = CrawlerService.servers; // Get servers from CrawlerService
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.4,
-        minChildSize: 0.3,
-        maxChildSize: 0.6,
-        expand: false,
-        builder: (context, controller) => Column(
-          children: [
-            Container(
-              margin: const EdgeInsets.symmetric(vertical: 8),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                'Select Server',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                controller: controller,
-                itemCount: servers.length,
-                itemBuilder: (context, index) {
-                  final server = servers[index];
-                  final isSelected = server == currentServer;
-                  return _buildServerListItem(server, isSelected);
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildServerListItem(String server, bool isSelected) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? colorScheme.primaryContainer
-              : colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(
-          Icons.dns_rounded,
-          color: isSelected ? colorScheme.primary : colorScheme.outline,
-        ),
-      ),
-      title: Text(
-        server,
-        style: TextStyle(
-          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-          color: isSelected ? colorScheme.primary : null,
-        ),
-      ),
-      trailing: isSelected
-          ? Icon(Icons.check, color: colorScheme.primary)
-          : null,
-      onTap: () async {
-        Navigator.pop(context);
-        await _changeServer(server);
-      },
-    );
-  }
-
-  Future<void> _changeServer(String newServer) async {
-    try {
-      // Show loading indicator
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(child: CircularProgressIndicator()),
-      );
-
-      // Test server connection
-      final response = await http
-          .get(
-            Uri.parse(newServer),
-            headers: {
-              'User-Agent':
-                  'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
-            },
-          )
-          .timeout(
-            const Duration(seconds: 10),
-            onTimeout: () {
-              throw Exception('Connection timeout');
-            },
-          );
-
-      // Pop loading dialog
-      Navigator.pop(context);
-
-      if (response.statusCode == 200) {
-        _onSettingChanged(() {
-          setState(() => currentServer = newServer);
-        });
-        CustomToast.show(context, 'Server changed successfully');
-      } else {
-        throw Exception('Server returned ${response.statusCode}');
-      }
-    } catch (e) {
-      // Pop loading dialog if still showing
-      if (Navigator.canPop(context)) {
-        Navigator.pop(context);
-      }
-
-      CustomToast.show(context, 'Failed to connect to server: ${e.toString()}');
-    }
-  }
-
-  Future<void> _changeLanguage(String newLanguage) async {
-    try {
-      _onSettingChanged(() async {
-        setState(() => selectedLanguage = newLanguage);
-
-        // Show loading indicator
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) =>
-              const Center(child: CircularProgressIndicator()),
-        );
-
-        try {
-          final languageService = Provider.of<LanguageService>(
-            context,
-            listen: false,
-          );
-          await languageService.setLanguage(newLanguage);
-
-          // Pop loading dialog
-          Navigator.pop(context);
-          CustomToast.show(context, 'Language changed to $newLanguage');
-        } catch (e) {
-          // Pop loading dialog
-          Navigator.pop(context);
-          rethrow;
-        }
-      });
-    } catch (e) {
-      CustomToast.show(context, 'Failed to change language: ${e.toString()}');
-      // Revert the change
-      setState(() => selectedLanguage = _initialLanguage);
-    }
-  }
-
-  Widget _buildServerOption(String server) {
-    final isSelected = currentServer == server;
-    final colorScheme = Theme.of(context).colorScheme;
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: isSelected
-              ? colorScheme.primary
-              : colorScheme.surfaceContainerHighest,
-          width: isSelected ? 2 : 1,
-        ),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: Radio<String>(
-          value: server,
-          groupValue: currentServer,
-          onChanged: (String? value) async {
-            // Update both services to keep them in sync
-            final serverManagement = Provider.of<ServerManagementService>(
-              context,
-              listen: false,
-            );
-            await serverManagement.setServer(value!);
-            await _settingsService.saveCurrentServer(value);
-            _onSettingChanged(() => _loadCurrentServer());
-            Navigator.pop(context);
-          },
-        ),
-        title: Text(
-          server,
-          style: TextStyle(
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-            color: isSelected ? colorScheme.primary : null,
-          ),
-        ),
-        onTap: () async {
-          // Update both services to keep them in sync
-          final serverManagement = Provider.of<ServerManagementService>(
-            context,
-            listen: false,
-          );
-          await serverManagement.setServer(server);
-          await _settingsService.saveCurrentServer(server);
-          _onSettingChanged(() => _loadCurrentServer());
-          Navigator.pop(context);
-        },
       ),
     );
   }
@@ -1822,28 +1617,6 @@ class SettingsScreenState extends State<SettingsScreen>
             ),
           ),
       ],
-    );
-  }
-
-  Widget _buildServerTile() {
-    final colorScheme = Theme.of(context).colorScheme;
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: colorScheme.primaryContainer,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(Icons.dns_rounded, color: colorScheme.primary),
-      ),
-      title: const Text(
-        'Current Server',
-        style: TextStyle(fontWeight: FontWeight.w500),
-      ),
-      subtitle: Text(currentServer ?? 'No server selected'),
-      trailing: const Icon(Icons.chevron_right_rounded),
-      onTap: () => _showServerBottomSheet(),
     );
   }
 
@@ -3937,12 +3710,6 @@ class SettingsScreenState extends State<SettingsScreen>
                           subtitle: selectedLanguage ?? 'English',
                           onTap: () => _showLanguageBottomSheet(),
                         ),
-                        _buildQuickActionCard(
-                          icon: Icons.dns_rounded,
-                          title: 'Server',
-                          subtitle: currentServer ?? 'Not Selected',
-                          onTap: () => _showServerBottomSheet(),
-                        ),
                       ],
                     ),
                   ],
@@ -3975,7 +3742,6 @@ class SettingsScreenState extends State<SettingsScreen>
                   _buildWallpaperThemeSettings(),
                 ]),
                 _buildSection('Server Settings', [
-                  _buildServerTile(),
                   _buildServerDiagnosticButton(),
                   _buildModernSwitchTile(
                     'Data Saver',
@@ -4005,7 +3771,9 @@ class SettingsScreenState extends State<SettingsScreen>
                     _buildTestNotificationButton(),
                   ],
                 ]),
-                _buildSection('Developer Tools', [_buildBackgroundServiceDebugTile()]),
+                _buildSection('Developer Tools', [
+                  _buildBackgroundServiceDebugTile(),
+                ]),
                 _buildSection('Language', [_buildLanguageTile()]),
                 _buildSection('About', [_buildAboutTile()]),
                 const SizedBox(height: 80), // Space for FAB

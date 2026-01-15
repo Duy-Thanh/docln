@@ -1,4 +1,5 @@
 class SearchResult {
+  final String id; // THÊM CÁI NÀY VÀO
   final String title;
   final String url;
   final String coverUrl;
@@ -10,6 +11,7 @@ class SearchResult {
   final String seriesUrl;
 
   SearchResult({
+    this.id = '', // Mặc định rỗng để không lỗi code cũ
     required this.title,
     required this.url,
     required this.coverUrl,
@@ -23,9 +25,10 @@ class SearchResult {
 
   factory SearchResult.fromHtml(Map<String, dynamic> json) {
     return SearchResult(
+      id: json['id']?.toString() ?? '', // Thêm dòng này
       title: json['title'] ?? '',
       url: json['url'] ?? '',
-      coverUrl: json['coverUrl'] ?? 'https://ln.hako.vn/img/nocover.jpg',
+      coverUrl: json['coverUrl'] ?? 'https://docln.sbs/img/nocover.jpg',
       chapterTitle: json['chapterTitle'] ?? '',
       chapterUrl: json['chapterUrl'] ?? '',
       volumeTitle: json['volumeTitle'] ?? '',
@@ -41,13 +44,13 @@ class SearchResponse {
   final bool hasResults;
   final int currentPage;
   final int totalPages;
-  final String keyword; // Adding the keyword to maintain state during pagination
+  final String keyword;
 
   SearchResponse({
     required this.results,
     required this.hasResults,
     required this.currentPage,
     required this.totalPages,
-    this.keyword = '', // Default empty string for backward compatibility
+    this.keyword = '',
   });
 }

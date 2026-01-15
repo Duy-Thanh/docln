@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
-import '../services/search_service.dart';
+
+import '../services/api_service.dart'; // Dùng cái này
 import '../models/search_result.dart';
 import 'package:provider/provider.dart';
 import '../services/theme_services.dart';
@@ -22,8 +23,10 @@ class SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<SearchScreen>
     with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
-  final SearchService _searchService = SearchService();
   final FocusNode _searchFocusNode = FocusNode();
+
+  // DÙNG API SERVICE MỚI
+  final ApiService _apiService = ApiService();
 
   // Initialize controllers explicitly, not using late
   AnimationController? _animationController;
@@ -99,13 +102,8 @@ class _SearchScreenState extends State<SearchScreen>
 
     if (searchTerm.isEmpty) return;
 
-    // If it's a new search (page 1), update the search field
     if (page == 1 && _searchResponse?.keyword != searchTerm) {
       _searchController.text = searchTerm;
-    }
-    // If navigating pages with existing response, ensure search field matches
-    else if (_searchResponse != null && page > 1) {
-      _searchController.text = _searchResponse!.keyword;
     }
 
     if (mounted) {
@@ -113,7 +111,6 @@ class _SearchScreenState extends State<SearchScreen>
         _isLoading = true;
         _errorMessage = '';
         if (page == 1) {
-          // Only reset search results if it's a new search
           _searchResponse = null;
         }
         _currentPage = page;
@@ -121,12 +118,11 @@ class _SearchScreenState extends State<SearchScreen>
     }
 
     try {
-      // Add haptic feedback when searching
       HapticFeedback.mediumImpact();
 
-      final response = await _searchService.search(searchTerm, page: page);
+      // GỌI API SEARCH MỚI
+      final response = await _apiService.search(searchTerm, page: page);
 
-      // Use the animation controller for smooth transition of results
       if (mounted && _animationController != null) {
         _animationController!.reset();
         setState(() {
@@ -138,7 +134,7 @@ class _SearchScreenState extends State<SearchScreen>
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Error performing search: ${e.toString()}';
+          _errorMessage = 'Lỗi tìm kiếm: ${e.toString()}';
           _isLoading = false;
         });
       }
@@ -173,29 +169,9 @@ class _SearchScreenState extends State<SearchScreen>
 
   // Attempt to fix image URLs that might be causing issues
   String _getFixedImageUrl(String originalUrl) {
-    try {
-      // First apply the domain fix from SearchService
-      String url = SearchService.fixImageUrl(originalUrl);
-
-      // If the URL still contains docln.net, apply a more aggressive fix
-      if (url.contains('docln.net')) {
-        // Try a different domain if the original is from docln.net
-        Uri uri = Uri.parse(url);
-        String path = uri.path;
-
-        // Replace with hako.vip domain
-        if (uri.host.startsWith('i.')) {
-          return 'https://i.hako.vip$path';
-        } else if (uri.host.startsWith('i2.')) {
-          return 'https://i2.hako.vip$path';
-        }
-      }
-
-      return url;
-    } catch (e) {
-      // If anything goes wrong with URL manipulation, return default
-      return 'https://docln.sbs/img/nocover.jpg';
-    }
+    if (originalUrl.isEmpty) return 'https://docln.sbs/img/nocover.jpg';
+    if (originalUrl.startsWith('http')) return originalUrl;
+    return 'https://docln.sbs$originalUrl'; // Fallback
   }
 
   // Try multiple fallback image URLs when the primary one fails
@@ -487,28 +463,28 @@ class _SearchScreenState extends State<SearchScreen>
 
   Widget _buildSearchSuggestions(bool isDarkMode, Color primaryColor) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-            child: Text(
-              'Popular searches',
-              style: TextStyle(
-                color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
+          const Text('Gợi ý', style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 10),
           Wrap(
             spacing: 8,
-            runSpacing: 8,
-            children: List.generate(_popularSearches.length, (index) {
-              return _buildSafeSuggestionItem(index, isDarkMode, primaryColor);
-            }),
+            children: _popularSearches
+                .map(
+                  (search) => ActionChip(
+                    label: Text(search),
+                    onPressed: () {
+                      _searchController.text = search;
+                      _performSearch();
+                    },
+                    backgroundColor: isDarkMode
+                        ? Colors.grey[800]
+                        : Colors.grey[200],
+                  ),
+                )
+                .toList(),
           ),
         ],
       ),
