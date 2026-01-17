@@ -1,4 +1,3 @@
-import 'dart:ffi';
 import 'package:docln/core/services/settings_services.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -8,18 +7,15 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:android_intent_plus/android_intent.dart';
 import 'dart:io' show Platform, File;
 import 'package:flutter/services.dart';
-import 'dart:convert';
-import 'package:translator/translator.dart';
-import 'dart:math' show min;
-import 'dart:math' show Random;
-import 'package:docln/core/services/performance_service.dart';
+
 import 'package:docln/core/services/history_service_v2.dart';
-import 'package:provider/provider.dart';
-import 'package:docln/core/models/light_novel.dart';
 import 'package:docln/core/services/preferences_recovery_service.dart';
 import 'package:docln/core/widgets/custom_toast.dart';
 import 'package:docln/core/services/preferences_service.dart';
+import 'package:provider/provider.dart';
+import 'package:docln/core/models/light_novel.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:docln/features/reader/ui/reader_screen.dart';
 
 class WebViewScreen extends StatefulWidget {
   final String url;
@@ -34,7 +30,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   WebViewController? _controller;
   bool _isLoading = true;
   bool _hasError = false;
-  String? _adBlockScript;
+
   bool _canGoBack = false;
   bool _canGoForward = false;
   bool _isReaderMode = false;
@@ -52,39 +48,21 @@ class _WebViewScreenState extends State<WebViewScreen> {
     'i.hako.vn',
   ];
 
-  // Navbar removal script
-  final String _navbarRemovalScript = """
-    function removeNavbar(){
-      var e=document.getElementById("navbar");
-      e&&e.parentNode.removeChild(e);
-      
-      // Also remove other potential navigation elements
-      ['#header', '.header', '.nav-wrapper', '.navigation'].forEach(selector => {
-        const element = document.querySelector(selector);
-        if(element) element.remove();
-      });
-    }
-    
-    function setupObserver(){
-      if(document.body){
-        let e=new MutationObserver(e=>{e.forEach(e=>{removeNavbar()})});
-        e.observe(document.body,{childList:!0,subtree:!0});
-        let r=setInterval(()=>{removeNavbar()},500);
-        setTimeout(()=>{clearInterval(r),e.disconnect()},5e3)
-      } else setTimeout(setupObserver,1)
-    }
-    
-    removeNavbar();
-    setupObserver();
-  """;
-
   @override
   void initState() {
     super.initState();
-    _optimizeScreen();
     _backupPreferencesSafely();
     _loadSettings();
     _loadAdBlockRules();
+    _initWebView();
+  }
+
+  Future<void> _loadSettings() async {
+    // Settings loading stub
+  }
+
+  Future<void> _loadAdBlockRules() async {
+    // AdBlock stub
   }
 
   @override
@@ -173,77 +151,32 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
   }
 
-  Future<void> _loadSettings() async {
-    try {
-      final prefsService = PreferencesService();
-      await prefsService.initialize();
+  Future<void> _toggleAdBlock() async {
+    // Ad blocking is now handled purely by URL filtering in NavigationDelegate
+    // or by custom headers if supported. No script injection.
 
-      if (mounted) {
-        setState(() {
-          _isAdBlockEnabled = prefsService.getBool(
-            'ad_block_enabled',
-            defaultValue: true,
-          );
-        });
-      }
-    } catch (e) {
-      print('Error loading settings: $e');
-    }
-  }
+    final newState = !_isAdBlockEnabled;
 
-  Future<void> _loadAdBlockRules() async {
-    try {
+    // Save preference
+    final prefsService = PreferencesService();
+    await prefsService.initialize();
+    await prefsService.setBool('ad_block_enabled', newState);
+
+    if (mounted) {
       setState(() {
-        _isLoading = true;
+        _isAdBlockEnabled = newState;
       });
 
-      // Use the enhanced adblock service that now pulls from multiple filter lists
-      _adBlockScript = await AdBlockService.getAdBlockScript();
-
-      print('Ad blocking script loaded successfully');
-    } catch (e) {
-      print('Error loading ad block rules: $e');
-      // Use the improved fallback script if the main script fails
-      _adBlockScript = AdBlockService.getFallbackScript();
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-        _initWebView();
-      }
-    }
-  }
-
-  Future<void> _toggleAdBlock() async {
-    try {
-      final newState = !_isAdBlockEnabled;
-
-      // Save preference
-      final prefsService = PreferencesService();
-      await prefsService.initialize();
-      await prefsService.setBool('ad_block_enabled', newState);
-
-      if (mounted) {
-        setState(() {
-          _isAdBlockEnabled = newState;
-        });
-
-        // Reload the page with new settings
-        if (_controller != null) {
-          _controller!.reload();
-        }
-
-        // Show toast notification
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ad blocker ${newState ? 'enabled' : 'disabled'}'),
-            duration: const Duration(seconds: 2),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ad blocker ${newState ? 'enabled' : 'disabled'}'),
+          duration: const Duration(seconds: 2),
+          action: SnackBarAction(
+            label: 'RELOAD',
+            onPressed: () => _controller?.reload(),
           ),
-        );
-      }
-    } catch (e) {
-      print('Error toggling ad blocking: $e');
+        ),
+      );
     }
   }
 
@@ -253,41 +186,42 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
 
     final settingsService = SettingsService();
-    final baseUrl =
-        await settingsService.getCurrentServer() ?? 'https://docln.sbs';
+    final baseUrl = await settingsService.getCurrentServer();
     final cleanPath = url.startsWith('/') ? url.substring(1) : url;
     return '$baseUrl/$cleanPath';
   }
 
-  Future<void> _optimizeScreen() async {
-    await PerformanceService.optimizeScreen('WebViewScreen');
-  }
-
   Future<void> _initWebView() async {
-    // Make sure the URL is fully formed before loading
+    // Make sure the URL is properly formatted
     final fullUrl = await _ensureFullUrl(widget.url);
 
-    print('Loading URL: $fullUrl'); // Debug log
-
+    debugPrint('Loading URL: $fullUrl');
     final controller = WebViewController()
+      ..setUserAgent(
+        'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+      )
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..enableZoom(false) // Optional: disable zoom if not needed
+      ..enableZoom(false)
       ..setBackgroundColor(Colors.transparent)
       ..setNavigationDelegate(
         NavigationDelegate(
           onNavigationRequest: (NavigationRequest request) {
             final Uri uri = Uri.parse(request.url);
-            print('Navigation request to: ${request.url}'); // Debug log
 
+            // STRICT KIOSK MODE: Only allow specific domains
             bool isAllowed = _allowedDomains.any(
-              (domain) => uri.host.contains(domain),
+              (domain) => uri.host == domain || uri.host.endsWith('.$domain'),
             );
-            return isAllowed
-                ? NavigationDecision.navigate
-                : NavigationDecision.prevent;
+
+            // Block all external links (Facebook, Discord, etc.)
+            if (!isAllowed) {
+              debugPrint('🚫 Blocked navigation to: ${request.url}');
+              return NavigationDecision.prevent;
+            }
+
+            return NavigationDecision.navigate;
           },
           onPageStarted: (String url) {
-            print('Page started loading: $url'); // Debug log
             if (mounted) {
               setState(() {
                 _isLoading = true;
@@ -295,45 +229,51 @@ class _WebViewScreenState extends State<WebViewScreen> {
               });
             }
             _updateNavigationState();
-            _injectScripts();
+            // Removed shim injection
           },
           onPageFinished: (String url) {
-            print('Page finished loading: $url'); // Debug log
             if (mounted) {
               setState(() {
                 _isLoading = false;
               });
             }
             _updateNavigationState();
-            _injectScripts();
+            // No scripts injected
 
-            // Add to history when page loads
+            // Add to history
             _addToHistory(url);
           },
           onWebResourceError: (WebResourceError error) {
-            print('Web resource error: ${error.description}'); // Debug log
+            debugPrint(
+              'WebResourceError: ${error.description}, Code: ${error.errorCode}, Type: ${error.errorType}',
+            );
+            // Ignore common harmless errors
+            if (error.description.contains('net::ERR_BLOCKED_BY_CLIENT'))
+              return;
+
             if (mounted) {
               setState(() {
                 _isLoading = false;
-                _hasError = true;
+                // Don't show full error screen for minor resource failures
+                if (error.errorCode != -10 && error.errorCode != -11) {
+                  // generic errors
+                  _hasError = true;
+                }
               });
             }
           },
         ),
       )
-      // Add console message handling with filtering
       ..setOnConsoleMessage((JavaScriptConsoleMessage message) {
+        // Aggressively filter console noise
         final msg = message.message;
-        // Filter out known harmless WebView errors
-        if (msg.contains('Cannot read properties of null') ||
-            msg.contains('Cannot read properties of undefined') ||
-            msg.contains('Push notifications are not supported') ||
-            msg.contains('Alpine Expression Error') ||
-            msg.contains('net::ERR_CONNECTION_REFUSED')) {
-          // Suppress these common WebView errors
+        if (msg.contains('DOMException') ||
+            msg.contains('querySelector') ||
+            msg.contains('properties of null') ||
+            msg.contains('ERR_'))
           return;
-        }
-        debugPrint('WebView Console: $msg');
+
+        debugPrint('🌐 Content: $msg');
       });
 
     controller.loadRequest(Uri.parse(fullUrl));
@@ -343,111 +283,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
         _controller = controller;
       });
     }
-  }
-
-  Future<void> _toggleReaderMode() async {
-    const readerModeScript = '''
-      (function() {
-        const existingStyle = document.getElementById('reader-mode-styles');
-        if (existingStyle) {
-          existingStyle.remove();
-          return false;
-        }
-
-        const style = document.createElement('style');
-        style.id = 'reader-mode-styles';
-        style.innerHTML = `
-          body {
-            max-width: 800px !important;
-            margin: 0 auto !important;
-            padding: 20px !important;
-            background: #fafafa !important;
-            color: #2c3e50 !important;
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif !important;
-            line-height: 1.8 !important;
-            font-size: 18px !important;
-          }
-          
-          .chapter-content, .content, article, .chapter-c, #chapter-content {
-            font-size: 18px !important;
-            line-height: 1.8 !important;
-            color: #2c3e50 !important;
-            padding: 0 16px !important;
-          }
-          
-          p, li {
-            font-size: 18px !important;
-            line-height: 1.8 !important;
-            color: #2c3e50 !important;
-            margin: 1em 0 !important;
-          }
-          
-          h1, h2, h3, h4, h5, h6 {
-            color: #1a1a1a !important;
-            line-height: 1.4 !important;
-            margin: 1.5em 0 0.8em !important;
-            font-weight: 600 !important;
-          }
-          
-          img {
-            max-width: 100% !important;
-            height: auto !important;
-            margin: 1.5em auto !important;
-            display: block !important;
-            border-radius: 8px !important;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
-          }
-          
-          a {
-            color: #3498db !important;
-            text-decoration: none !important;
-            border-bottom: 1px solid #3498db44 !important;
-            transition: all 0.2s ease !important;
-          }
-          
-          a:hover {
-            color: #2980b9 !important;
-            border-bottom-color: #2980b9 !important;
-          }
-          
-          header, footer, nav, aside, .ads, .banner, .social-share,
-          [class*="advertisement"], [class*="sidebar"], [class*="related"],
-          [class*="recommended"], [class*="popup"], [class*="modal"] {
-            display: none !important;
-          }
-        `;
-        document.head.appendChild(style);
-        return true;
-      })();
-    ''';
-
-    try {
-      final result = await _controller?.runJavaScriptReturningResult(
-        readerModeScript,
-      );
-      setState(() {
-        _isReaderMode = result as bool;
-      });
-    } catch (e) {
-      print('Error toggling reader mode: $e');
-    }
-  }
-
-  Future<void> _enableTextSelection() async {
-    const script = '''
-      document.documentElement.style.webkitUserSelect = 'text';
-      document.documentElement.style.userSelect = 'text';
-      
-      // Enable long press menu
-      document.addEventListener('selectionchange', function() {
-        const selection = window.getSelection();
-        if (selection.toString().length > 0) {
-          window.flutter_inappwebview.callHandler('onTextSelected', selection.toString());
-        }
-      });
-    ''';
-
-    await _controller?.runJavaScript(script);
   }
 
   Future<void> _updateNavigationState() async {
@@ -461,105 +296,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
         _canGoBack = canGoBack;
         _canGoForward = canGoForward;
       });
-    }
-  }
-
-  Future<void> _injectScripts() async {
-    if (_controller == null) return;
-
-    try {
-      // Only inject ad blocking if enabled
-      if (_isAdBlockEnabled && _adBlockScript != null) {
-        await _controller!.runJavaScript(_adBlockScript!);
-        print('Ad blocking script injected');
-      }
-
-      // Inject navbar removal script
-      await _controller!.runJavaScript(_navbarRemovalScript);
-
-      // Inject error prevention and handling scripts
-      await _controller!.runJavaScript('''
-        // Error prevention for common WebView issues
-        (function() {
-          // Prevent Alpine.js errors by providing fallback store
-          if (typeof window.\$store === 'undefined') {
-            window.\$store = {
-              toast: {
-                on: false,
-                message: '',
-                show: function() {},
-                hide: function() {}
-              }
-            };
-          }
-
-          // Prevent null element access errors
-          const originalQuerySelector = document.querySelector;
-          const originalQuerySelectorAll = document.querySelectorAll;
-          
-          document.querySelector = function(selector) {
-            try {
-              return originalQuerySelector.call(document, selector);
-            } catch (e) {
-              console.warn('querySelector error prevented:', e);
-              return null;
-            }
-          };
-
-          document.querySelectorAll = function(selector) {
-            try {
-              return originalQuerySelectorAll.call(document, selector);
-            } catch (e) {
-              console.warn('querySelectorAll error prevented:', e);
-              return [];
-            }
-          };
-
-          // Suppress push notification errors
-          if (!('Notification' in window)) {
-            window.Notification = {
-              requestPermission: function() { return Promise.resolve('denied'); },
-              permission: 'denied'
-            };
-          }
-
-          // Override console.error to reduce noise
-          const originalError = console.error;
-          console.error = function(...args) {
-            const message = args.join(' ');
-            if (message.includes('Cannot read properties of null') ||
-                message.includes('Cannot read properties of undefined') ||
-                message.includes('Push notifications are not supported') ||
-                message.includes('Alpine Expression Error')) {
-              // Suppress these common WebView errors
-              return;
-            }
-            originalError.apply(console, args);
-          };
-        })();
-      ''');
-
-      // Additional cleanup for reader experience
-      await _controller!.runJavaScript('''
-        // Remove floating elements and popups
-        document.querySelectorAll('[class*="float"], [class*="popup"], [class*="modal"], [class*="overlay"]')
-          .forEach(function(el) { el.remove(); });
-          
-        // Remove overflow:hidden from body and html
-        document.body.style.overflow = 'auto';
-        document.documentElement.style.overflow = 'auto';
-        
-        // Remove fixed position elements that might be ads
-        if (${_isAdBlockEnabled ? 'true' : 'false'}) {
-          document.querySelectorAll('div[style*="position:fixed"], div[style*="position: fixed"]').forEach(function(el) {
-            if (el.clientHeight < 200) {
-              el.remove();
-            }
-          });
-        }
-      ''');
-    } catch (e) {
-      print('Error injecting scripts: $e');
     }
   }
 
@@ -635,536 +371,23 @@ class _WebViewScreenState extends State<WebViewScreen> {
   }
 
   Future<void> _toggleDarkMode() async {
-    const darkModeScript = '''
-      (function() {
-        const existingStyle = document.getElementById('dark-mode-styles');
-        if (existingStyle) {
-          existingStyle.remove();
-          return false;
-        }
-
-        const style = document.createElement('style');
-        style.id = 'dark-mode-styles';
-        style.innerHTML = `
-          body {
-            background: #1a1a1a !important;
-            color: #e0e0e0 !important;
-          }
-          
-          .chapter-content, .content, article, .chapter-c, #chapter-content {
-            color: #e0e0e0 !important;
-            background: #1a1a1a !important;
-          }
-          
-          p, div, span, li {
-            color: #e0e0e0 !important;
-            background: transparent !important;
-          }
-          
-          h1, h2, h3, h4, h5, h6 {
-            color: #ffffff !important;
-            font-weight: 600 !important;
-          }
-          
-          a {
-            color: #64b5f6 !important;
-            text-decoration: none !important;
-            border-bottom: 1px solid #64b5f644 !important;
-            transition: all 0.2s ease !important;
-          }
-          
-          a:hover {
-            color: #90caf9 !important;
-            border-bottom-color: #90caf9 !important;
-          }
-          
-          pre, code {
-            background: #2d2d2d !important;
-            color: #e0e0e0 !important;
-            border-radius: 4px !important;
-            padding: 0.2em 0.4em !important;
-          }
-          
-          blockquote {
-            background: #2d2d2d !important;
-            border-left: 4px solid #64b5f6 !important;
-            margin: 1em 0 !important;
-            padding: 0.5em 1em !important;
-            border-radius: 0 4px 4px 0 !important;
-          }
-          
-          hr {
-            border: none !important;
-            border-top: 1px solid #404040 !important;
-            margin: 2em 0 !important;
-          }
-          
-          img {
-            opacity: 0.9 !important;
-            border-radius: 8px !important;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
-          }
-          
-          table {
-            border-collapse: collapse !important;
-            border: 1px solid #404040 !important;
-            background: #2d2d2d !important;
-            border-radius: 4px !important;
-            overflow: hidden !important;
-          }
-          
-          th, td {
-            border: 1px solid #404040 !important;
-            padding: 8px 12px !important;
-          }
-          
-          th {
-            background: #333333 !important;
-            color: #ffffff !important;
-          }
-        `;
-        document.head.appendChild(style);
-        return true;
-      })();
-    ''';
-
-    try {
-      final result = await _controller?.runJavaScriptReturningResult(
-        darkModeScript,
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Dark mode via script injection is disabled.'),
+        ),
       );
-      setState(() {
-        _isDarkMode = result as bool;
-      });
-    } catch (e) {
-      print('Error toggling dark mode: $e');
     }
   }
 
   void _showTranslateOptions() {
-    final theme = Theme.of(context);
-    final translator = GoogleTranslator();
-    int translatedCount = 0;
-    int failedCount = 0;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => Container(
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 10,
-                offset: const Offset(0, -2),
-              ),
-            ],
-          ),
-          child: SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Handle bar
-                Container(
-                  margin: const EdgeInsets.only(top: 8),
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.onSurfaceVariant.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      Text(
-                        'Translate Page',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const Spacer(),
-                      IconButton.filledTonal(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context),
-                        style: IconButton.styleFrom(
-                          backgroundColor: theme.colorScheme.surfaceVariant
-                              .withOpacity(0.5),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(),
-                _buildLanguageOption(
-                  'English',
-                  'en',
-                  onTap: () => _translatePage('en'),
-                ),
-                _buildLanguageOption(
-                  'Vietnamese',
-                  'vi',
-                  onTap: () => _translatePage('vi'),
-                ),
-                _buildLanguageOption(
-                  'Japanese',
-                  'ja',
-                  onTap: () => _translatePage('ja'),
-                ),
-                _buildLanguageOption(
-                  'Korean',
-                  'ko',
-                  onTap: () => _translatePage('ko'),
-                ),
-                _buildLanguageOption(
-                  'Chinese (Simplified)',
-                  'zh-CN',
-                  onTap: () => _translatePage('zh-CN'),
-                ),
-                const SizedBox(height: 8),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLanguageOption(
-    String language,
-    String code, {
-    required VoidCallback onTap,
-  }) {
-    final theme = Theme.of(context);
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              Text(language, style: theme.textTheme.bodyLarge),
-              const Spacer(),
-              Text(
-                code.toUpperCase(),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Icon(
-                Icons.arrow_forward_ios_rounded,
-                size: 16,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _translatePage(String targetLanguage) async {
-    try {
-      Navigator.pop(context); // Close language selection
-
-      // Show loading indicator
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => Center(
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Translating...',
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                ],
-              ),
-            ),
-          ),
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Translation via script injection is disabled.'),
         ),
       );
-
-      // Initialize translation infrastructure in JavaScript
-      await _controller?.runJavaScript(r'''
-        window.translationSystem = {
-          elements: new Map(),
-          cache: new Map(),  // Cache for translations
-          pendingUpdates: [],
-          
-          shouldTranslateNode: function(node) {
-            if (!node || !node.textContent) return false;
-            const text = node.textContent.trim();
-            if (text.length < 2) return false;
-            if (node.closest('script, style, iframe, noscript, svg, path')) return false;
-            if (node.tagName === 'INPUT' || node.tagName === 'TEXTAREA') return false;
-            if (/^[-_+=<>{}\[\]()\/\\|~`!@#$%^&*]+$/.test(text)) return false;
-            return true;
-          },
-          
-          collectTexts: function() {
-            const walker = document.createTreeWalker(
-              document.body,
-              NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-              {
-                acceptNode: function(node) {
-                  if (node.nodeType === 3) {
-                    return node.textContent.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
-                  }
-                  if (node.hasAttribute('data-translated')) return NodeFilter.FILTER_REJECT;
-                  return NodeFilter.FILTER_ACCEPT;
-                }
-              }
-            );
-
-            const texts = [];
-            let index = 0;
-            let currentNode;
-            let lastParent = null;
-            let lastText = null;
-
-            while (currentNode = walker.nextNode()) {
-              if (currentNode.nodeType === 3) {
-                const parent = currentNode.parentElement;
-                if (this.shouldTranslateNode(parent)) {
-                  const text = currentNode.textContent.trim();
-                  
-                  // Combine short consecutive texts under same parent
-                  if (lastParent === parent && text.length < 10 && lastText) {
-                    lastText.text += ' ' + text;
-                    continue;
-                  }
-
-                  this.elements.set(index, parent);
-                  lastText = { id: index, text: text };
-                  texts.push(lastText);
-                  lastParent = parent;
-                  index++;
-                }
-              } else if (currentNode.nodeType === 1) {
-                const hasOnlyText = Array.from(currentNode.childNodes)
-                  .every(child => child.nodeType === 3 || child.tagName === 'BR');
-                
-                if (hasOnlyText && this.shouldTranslateNode(currentNode)) {
-                  const text = currentNode.textContent.trim().replace(/\s+/g, ' ');
-                  this.elements.set(index, currentNode);
-                  texts.push({ id: index, text: text });
-                  currentNode.setAttribute('data-translated', 'true');
-                  index++;
-                }
-              }
-            }
-            return texts;
-          },
-          
-          queueUpdate: function(id, text) {
-            this.pendingUpdates.push({ id, text });
-            if (this.pendingUpdates.length >= 10) {
-              this.flushUpdates();
-            }
-          },
-          
-          flushUpdates: function() {
-            const updates = this.pendingUpdates.splice(0);
-            requestAnimationFrame(() => {
-              updates.forEach(({id, text}) => {
-                const element = this.elements.get(id);
-                if (element) {
-                  element.textContent = text;
-                  element.style.color = '#1a73e8';
-                }
-              });
-            });
-          },
-          
-          updateText: function(id, text) {
-            this.queueUpdate(id, text);
-            return true;
-          }
-        };
-      ''');
-
-      // Collect texts to translate
-      final String jsonResult =
-          await _controller?.runJavaScriptReturningResult(r'''
-        (function() {
-          try {
-            const texts = window.translationSystem.collectTexts();
-            console.log('Number of texts collected:', texts.length);
-            // Return the array directly, WebView will handle JSON conversion
-            return texts;
-          } catch (e) {
-            console.error('Error collecting texts:', e);
-            return []; // Return empty array if error
-          }
-        })()
-      ''')
-              as String;
-
-      print('Raw result type: ${jsonResult.runtimeType}');
-      print(
-        'Raw result preview: ${jsonResult.substring(0, min(100, jsonResult.length))}',
-      );
-
-      // Parse the JSON, handling potential errors
-      List<dynamic> elements;
-      try {
-        if (jsonResult.startsWith('"') && jsonResult.endsWith('"')) {
-          // Handle double-encoded JSON
-          elements = json.decode(json.decode(jsonResult));
-        } else {
-          // Handle single-encoded JSON
-          elements = json.decode(jsonResult);
-        }
-        print('Successfully parsed ${elements.length} elements');
-      } catch (e) {
-        print('JSON parsing error: $e');
-        print('Raw result was: $jsonResult');
-        elements = [];
-      }
-
-      if (elements.isEmpty) {
-        if (mounted) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No text found to translate')),
-          );
-        }
-        return;
-      }
-
-      final translator = GoogleTranslator();
-      int translatedCount = 0;
-      int failedCount = 0;
-      final translationCache = <String, String>{}; // Cache translations
-
-      // Create connection pools to manage concurrent requests
-      const maxConcurrent = 10; // Maximum concurrent translations
-      final connectionPool = <Future<void>>[];
-      final completedFutures = <Future<void>>{}; // Track completed futures
-
-      // Process elements with controlled concurrency
-      for (var i = 0; i < elements.length; i++) {
-        final element = elements[i];
-        final int id = element['id'] as int;
-        final String text = element['text'] as String;
-
-        // Skip non-translatable text
-        if (RegExp(r'^[^a-zA-Z\u00C0-\u1EF9]+$').hasMatch(text)) {
-          continue;
-        }
-
-        // Check cache first
-        if (translationCache.containsKey(text)) {
-          _controller?.runJavaScript(
-            'window.translationSystem.updateText(${id}, ${json.encode(translationCache[text])})',
-          );
-          translatedCount++;
-          continue;
-        }
-
-        // Clean up completed futures
-        connectionPool.removeWhere((f) => completedFutures.contains(f));
-
-        // Manage connection pool
-        if (connectionPool.length >= maxConcurrent) {
-          // Wait for one translation to complete before adding more
-          await Future.wait([connectionPool.first]);
-        }
-
-        // Add new translation to pool
-        final future = () async {
-          try {
-            final translation = await translator
-                .translate(text, to: targetLanguage)
-                .timeout(
-                  const Duration(seconds: 5),
-                  onTimeout: () => throw 'Translation timeout',
-                );
-
-            if (translation.text != text) {
-              // Cache the translation
-              translationCache[text] = translation.text;
-
-              // Update UI immediately
-              _controller?.runJavaScript(
-                'window.translationSystem.updateText(${id}, ${json.encode(translation.text)})',
-              );
-
-              translatedCount++;
-              if (translatedCount % 5 == 0 && mounted) {
-                ScaffoldMessenger.of(context)
-                  ..clearSnackBars()
-                  ..showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Translated $translatedCount of ${elements.length} elements...',
-                      ),
-                      duration: const Duration(milliseconds: 100),
-                    ),
-                  );
-              }
-            }
-          } catch (e) {
-            print('Error translating element: $e');
-            failedCount++;
-
-            // On error, reduce concurrent connections temporarily
-            await Future.delayed(const Duration(milliseconds: 100));
-          }
-        }();
-
-        // Track the future
-        connectionPool.add(future);
-        future.then((_) => completedFutures.add(future));
-      }
-
-      // Wait for remaining translations
-      await Future.wait(connectionPool);
-
-      // Cleanup
-      await _controller?.runJavaScript('delete window.translationSystem;');
-
-      // Show completion message
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Translated $translatedCount elements' +
-                  (failedCount > 0 ? ' ($failedCount failed)' : ''),
-            ),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-    } catch (e) {
-      print('Translation error: $e');
-      print('Stack trace: ${StackTrace.current}');
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Translation failed')));
-      }
     }
-  }
-
-  Future<void> _saveForOffline() async {
-    // Implement offline saving functionality
-    // This would require additional setup for local storage
   }
 
   void _showMoreOptions() {
@@ -1447,20 +670,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
   }
 
   Future<void> _setTextSize(double size) async {
-    try {
-      await _controller?.runJavaScript('document.body.style.zoom = "${size}%"');
+    // JS Injection removed.
+    // To support this without JS, we would need to reload the page with a different UserAgent or settings,
+    // which is overkill. Disabling for now.
+    if (mounted) {
       setState(() {
         _textZoom = size;
       });
-      Navigator.pop(context);
-    } catch (e) {
-      print('Error setting text size: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Text Zoom via Script is disabled.')),
+      );
     }
-  }
-
-  void _showFindInPage() {
-    // Add find in page functionality
-    // This will require additional JavaScript injection
   }
 
   void _showPageInfo() async {
@@ -1707,85 +927,102 @@ class _WebViewScreenState extends State<WebViewScreen> {
     if (!mounted) return;
 
     try {
-      // Extract novel info from the URL
+      // Extract novel info from the URL only
       final Uri uri = Uri.parse(url);
       final pathSegments = uri.pathSegments;
 
-      // Only process novel pages, not other pages
       if (pathSegments.contains('truyen') || pathSegments.contains('novel')) {
-        // Extract novel ID, title and chapter if possible
         String novelId = '';
-        String novelTitle = '';
+        String novelTitle = 'Unknown Novel';
         String? chapterTitle;
 
-        // Check if it's a chapter page or novel page
-        bool isChapterPage =
-            pathSegments.contains('chuong') || pathSegments.contains('chapter');
+        // Roughly parse structure: /truyen/ID-Slug/cID-Chapter
+        // Example: docln.net/truyen/123-ten-truyen/c456-ten-chuong
 
-        // Extract novel ID and set a placeholder title
-        if (pathSegments.length >= 2) {
-          novelId = pathSegments.last;
-          novelTitle = novelId.replaceAll(
-            '-',
-            ' ',
-          ); // Simple conversion for display
+        // Find 'truyen' index
+        int truyenIndex = pathSegments.indexOf('truyen');
+        if (truyenIndex == -1) truyenIndex = pathSegments.indexOf('novel');
+
+        if (truyenIndex != -1 && pathSegments.length > truyenIndex + 1) {
+          String slug = pathSegments[truyenIndex + 1];
+          List<String> parts = slug.split('-');
+          if (parts.isNotEmpty) {
+            novelId = parts[0];
+            // Restore title from slug if possible, poorly
+            novelTitle = slug
+                .substring(novelId.length)
+                .replaceAll('-', ' ')
+                .trim();
+            novelTitle = novelTitle.isEmpty ? slug : novelTitle;
+          } else {
+            novelId = slug;
+          }
         }
 
-        // Try to get title from the page
-        _controller
-            ?.runJavaScriptReturningResult('''
-          (function() {
-            // Try to find the title in different ways
-            var title = document.querySelector('.series-name')?.innerText || 
-                       document.querySelector('.story-title')?.innerText ||
-                       document.querySelector('h1')?.innerText ||
-                       document.title;
-                       
-            // Try to find current chapter if on a chapter page
-            var chapter = document.querySelector('.chapter-title')?.innerText ||
-                         document.querySelector('.chap-title')?.innerText;
-                         
-            return { title: title || "", chapter: chapter || "" };
-          })();
-        ''')
-            .then((result) {
-              // Parse the result
-              if (result != null) {
-                try {
-                  final Map<String, dynamic> data = jsonDecode(
-                    result.toString(),
-                  );
-                  novelTitle = data['title'] as String? ?? novelTitle;
-                  chapterTitle = data['chapter'] as String?;
+        // Check chapter
+        // Usually next segment
+        // ... /c123-chapter-title
+        if (truyenIndex != -1 && pathSegments.length > truyenIndex + 2) {
+          String chSlug = pathSegments[truyenIndex + 2];
+          if (chSlug.startsWith('c') || chSlug.startsWith('chapter')) {
+            chapterTitle = chSlug.replaceAll('-', ' ');
+          }
+        }
 
-                  // Create a minimal LightNovel object and save to history
-                  final novel = LightNovel(
-                    id: novelId,
-                    title: novelTitle,
-                    coverUrl:
-                        'https://docln.sbs/img/nocover.jpg', // Default cover
-                    url: isChapterPage
-                        ? url.split('/chuong')[0]
-                        : url, // Remove chapter from URL if it's a chapter page
-                  );
+        final novel = LightNovel(
+          id: novelId,
+          title: novelTitle,
+          coverUrl: 'https://docln.sbs/img/nocover.jpg',
+          url: url,
+        );
 
-                  // Add to history
-                  final historyService = Provider.of<HistoryServiceV2>(
-                    context,
-                    listen: false,
-                  );
-                  historyService.addToHistory(novel, chapterTitle);
-                } catch (e) {
-                  print('Error parsing page info: $e');
-                }
-              }
-            })
-            .catchError((e) {
-              print('Error getting page info: $e');
-            });
+        final historyService = Provider.of<HistoryServiceV2>(
+          context,
+          listen: false,
+        );
+        historyService.addToHistory(novel, chapterTitle);
       }
     } catch (e) {
       print('Error adding to history: $e');
+    }
+  }
+
+  Future<void> _toggleReaderMode() async {
+    if (_controller == null) return;
+
+    final currentUrl = await _controller!.currentUrl();
+    if (currentUrl == null) return;
+
+    // Use default title since we can't scrape
+    final pageTitle = "Light Novel";
+
+    // Create minimal LightNovel for ReaderScreen
+    Uri? uri = Uri.tryParse(currentUrl);
+    String novelSlug =
+        uri?.pathSegments.length != null && uri!.pathSegments.length > 1
+        ? uri.pathSegments[1]
+        : 'unknown-novel';
+
+    final lightNovel = LightNovel(
+      id: novelSlug.split('-').first,
+      title: pageTitle,
+      coverUrl: 'https://docln.net/img/nocover.png',
+      url: currentUrl,
+    );
+
+    // ... Navigation logic ...
+    if (mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ReaderScreen(
+            url: currentUrl,
+            title: 'Reader Mode',
+            novel: lightNovel,
+            chapterTitle: 'Current Chapter',
+          ),
+        ),
+      );
     }
   }
 }

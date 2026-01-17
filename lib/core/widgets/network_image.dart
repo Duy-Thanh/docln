@@ -124,11 +124,14 @@ class _OptimizedNetworkImageState extends State<OptimizedNetworkImage> {
         }
       });
     } else {
-      if (mounted) {
-        setState(() {
-          _hasError = true;
-        });
-      }
+      // Schedule rebuild for error state
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _hasError = true;
+          });
+        }
+      });
     }
   }
 

@@ -7,10 +7,10 @@ import 'package:docln/core/models/light_novel.dart';
 import 'package:docln/core/services/history_service_v2.dart';
 import 'package:docln/core/services/eye_protection_service.dart';
 import 'package:docln/core/widgets/eye_protection_overlay.dart';
-import 'package:docln/core/widgets/eye_friendly_text.dart';
+
 import 'package:docln/core/widgets/network_image.dart';
 import 'package:docln/features/settings/ui/EyeCareScreen.dart';
-import 'package:docln/core/services/settings_services.dart';
+
 import 'comments_screen.dart';
 import 'package:docln/core/services/preferences_service.dart';
 import 'package:docln/core/services/api_service.dart';
@@ -35,229 +35,6 @@ class ContentBlock {
 }
 
 // PERFORMANCE OPTIMIZATION: Data class for passing to isolate
-class _ParseParams {
-  final String content;
-  final double fontSize;
-  final String fontFamily;
-  final double lineHeight;
-  final double paragraphSpacing;
-  final Color textColor;
-
-  _ParseParams({
-    required this.content,
-    required this.fontSize,
-    required this.fontFamily,
-    required this.lineHeight,
-    required this.paragraphSpacing,
-    required this.textColor,
-  });
-}
-
-// PERFORMANCE OPTIMIZATION: Top-level function for isolate parsing
-// This runs on a separate thread, keeping UI responsive
-List<ContentBlock> _parseContentInIsolate(_ParseParams params) {
-  final content = params.content;
-  final List<ContentBlock> blocks = [];
-
-  // Check if the content is HTML
-  if (content.contains('<p>') ||
-      content.contains('<h') ||
-      content.contains('<img')) {
-    // Pre-process content
-    final processedContent = content.replaceAll(
-      RegExp(r'<p\s+id\s*=\s*"[^"]*"'),
-      '<p',
-    );
-
-    // Single-pass parsing
-    int currentPos = 0;
-    while (currentPos < processedContent.length) {
-      final nextTagStart = processedContent.indexOf('<', currentPos);
-      if (nextTagStart == -1) break;
-
-      // Parse paragraphs
-      if (processedContent.startsWith('<p', nextTagStart)) {
-        final endTag = processedContent.indexOf('</p>', nextTagStart);
-        if (endTag != -1) {
-          final contentStart = processedContent.indexOf('>', nextTagStart) + 1;
-          final paragraphContent = processedContent.substring(
-            contentStart,
-            endTag,
-          );
-
-          // Check if paragraph contains ONLY images (no text)
-          final textContent = paragraphContent
-              .replaceAll(RegExp(r'<img[^>]*>'), '')
-              .trim();
-          final hasOnlyImages = textContent.isEmpty;
-          final imageMatches = RegExp(
-            r'<img[^>]*>',
-          ).allMatches(paragraphContent);
-
-          if (hasOnlyImages && imageMatches.isNotEmpty) {
-            // Parse each image in the paragraph as separate blocks
-            for (final match in imageMatches) {
-              final imgTag = match.group(0)!;
-              final srcMatch = RegExp(
-                r'src\s*=\s*["'
-                "'"
-                r']([^"'
-                "'"
-                r']+)["'
-                "'"
-                r']',
-              ).firstMatch(imgTag);
-              if (srcMatch != null) {
-                final imageUrl = srcMatch.group(1)!;
-                if (imageUrl.startsWith('http')) {
-                  // Extract alt text
-                  String? altText;
-                  final altStart = imgTag.indexOf('alt=');
-                  if (altStart != -1) {
-                    final quoteStart = altStart + 4;
-                    if (quoteStart < imgTag.length) {
-                      final quote = imgTag[quoteStart];
-                      if (quote == '"' || quote == "'") {
-                        final quoteEnd = imgTag.indexOf(quote, quoteStart + 1);
-                        if (quoteEnd != -1) {
-                          altText = imgTag.substring(quoteStart + 1, quoteEnd);
-                        }
-                      }
-                    }
-                  }
-                  blocks.add(
-                    ContentBlock(
-                      type: ContentBlockType.image,
-                      content: imageUrl,
-                      startPosition: nextTagStart + match.start,
-                      altText: altText,
-                    ),
-                  );
-                }
-              }
-            }
-          } else {
-            // Regular paragraph with text
-            blocks.add(
-              ContentBlock(
-                type: ContentBlockType.paragraph,
-                content: paragraphContent,
-                startPosition: nextTagStart,
-              ),
-            );
-          }
-          currentPos = endTag + 4;
-          continue;
-        }
-      }
-      // Parse headers
-      else if (processedContent.startsWith(RegExp(r'<h[1-6]'), nextTagStart)) {
-        final endTagMatch = RegExp(
-          r'</h[1-6]>',
-        ).firstMatch(processedContent.substring(nextTagStart));
-        if (endTagMatch != null) {
-          final contentStart = processedContent.indexOf('>', nextTagStart) + 1;
-          final endTagPos = nextTagStart + endTagMatch.start;
-          final blockContent = processedContent.substring(
-            contentStart,
-            endTagPos,
-          );
-          blocks.add(
-            ContentBlock(
-              type: ContentBlockType.header,
-              content: blockContent,
-              startPosition: nextTagStart,
-            ),
-          );
-          currentPos = nextTagStart + endTagMatch.end;
-          continue;
-        }
-      }
-      // Parse images
-      else if (processedContent.startsWith('<img', nextTagStart)) {
-        final imgTagEnd = processedContent.indexOf('>', nextTagStart);
-        if (imgTagEnd != -1) {
-          final imgTag = processedContent.substring(
-            nextTagStart,
-            imgTagEnd + 1,
-          );
-          final srcMatch = RegExp(
-            r'src\s*=\s*["'
-            "'"
-            r']([^"'
-            "'"
-            r']+)["'
-            "'"
-            r']',
-          ).firstMatch(imgTag);
-          if (srcMatch != null) {
-            final imageUrl = srcMatch.group(1)!;
-            if (imageUrl.startsWith('http')) {
-              // Extract alt text
-              String? altText;
-              final altStart = imgTag.indexOf('alt=');
-              if (altStart != -1) {
-                final quoteStart = altStart + 4;
-                if (quoteStart < imgTag.length) {
-                  final quote = imgTag[quoteStart];
-                  if (quote == '"' || quote == "'") {
-                    final quoteEnd = imgTag.indexOf(quote, quoteStart + 1);
-                    if (quoteEnd != -1) {
-                      altText = imgTag.substring(quoteStart + 1, quoteEnd);
-                    }
-                  }
-                }
-              }
-              blocks.add(
-                ContentBlock(
-                  type: ContentBlockType.image,
-                  content: imageUrl,
-                  startPosition: nextTagStart,
-                  altText: altText,
-                ),
-              );
-            }
-          }
-          currentPos = imgTagEnd + 1;
-          continue;
-        }
-      }
-
-      currentPos = nextTagStart + 1;
-    }
-  } else {
-    // Plain text parsing
-    final paragraphs = content.split('\n\n');
-    int position = 0;
-    for (final paragraph in paragraphs) {
-      if (paragraph.trim().isEmpty) {
-        position += paragraph.length + 2;
-        continue;
-      }
-
-      if (paragraph.trim().startsWith('#')) {
-        blocks.add(
-          ContentBlock(
-            type: ContentBlockType.header,
-            content: paragraph.trim().substring(1).trim(),
-            startPosition: position,
-          ),
-        );
-      } else {
-        blocks.add(
-          ContentBlock(
-            type: ContentBlockType.paragraph,
-            content: paragraph.trim(),
-            startPosition: position,
-          ),
-        );
-      }
-      position += paragraph.length + 2;
-    }
-  }
-
-  return blocks;
-}
 
 class ReaderScreen extends StatefulWidget {
   final String url;
@@ -280,7 +57,7 @@ class ReaderScreen extends StatefulWidget {
 class _ReaderScreenState extends State<ReaderScreen>
     with WidgetsBindingObserver {
   bool _isLoading = true;
-  String _content = '';
+
   double _fontSize = 18.0;
   String _fontFamily = 'Roboto';
   double _lineHeight = 1.8;
@@ -290,17 +67,9 @@ class _ReaderScreenState extends State<ReaderScreen>
   double _paragraphSpacing = 1.5;
   bool _showControls = true;
 
-  // PERFORMANCE OPTIMIZATION: Cache parsed content
-  List<Widget>? _cachedContentWidgets;
-  List<ContentBlock>?
-  _parsedContentBlocks; // Store pre-parsed blocks from isolate
-  String? _lastParsedContent;
-  double? _lastFontSize;
-  double? _lastLineHeight;
-  double? _lastParagraphSpacing;
-
   // Reading progress
   double _readingProgress = 0.0;
+
   final ScrollController _scrollController = ScrollController();
 
   // Text selection
@@ -1426,278 +1195,6 @@ class _ReaderScreenState extends State<ReaderScreen>
     );
   }
 
-  List<Widget> _parseContent() {
-    // PERFORMANCE OPTIMIZATION: Check cache first
-    final settingsChanged =
-        _lastFontSize != _fontSize ||
-        _lastLineHeight != _lineHeight ||
-        _lastParagraphSpacing != _paragraphSpacing;
-
-    if (_cachedContentWidgets != null &&
-        _lastParsedContent == _content &&
-        !settingsChanged) {
-      return _cachedContentWidgets!;
-    }
-
-    // CRITICAL PERFORMANCE FIX: Use pre-parsed blocks from isolate
-    // This skips the expensive parsing on UI thread
-    final List<ContentBlock> contentBlocks;
-
-    if (_parsedContentBlocks != null && _lastParsedContent == _content) {
-      // Use blocks from isolate parsing
-      contentBlocks = _parsedContentBlocks!;
-
-      // DEBUG: Check image blocks in widget building
-      final imageCount = contentBlocks
-          .where((b) => b.type == ContentBlockType.image)
-          .length;
-      debugPrint(
-        '🎨 Building widgets with $imageCount images from ${contentBlocks.length} blocks',
-      );
-    } else {
-      // Fallback to synchronous parsing (should rarely happen)
-      final stopwatch = Stopwatch()..start();
-
-      if (_content.contains('<p>') ||
-          _content.contains('<h') ||
-          _content.contains('<img')) {
-        final processedContent = _content.replaceAll(
-          RegExp(r'<p\s+id\s*=\s*"[^"]*"'),
-          '<p',
-        );
-        contentBlocks = _parseContentBlocksOptimized(processedContent);
-      } else {
-        contentBlocks = _parseContentBlocksOptimized(_content);
-      }
-
-      stopwatch.stop();
-    }
-
-    // Now build widgets from blocks (this is fast)
-    final stopwatch = Stopwatch()..start();
-    final List<Widget> widgets = [];
-
-    // Process the blocks in order
-    for (var block in contentBlocks) {
-      switch (block.type) {
-        case ContentBlockType.paragraph:
-          final paragraphText = _stripHtmlTagsFast(block.content);
-          // Skip empty paragraphs
-          if (paragraphText.isEmpty ||
-              RegExp(r'^\s*\$\d+\s*$').hasMatch(paragraphText)) {
-            continue;
-          }
-
-          widgets.add(
-            Padding(
-              padding: EdgeInsets.only(bottom: 16 * _paragraphSpacing),
-              child: Text(
-                paragraphText,
-                style: TextStyle(
-                  fontSize: _fontSize,
-                  color: _textColor,
-                  fontFamily: _fontFamily,
-                  height: _lineHeight,
-                ),
-              ),
-            ),
-          );
-          break;
-
-        case ContentBlockType.header:
-          final headerText = _stripHtmlTagsFast(block.content);
-          if (headerText.isNotEmpty) {
-            widgets.add(
-              Padding(
-                padding: EdgeInsets.only(bottom: 16 * _paragraphSpacing),
-                child: Text(
-                  headerText,
-                  style: TextStyle(
-                    fontSize: _fontSize + 4,
-                    fontWeight: FontWeight.bold,
-                    color: _textColor,
-                    fontFamily: _fontFamily,
-                    height: _lineHeight,
-                  ),
-                ),
-              ),
-            );
-          }
-          break;
-
-        case ContentBlockType.image:
-          widgets.add(
-            Padding(
-              padding: EdgeInsets.symmetric(vertical: 16.0),
-              child: Center(
-                child: Column(
-                  children: [
-                    _buildImageWidget(block.content),
-                    if (block.altText != null && block.altText!.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8.0),
-                        child: Text(
-                          block.altText!,
-                          style: TextStyle(
-                            fontStyle: FontStyle.italic,
-                            fontSize: _fontSize - 2,
-                            color: _textColor.withOpacity(0.7),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          );
-          break;
-      }
-    }
-
-    // Cache the result
-    _cachedContentWidgets = widgets;
-    _lastParsedContent = _content;
-    _lastFontSize = _fontSize;
-    _lastLineHeight = _lineHeight;
-    _lastParagraphSpacing = _paragraphSpacing;
-
-    stopwatch.stop();
-
-    return widgets;
-  }
-
-  // PERFORMANCE OPTIMIZATION: Single-pass optimized content block parsing
-  List<ContentBlock> _parseContentBlocksOptimized(String html) {
-    final List<ContentBlock> blocks = [];
-    int currentPos = 0;
-
-    // Use a more efficient parsing strategy for large content
-    while (currentPos < html.length) {
-      // Find next tag
-      final nextTagStart = html.indexOf('<', currentPos);
-      if (nextTagStart == -1) break;
-
-      // Determine tag type
-      if (html.startsWith('<p', nextTagStart)) {
-        final endTag = html.indexOf('</p>', nextTagStart);
-        if (endTag != -1) {
-          final contentStart = html.indexOf('>', nextTagStart) + 1;
-          final content = html.substring(contentStart, endTag);
-          blocks.add(
-            ContentBlock(
-              type: ContentBlockType.paragraph,
-              content: content,
-              startPosition: nextTagStart,
-            ),
-          );
-          currentPos = endTag + 4; // Skip </p>
-          continue;
-        }
-      } else if (html.startsWith(RegExp(r'<h[1-6]'), nextTagStart)) {
-        final endTagMatch = RegExp(
-          r'</h[1-6]>',
-        ).firstMatch(html.substring(nextTagStart));
-        if (endTagMatch != null) {
-          final contentStart = html.indexOf('>', nextTagStart) + 1;
-          final endTagPos = nextTagStart + endTagMatch.start;
-          final content = html.substring(contentStart, endTagPos);
-          blocks.add(
-            ContentBlock(
-              type: ContentBlockType.header,
-              content: content,
-              startPosition: nextTagStart,
-            ),
-          );
-          currentPos = nextTagStart + endTagMatch.end;
-          continue;
-        }
-      } else if (html.startsWith('<img', nextTagStart)) {
-        final imgTagEnd = html.indexOf('>', nextTagStart);
-        if (imgTagEnd != -1) {
-          final imgTag = html.substring(nextTagStart, imgTagEnd + 1);
-          final srcMatch = RegExp(
-            r'src\s*=\s*["'
-            "'"
-            r']([^"'
-            "'"
-            r']+)["'
-            "'"
-            r']',
-          ).firstMatch(imgTag);
-          if (srcMatch != null) {
-            final imageUrl = srcMatch.group(1)!;
-            if (imageUrl.startsWith('http')) {
-              blocks.add(
-                ContentBlock(
-                  type: ContentBlockType.image,
-                  content: imageUrl,
-                  startPosition: nextTagStart,
-                  altText: _extractAltTextFast(imgTag),
-                ),
-              );
-            }
-          }
-          currentPos = imgTagEnd + 1;
-          continue;
-        }
-      }
-
-      currentPos = nextTagStart + 1;
-    }
-
-    return blocks;
-  }
-
-  // PERFORMANCE OPTIMIZATION: Faster HTML tag stripping
-  String _stripHtmlTagsFast(String htmlString) {
-    if (htmlString.isEmpty) return '';
-
-    // Single-pass tag removal
-    final buffer = StringBuffer();
-    bool inTag = false;
-
-    for (int i = 0; i < htmlString.length; i++) {
-      final char = htmlString[i];
-      if (char == '<') {
-        inTag = true;
-      } else if (char == '>') {
-        inTag = false;
-      } else if (!inTag) {
-        buffer.write(char);
-      }
-    }
-
-    // Convert HTML entities in single pass
-    String result = buffer
-        .toString()
-        .replaceAll('&nbsp;', ' ')
-        .replaceAll('&amp;', '&')
-        .replaceAll('&lt;', '<')
-        .replaceAll('&gt;', '>')
-        .replaceAll('&quot;', '"')
-        .replaceAll('&#39;', "'");
-
-    return result.trim();
-  }
-
-  // PERFORMANCE OPTIMIZATION: Faster alt text extraction
-  String? _extractAltTextFast(String imgTag) {
-    final altStart = imgTag.indexOf('alt=');
-    if (altStart == -1) return null;
-
-    final quoteStart = altStart + 4;
-    if (quoteStart >= imgTag.length) return null;
-
-    final quote = imgTag[quoteStart];
-    if (quote != '"' && quote != "'") return null;
-
-    final quoteEnd = imgTag.indexOf(quote, quoteStart + 1);
-    if (quoteEnd == -1) return null;
-
-    return imgTag.substring(quoteStart + 1, quoteEnd);
-  }
-
   // Method to fix image URLs before loading
   String _fixImageUrl(String url) {
     // Giữ lại logic thay thế domain lỗi (docln -> hako)
@@ -1723,50 +1220,69 @@ class _ReaderScreenState extends State<ReaderScreen>
   Widget _buildImageWidget(String imageUrl) {
     final fixedUrl = _fixImageUrl(imageUrl);
 
-    return OptimizedNetworkImage(
-      imageUrl: fixedUrl,
-      fit: BoxFit.contain,
-      errorWidget: (context, url, error) {
-        print('Error loading image: $error for URL $fixedUrl');
+    // RAM OPTIMIZATION: Calculate optimal cache size
+    // limit max width to 1080p to prevent OOM on high-res tablets loading excessively huge images
+    final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final targetWidth = (screenWidth * devicePixelRatio).toInt();
+    final memCacheWidth = targetWidth > 1500
+        ? 1500
+        : targetWidth; // Cap at ~1500px width
 
-        // If the fixed URL failed, try a direct alternative domain
-        if (fixedUrl != imageUrl && !fixedUrl.contains('i.hako.vn')) {
-          print('Trying alternative domain for image');
-          final altUrl = imageUrl.replaceAll(
-            RegExp(r'i[0-9]?\.docln\.net'),
-            'i.hako.vn',
+    return RepaintBoundary(
+      // Performance: Separate layer for images
+      child: OptimizedNetworkImage(
+        imageUrl: fixedUrl,
+        fit: BoxFit.contain,
+        memCacheWidth: memCacheWidth, // Vital for RAM usage
+        errorWidget: (context, url, error) {
+          print('Error loading image: $error for URL $fixedUrl');
+
+          // If the fixed URL failed, try a direct alternative domain
+          if (fixedUrl != imageUrl && !fixedUrl.contains('i.hako.vn')) {
+            print('Trying alternative domain for image');
+            final altUrl = imageUrl.replaceAll(
+              RegExp(r'i[0-9]?\.docln\.net'),
+              'i.hako.vn',
+            );
+
+            return OptimizedNetworkImage(
+              imageUrl: altUrl,
+              fit: BoxFit.contain,
+              memCacheWidth: memCacheWidth,
+              errorWidget: (context, url, error) {
+                print('Error loading alternative image: $error');
+                return Column(
+                  children: [
+                    Icon(Icons.broken_image, color: Colors.red),
+                    Text(
+                      'Failed to load image',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                    Text(
+                      '(Tap to retry)',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                );
+              },
+            );
+          }
+
+          return Column(
+            children: [
+              Icon(Icons.broken_image, color: Colors.red),
+              Text('Failed to load image', style: TextStyle(color: Colors.red)),
+            ],
           );
-
-          return OptimizedNetworkImage(
-            imageUrl: altUrl,
-            fit: BoxFit.contain,
-            errorWidget: (context, url, error) {
-              print('Error loading alternative image: $error');
-              return Column(
-                children: [
-                  Icon(Icons.broken_image, color: Colors.red),
-                  Text(
-                    'Failed to load image',
-                    style: TextStyle(color: Colors.red),
-                  ),
-                  Text(
-                    '(Tap to retry)',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                ],
-              );
-            },
-          );
-        }
-
-        return Column(
-          children: [
-            Icon(Icons.broken_image, color: Colors.red),
-            Text('Failed to load image', style: TextStyle(color: Colors.red)),
-          ],
-        );
-      },
-      placeholder: Center(child: CircularProgressIndicator()),
+        },
+        placeholder: Center(
+          child: SizedBox(
+            height: 200, // Fixed height placeholder to reduce layout jumps
+            child: Center(child: CircularProgressIndicator()),
+          ),
+        ),
+      ),
     );
   }
 

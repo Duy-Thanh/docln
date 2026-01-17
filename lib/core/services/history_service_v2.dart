@@ -109,6 +109,15 @@ class HistoryServiceV2 extends ChangeNotifier {
     }).toList();
   }
 
+  /// Get history item by novel ID
+  HistoryItemV2? getHistoryItem(String novelId) {
+    try {
+      return _historyItems.firstWhere((item) => item.novel.id == novelId);
+    } catch (e) {
+      return null;
+    }
+  }
+
   /// Reload history when server changes
   Future<void> onServerChange() async {
     debugPrint('🔄 Server changed, reloading history...');

@@ -61,17 +61,6 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
     _scrollController.addListener(_onScroll);
     _loadNovelDetails();
     _loadNotificationStatus();
-
-    // Add to reading history
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        // Add to history when the screen is first viewed
-        Provider.of<HistoryServiceV2>(
-          context,
-          listen: false,
-        ).addToHistory(widget.novel, widget.novel.latestChapter);
-      }
-    });
   }
 
   Future<void> _loadNotificationStatus() async {
@@ -149,12 +138,6 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
           _alternativeTitles = []; // API hiện tại chưa parse cái này, kệ nó
           _novelType = 'Truyện dịch'; // Mặc định hoặc parse từ API nếu cần
           _isLoading = false;
-
-          // Add to history
-          Provider.of<HistoryServiceV2>(
-            context,
-            listen: false,
-          ).addToHistory(updatedNovel, updatedNovel.latestChapter);
         });
       }
     } catch (e) {
@@ -264,7 +247,7 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
                 );
               },
               icon: const Icon(Icons.language),
-              label: const Text('Đọc trên web'),
+              label: const Text('Read on Web'),
               style: TextButton.styleFrom(
                 foregroundColor: _isScrolled
                     ? theme.colorScheme.primary
@@ -328,6 +311,31 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Logic for Continue Reading
+    final historyService = Provider.of<HistoryServiceV2>(context);
+    final historyItem = historyService.getHistoryItem(widget.novel.id);
+
+    String buttonText = 'READ NOW';
+    Map<String, dynamic>? targetChapter;
+
+    if (_chapters.isNotEmpty) {
+      targetChapter = _chapters.first; // Default to first
+
+      if (historyItem != null) {
+        // Try to find the last read chapter
+        final lastReadTitle = historyItem.lastReadChapter;
+        final foundChapter = _chapters.firstWhere(
+          (c) => c['title'] == lastReadTitle,
+          orElse: () => _chapters.first,
+        );
+
+        if (foundChapter['title'] == lastReadTitle) {
+          buttonText = 'CONTINUE READING';
+          targetChapter = foundChapter;
+        }
+      }
+    }
 
     return Stack(
       children: [
@@ -498,23 +506,18 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
                       onPressed: _isLoading
                           ? null
                           : () {
-                              if (_chapters.isNotEmpty) {
-                                // Logic to read first chapter
-                                final chapterUrl = _chapters.first['url'] ?? '';
-                                // Assume simpler logic for now to match wrapper expectations
-                                // ... (Existing logic reference will be needed ifcomplex)
-                                // Re-implementing simplified logic
+                              if (targetChapter != null) {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                     builder: (context) => ReaderScreen(
                                       url: _getFullUrl(
-                                        chapterUrl,
+                                        targetChapter!['url'],
                                       ), // Assuming ApiService helper
                                       title: widget.novel.title,
                                       novel: widget.novel,
                                       chapterTitle:
-                                          _chapters.first['title'] ??
+                                          targetChapter!['title'] ??
                                           'Chapter 1',
                                     ),
                                   ),
@@ -540,10 +543,14 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
                         elevation: 4,
                         shadowColor: colorScheme.primary.withOpacity(0.4),
                       ),
-                      icon: const Icon(Icons.menu_book_rounded),
-                      label: const Text(
-                        'ĐỌC NGAY',
-                        style: TextStyle(
+                      icon: Icon(
+                        buttonText == 'CONTINUE READING'
+                            ? Icons.history_edu
+                            : Icons.menu_book_rounded,
+                      ),
+                      label: Text(
+                        buttonText,
+                        style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           letterSpacing: 0.5,
                         ),
@@ -569,7 +576,7 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
                         if (!bookmarkService.isBookmarked(widget.novel.id)) {
                           CustomToast.show(
                             context,
-                            'Hãy đánh dấu truyện trước!',
+                            'Please bookmark this novel first!',
                           );
                           return;
                         }
@@ -581,7 +588,9 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
                         setState(() => _notificationEnabled = newStatus);
                         CustomToast.show(
                           context,
-                          newStatus ? 'Đã bật thông báo' : 'Đã tắt thông báo',
+                          newStatus
+                              ? 'Notifications enabled'
+                              : 'Notifications disabled',
                         );
                       },
                       borderRadius: BorderRadius.circular(12),
@@ -2059,6 +2068,7 @@ class _BookmarkButtonState extends State<BookmarkButton>
 
     // Toggle bookmark
     bookmarkService.toggleBookmark(widget.novel).then((_) {
+      if (!mounted) return; // Fix crash if widget is disposed
       final newState = bookmarkService.isBookmarked(widget.novel.id);
       CustomToast.show(
         context,
