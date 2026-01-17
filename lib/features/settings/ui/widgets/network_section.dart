@@ -87,7 +87,7 @@ class _NetworkSectionState extends State<NetworkSection> {
         children: [
           Container(
             width: 4,
-            height: 24,
+            height: 18,
             decoration: BoxDecoration(
               color: colorScheme.primary,
               borderRadius: BorderRadius.circular(2),
@@ -97,7 +97,7 @@ class _NetworkSectionState extends State<NetworkSection> {
           Text(
             title,
             style: TextStyle(
-              fontSize: 20,
+              fontSize: 16,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.5,
               color: colorScheme.primary,

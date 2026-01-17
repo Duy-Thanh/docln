@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 
 import 'package:docln/core/services/api_service.dart'; // Dùng cái này
@@ -12,6 +11,7 @@ import 'package:docln/core/widgets/webview_screen.dart';
 import 'dart:math' as math;
 import 'package:docln/features/reader/ui/LightNovelDetailsScreen.dart';
 import 'package:docln/core/models/light_novel.dart';
+import 'package:docln/core/widgets/light_novel_card.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({Key? key}) : super(key: key);
@@ -37,7 +37,6 @@ class _SearchScreenState extends State<SearchScreen>
   String _errorMessage = '';
   SearchResponse? _searchResponse;
   int _currentPage = 1;
-  bool _isSearchBarFocused = false;
   bool _isDisposed = false; // Track if widget is disposed
 
   // Popular searches for suggestions
@@ -66,22 +65,12 @@ class _SearchScreenState extends State<SearchScreen>
       CurvedAnimation(parent: _animationController!, curve: Curves.easeOut),
     );
 
-    _searchFocusNode.addListener(_onFocusChange);
-
     // Start the animation when screen loads - with safety check
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _animationController != null) {
         _animationController!.forward();
       }
     });
-  }
-
-  void _onFocusChange() {
-    if (mounted) {
-      setState(() {
-        _isSearchBarFocused = _searchFocusNode.hasFocus;
-      });
-    }
   }
 
   @override
@@ -134,7 +123,7 @@ class _SearchScreenState extends State<SearchScreen>
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Lỗi tìm kiếm: ${e.toString()}';
+          _errorMessage = 'Search error: ${e.toString()}';
           _isLoading = false;
         });
       }
@@ -167,103 +156,6 @@ class _SearchScreenState extends State<SearchScreen>
     }
   }
 
-  // Attempt to fix image URLs that might be causing issues
-  String _getFixedImageUrl(String originalUrl) {
-    if (originalUrl.isEmpty) return 'https://docln.sbs/img/nocover.jpg';
-    if (originalUrl.startsWith('http')) return originalUrl;
-    return 'https://docln.sbs$originalUrl'; // Fallback
-  }
-
-  // Try multiple fallback image URLs when the primary one fails
-  Widget _buildCoverImage(String imageUrl, double height, bool isDarkMode) {
-    // List of possible domains to try
-    final domains = [
-      '', // Original URL
-      'i.hako.vip',
-      'i2.hako.vip',
-      'ln.hako.vn',
-    ];
-
-    // Create a fixed URL
-    String fixedUrl = _getFixedImageUrl(imageUrl);
-
-    return CachedNetworkImage(
-      imageUrl: fixedUrl,
-      height: height,
-      width: double.infinity,
-      fit: BoxFit.cover,
-      maxHeightDiskCache: 1000, // Limit cache size
-      fadeInDuration: const Duration(milliseconds: 300),
-      placeholderFadeInDuration: const Duration(milliseconds: 300),
-      errorListener: (error) {
-        print('Image error: $error for URL: $fixedUrl');
-      },
-      httpHeaders: const {
-        'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36',
-      },
-      placeholder: (context, url) => Shimmer.fromColors(
-        baseColor: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
-        highlightColor: isDarkMode ? Colors.grey[700]! : Colors.grey[100]!,
-        child: Container(height: height, color: Colors.white),
-      ),
-      errorWidget: (context, url, error) {
-        // Try each domain in sequence if the original fails
-        for (int i = 1; i < domains.length; i++) {
-          if (!url.contains(domains[i])) {
-            try {
-              Uri uri = Uri.parse(url);
-              String path = uri.path;
-              String newUrl = 'https://${domains[i]}$path';
-
-              // Return a new CachedNetworkImage with the next domain
-              return CachedNetworkImage(
-                imageUrl: newUrl,
-                height: height,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                placeholder: (context, url) => Shimmer.fromColors(
-                  baseColor: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
-                  highlightColor: isDarkMode
-                      ? Colors.grey[700]!
-                      : Colors.grey[100]!,
-                  child: Container(height: height, color: Colors.white),
-                ),
-                // Final fallback is a generic image placeholder
-                errorWidget: (context, url, error) => Container(
-                  height: height,
-                  color: isDarkMode ? Colors.grey[800] : Colors.grey[300],
-                  child: Center(
-                    child: Icon(
-                      Icons.image_not_supported,
-                      color: isDarkMode ? Colors.grey[600] : Colors.grey[400],
-                      size: height / 3,
-                    ),
-                  ),
-                ),
-              );
-            } catch (e) {
-              continue; // Try next domain if URI parsing fails
-            }
-          }
-        }
-
-        // If all domains fail, show a placeholder
-        return Container(
-          height: height,
-          color: isDarkMode ? Colors.grey[800] : Colors.grey[300],
-          child: Center(
-            child: Icon(
-              Icons.image_not_supported,
-              color: isDarkMode ? Colors.grey[600] : Colors.grey[400],
-              size: height / 3,
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     // Safety check for animation controller
@@ -280,46 +172,27 @@ class _SearchScreenState extends State<SearchScreen>
         : Colors.deepOrange;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Search'),
-        elevation: 0,
-        backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
-        systemOverlayStyle: isDarkMode
-            ? SystemUiOverlayStyle.light
-            : SystemUiOverlayStyle.dark,
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: isDarkMode
-                ? [Colors.grey[900]!, Colors.grey[850]!]
-                : [Colors.white, Colors.grey[50]!],
-          ),
-        ),
+      body: SafeArea(
         child: Column(
           children: [
             // Enhanced Search Bar
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: AnimatedBuilder(
                 animation: _animationController!,
                 builder: (context, child) {
-                  // Ensure values are clamped to valid ranges
                   final scale = _scaleAnimation!.value.clamp(0.5, 1.0);
                   final opacity = _fadeAnimation!.value.clamp(0.0, 1.0);
-
                   return Transform.scale(
                     scale: scale,
                     child: Opacity(opacity: opacity, child: child),
                   );
                 },
-                child: _buildAnimatedSearchBar(isDarkMode, primaryColor),
+                child: _buildM3SearchBar(isDarkMode, primaryColor),
               ),
             ),
 
-            // Popular searches or suggestions with proper animation safety
+            // Suggestions
             if (_searchController.text.isEmpty && _searchResponse == null)
               _buildSafeAnimatedSuggestions(isDarkMode, primaryColor),
 
@@ -328,16 +201,14 @@ class _SearchScreenState extends State<SearchScreen>
               child: AnimatedBuilder(
                 animation: _animationController!,
                 builder: (context, child) {
-                  // Ensure values are clamped to valid ranges
                   final opacity = _fadeAnimation!.value.clamp(0.0, 1.0);
+                  // Ensure offset is valid
+                  final offsetVal = 20.0 * (1.0 - opacity);
 
                   return Opacity(
                     opacity: opacity,
                     child: Transform.translate(
-                      offset: Offset(
-                        0,
-                        20 * (1 - _fadeAnimation!.value.clamp(0.0, 1.0)),
-                      ),
+                      offset: Offset(0, offsetVal),
                       child: child,
                     ),
                   );
@@ -371,93 +242,33 @@ class _SearchScreenState extends State<SearchScreen>
     );
   }
 
-  Widget _buildAnimatedSearchBar(bool isDarkMode, Color primaryColor) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-      height: 56,
-      decoration: BoxDecoration(
-        color: isDarkMode ? Colors.grey[800] : Colors.white,
-        borderRadius: BorderRadius.circular(_isSearchBarFocused ? 16 : 28),
-        boxShadow: [
-          BoxShadow(
-            color: _isSearchBarFocused
-                ? primaryColor.withOpacity(0.2)
-                : Colors.black.withOpacity(0.1),
-            blurRadius: _isSearchBarFocused ? 8 : 4,
-            offset: const Offset(0, 2),
-            spreadRadius: _isSearchBarFocused ? 1 : 0,
-          ),
-        ],
+  Widget _buildM3SearchBar(bool isDarkMode, Color primaryColor) {
+    return SearchBar(
+      controller: _searchController,
+      focusNode: _searchFocusNode,
+      hintText: 'Search for light novels...',
+      elevation: MaterialStateProperty.all(2.0),
+      backgroundColor: MaterialStateProperty.all(
+        isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF0F0F0),
       ),
-      child: TextField(
-        controller: _searchController,
-        focusNode: _searchFocusNode,
-        decoration: InputDecoration(
-          hintText: 'Search for light novels...',
-          hintStyle: TextStyle(
-            color: isDarkMode ? Colors.grey[500] : Colors.grey[400],
-            fontSize: 16,
-          ),
-          prefixIcon: AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            padding: const EdgeInsets.all(10),
-            child: Icon(
-              Icons.search_rounded,
-              color: _isSearchBarFocused
-                  ? primaryColor
-                  : (isDarkMode ? Colors.grey[400] : Colors.grey[600]),
-              size: 24,
-            ),
-          ),
-          suffixIcon: _searchController.text.isNotEmpty
-              ? TweenAnimationBuilder<double>(
-                  duration: const Duration(milliseconds: 300),
-                  tween: Tween<double>(begin: 0.0, end: 1.0),
-                  builder: (context, value, child) {
-                    // Ensure value is valid
-                    final safeValue = value.clamp(0.0, 1.0);
-
-                    return Transform.scale(
-                      scale: safeValue,
-                      child: Opacity(
-                        opacity: safeValue,
-                        child: IconButton(
-                          icon: const Icon(Icons.clear_rounded),
-                          onPressed: () {
-                            if (mounted) {
-                              setState(() {
-                                _searchController.clear();
-                                _searchResponse = null;
-                                // Provide haptic feedback
-                                HapticFeedback.lightImpact();
-                              });
-                            }
-                          },
-                          splashRadius: 20,
-                          color: isDarkMode
-                              ? Colors.grey[400]
-                              : Colors.grey[600],
-                        ),
-                      ),
-                    );
-                  },
-                )
-              : null,
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 16),
-          fillColor: Colors.transparent,
-        ),
-        cursorColor: primaryColor,
-        cursorRadius: const Radius.circular(8),
-        cursorWidth: 2.0,
-        onSubmitted: (_) => _performSearch(page: 1),
-        style: TextStyle(
-          color: isDarkMode ? Colors.white : Colors.black87,
-          fontSize: 16,
-        ),
-        textInputAction: TextInputAction.search,
+      leading: Icon(
+        Icons.search_rounded,
+        color: Theme.of(context).colorScheme.primary,
       ),
+      trailing: [
+        if (_searchController.text.isNotEmpty)
+          IconButton(
+            icon: const Icon(Icons.close_rounded),
+            onPressed: () {
+              _searchController.clear();
+              setState(() {
+                _searchResponse = null;
+              });
+              // Keep focus if you want, or unfocus
+            },
+          ),
+      ],
+      onSubmitted: (_) => _performSearch(page: 1),
     );
   }
 
@@ -467,72 +278,39 @@ class _SearchScreenState extends State<SearchScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Gợi ý', style: TextStyle(fontWeight: FontWeight.bold)),
+          const Text(
+            'Suggestions',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 10),
           Wrap(
             spacing: 8,
+            runSpacing: 8,
             children: _popularSearches
                 .map(
-                  (search) => ActionChip(
+                  (search) => FilterChip(
                     label: Text(search),
-                    onPressed: () {
+                    onSelected: (_) {
                       _searchController.text = search;
                       _performSearch();
                     },
-                    backgroundColor: isDarkMode
-                        ? Colors.grey[800]
-                        : Colors.grey[200],
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.surfaceVariant,
+                    labelStyle: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      side: BorderSide(
+                        color: Theme.of(context).colorScheme.outlineVariant,
+                      ),
+                    ),
                   ),
                 )
                 .toList(),
           ),
         ],
-      ),
-    );
-  }
-
-  // Safe version of suggestion item with proper value clamping
-  Widget _buildSafeSuggestionItem(
-    int index,
-    bool isDarkMode,
-    Color primaryColor,
-  ) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0.0, end: 1.0),
-      duration: Duration(milliseconds: 400 + (index * 100)),
-      curve: Curves.easeOutBack,
-      builder: (context, value, child) {
-        // Ensure values are valid
-        final safeValue = value.clamp(0.0, 1.0);
-
-        return Transform.scale(
-          scale: safeValue,
-          child: Opacity(opacity: safeValue, child: child),
-        );
-      },
-      child: InkWell(
-        onTap: () {
-          if (mounted) {
-            setState(() {
-              _searchController.text = _popularSearches[index];
-              _performSearch(page: 1);
-            });
-          }
-        },
-        borderRadius: BorderRadius.circular(20),
-        child: Chip(
-          label: Text(_popularSearches[index]),
-          avatar: Icon(Icons.trending_up, size: 16, color: primaryColor),
-          backgroundColor: isDarkMode
-              ? Colors.grey[800]!.withOpacity(0.7)
-              : Colors.grey[200]!.withOpacity(0.7),
-          side: BorderSide(
-            width: 1,
-            color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
-          ),
-          elevation: 1,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        ),
       ),
     );
   }
@@ -577,7 +355,6 @@ class _SearchScreenState extends State<SearchScreen>
 
                 final result = _searchResponse!.results[index];
 
-                // Staggered animation for grid items with proper safety
                 return _buildSafeAnimatedResultItem(
                   index,
                   result,
@@ -821,221 +598,26 @@ class _SearchScreenState extends State<SearchScreen>
     bool isDarkMode,
     Color primaryColor,
   ) {
-    return Hero(
-      tag: 'search_${result.seriesTitle}_${result.chapterUrl}',
-      child: Material(
-        borderRadius: BorderRadius.circular(16),
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            if (result.seriesUrl.isNotEmpty) {
-              HapticFeedback.mediumImpact();
-              _launchUrl(result.seriesUrl, result);
-            }
-          },
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Stack(
-                children: [
-                  // Cover image with gradient overlay
-                  Container(
-                    color: isDarkMode ? Colors.grey[850] : Colors.white,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // Novel cover with increased height
-                        SizedBox(
-                          height: 150, // Increased from 120px to 150px
-                          child: Stack(
-                            children: [
-                              // Cover image
-                              SizedBox.expand(
-                                child: _buildCoverImage(
-                                  result.coverUrl,
-                                  0,
-                                  isDarkMode,
-                                ),
-                              ),
-
-                              // Gradient overlay at bottom of cover
-                              Positioned(
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                height: 40, // Smaller gradient
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      colors: [
-                                        Colors.transparent,
-                                        Colors.black.withOpacity(0.7),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-
-                              // Original tag with animation
-                              if (result.isOriginal)
-                                Positioned(
-                                  top: 8,
-                                  right: 8,
-                                  child: TweenAnimationBuilder<double>(
-                                    tween: Tween<double>(begin: 0.0, end: 1.0),
-                                    duration: const Duration(milliseconds: 400),
-                                    curve: Curves.easeOut,
-                                    builder: (context, value, child) {
-                                      final safeValue = value.clamp(0.0, 1.0);
-                                      final safeAngle =
-                                          ((1 - safeValue) * math.pi / 10)
-                                              .clamp(0.0, math.pi / 10);
-
-                                      return Transform.scale(
-                                        scale: safeValue,
-                                        child: Transform.rotate(
-                                          angle: safeAngle,
-                                          child: Opacity(
-                                            opacity: safeValue,
-                                            child: child,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.green.withOpacity(0.85),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: const Text(
-                                        'Original',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 10,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-
-                              // Volume info at bottom of cover
-                              Positioned(
-                                left: 8,
-                                right: 8,
-                                bottom: 8,
-                                child: Text(
-                                  result.volumeTitle,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    shadows: [
-                                      Shadow(
-                                        color: Colors.black,
-                                        blurRadius: 3,
-                                      ),
-                                    ],
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // Info section that uses remaining card space
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 8,
-                            ),
-                            color: isDarkMode ? Colors.grey[850] : Colors.white,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Series title
-                                Text(
-                                  result.seriesTitle,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                    color: isDarkMode
-                                        ? Colors.white
-                                        : Colors.black87,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-
-                                const SizedBox(height: 4),
-
-                                // Chapter title that fills remaining space
-                                Expanded(
-                                  child: Text(
-                                    result.chapterTitle,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      height: 1.2,
-                                      color: isDarkMode
-                                          ? Colors.grey[400]
-                                          : Colors.grey[700],
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                    // Allow as many lines as fit in the available space
-                                    maxLines: 5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Ripple effect container
-                  Positioned.fill(
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        splashColor: primaryColor.withOpacity(0.1),
-                        highlightColor: primaryColor.withOpacity(0.05),
-                        onTap: () {
-                          if (result.seriesUrl.isNotEmpty) {
-                            HapticFeedback.mediumImpact();
-                            _launchUrl(result.seriesUrl, result);
-                          }
-                        },
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
+    return LightNovelCard(
+      novel: LightNovel(
+        id: result.url.split('/').last,
+        title: result.seriesTitle.isNotEmpty
+            ? result.seriesTitle
+            : result.title,
+        coverUrl: result.coverUrl,
+        url: result.url,
+        latestChapter: result.chapterTitle,
+        // Since SearchResult doesn't have rating/stats, we omit them
       ),
+      showChapterInfo: true,
+      onTap: () {
+        if (result.seriesUrl.isNotEmpty) {
+          HapticFeedback.mediumImpact();
+          _launchUrl(result.seriesUrl, result);
+        } else {
+          _launchUrl(result.url, result);
+        }
+      },
     );
   }
 

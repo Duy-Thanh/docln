@@ -40,8 +40,6 @@ class _LibraryScreenState extends State<LibraryScreen>
   final ApiService _apiService = ApiService();
 
   late TabController _tabController;
-  late AnimationController _controller;
-  double _tabAnimationValue = 0.0;
   int _selectedIndex = 0;
 
   List<Announcement> announcements = [];
@@ -57,11 +55,6 @@ class _LibraryScreenState extends State<LibraryScreen>
     super.initState();
     _optimizeScreen();
     _tabController = TabController(length: 3, vsync: this);
-    _tabController.animation?.addListener(_handleTabAnimation);
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
 
     _loadData();
   }
@@ -72,16 +65,8 @@ class _LibraryScreenState extends State<LibraryScreen>
 
   @override
   void dispose() {
-    _tabController.animation?.removeListener(_handleTabAnimation);
     _tabController.dispose();
-    _controller.dispose();
     super.dispose();
-  }
-
-  void _handleTabAnimation() {
-    setState(() {
-      _tabAnimationValue = _tabController.animation!.value;
-    });
   }
 
   void _onTabTapped(int index) {
@@ -141,7 +126,7 @@ class _LibraryScreenState extends State<LibraryScreen>
             .map(
               (item) => Chapter(
                 id: item.id,
-                title: item.latestChapter ?? 'Chương mới',
+                title: item.latestChapter ?? 'New Chapter',
                 url: item.url,
                 seriesTitle: item.title, // Field cũ
                 coverUrl: item.cover, // Field cũ
@@ -162,8 +147,8 @@ class _LibraryScreenState extends State<LibraryScreen>
         error = e.toString();
         isLoading = false;
       });
-      // CustomToast.show(context, 'Lỗi tải dữ liệu: $e');
-      print('Lỗi tải dữ liệu: $e');
+      // CustomToast.show(context, 'Data loading error: $e');
+      print('Data loading error: $e');
     }
   }
 
@@ -181,105 +166,80 @@ class _LibraryScreenState extends State<LibraryScreen>
     return Scaffold(
       body: Column(
         children: [
-          // Enhanced Tab Bar Container
+          // Modern Material 3 TabBar
           Container(
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 16,
-              bottom: 16,
+            padding: EdgeInsets.fromLTRB(
+              16,
+              MediaQuery.of(context).padding.top + 12,
+              16,
+              12,
             ),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  theme.colorScheme.primary.withOpacity(0.08),
-                  theme.colorScheme.primary.withOpacity(0.02),
-                  theme.scaffoldBackgroundColor,
-                ],
-                stops: const [0.0, 0.6, 1.0],
-              ),
-            ),
+            color: theme.scaffoldBackgroundColor,
             child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              padding: const EdgeInsets.all(4),
+              height: 48,
               decoration: BoxDecoration(
-                color: theme.colorScheme.surface.withOpacity(0.9),
-                borderRadius: BorderRadius.circular(30),
-                border: Border.all(
-                  color: theme.colorScheme.primary.withOpacity(0.1),
-                  width: 1,
+                color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: TabBar(
+                controller: _tabController,
+                onTap: _onTabTapped,
+                indicator: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  color: theme.colorScheme.primary,
+                  boxShadow: [
+                    BoxShadow(
+                      color: theme.colorScheme.primary.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: theme.colorScheme.primary.withOpacity(0.04),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+                indicatorSize: TabBarIndicatorSize.tab,
+                labelColor: Colors.white,
+                unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+                labelStyle: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+                unselectedLabelStyle: const TextStyle(
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                ),
+                overlayColor: MaterialStateProperty.all(Colors.transparent),
+                dividerColor: Colors.transparent,
+                tabs: const [
+                  Tab(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.local_fire_department_rounded, size: 18),
+                        SizedBox(width: 8),
+                        Text('Popular'),
+                      ],
+                    ),
+                  ),
+                  Tab(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.create_rounded, size: 18),
+                        SizedBox(width: 8),
+                        Text('Original'),
+                      ],
+                    ),
+                  ),
+                  Tab(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.new_releases_rounded, size: 18),
+                        SizedBox(width: 8),
+                        Text('Latest'),
+                      ],
+                    ),
                   ),
                 ],
-              ),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final tabWidth = (constraints.maxWidth - 8) / 3;
-                  return Stack(
-                    children: [
-                      // Animated selection background
-                      AnimatedPositioned(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeOutExpo,
-                        left: 4 + (_selectedIndex * tabWidth),
-                        child: Container(
-                          width: tabWidth,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.surface,
-                            borderRadius: BorderRadius.circular(26),
-                            boxShadow: [
-                              BoxShadow(
-                                color: theme.colorScheme.primary.withOpacity(
-                                  0.1,
-                                ),
-                                blurRadius: 12,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      // Tab buttons
-                      SizedBox(
-                        height: 44,
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _buildTabItem(
-                                'Nổi bật',
-                                Icons.local_fire_department_rounded,
-                                0,
-                                theme,
-                              ),
-                            ),
-                            Expanded(
-                              child: _buildTabItem(
-                                'Sáng tác',
-                                Icons.create_rounded,
-                                1,
-                                theme,
-                              ),
-                            ),
-                            Expanded(
-                              child: _buildTabItem(
-                                'Mới nhất',
-                                Icons.new_releases_rounded,
-                                2,
-                                theme,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
-                },
               ),
             ),
           ),
@@ -315,50 +275,6 @@ class _LibraryScreenState extends State<LibraryScreen>
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildTabItem(
-    String title,
-    IconData icon,
-    int index,
-    ThemeData theme,
-  ) {
-    final isSelected = _selectedIndex == index;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _onTabTapped(index),
-        borderRadius: BorderRadius.circular(26),
-        child: Container(
-          alignment: Alignment.center,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 18,
-                color: isSelected
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.onSurface.withOpacity(0.6),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                title,
-                style: TextStyle(
-                  color: isSelected
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.onSurface.withOpacity(0.6),
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -576,12 +492,12 @@ class _LibraryScreenState extends State<LibraryScreen>
             color: Colors.grey,
           ),
           const SizedBox(height: 16),
-          const Text('Không có dữ liệu'),
+          const Text('No data available'),
           const SizedBox(height: 24),
           FilledButton.icon(
             onPressed: _loadData,
             icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Thử lại'),
+            label: const Text('Retry'),
           ),
         ],
       ),
@@ -599,12 +515,12 @@ class _LibraryScreenState extends State<LibraryScreen>
             color: Theme.of(context).colorScheme.error,
           ),
           const SizedBox(height: 16),
-          Text(error ?? 'Lỗi kết nối'),
+          Text(error ?? 'Connection error'),
           const SizedBox(height: 24),
           FilledButton.icon(
             onPressed: _loadData,
             icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Thử lại'),
+            label: const Text('Retry'),
           ),
           const SizedBox(height: 12),
           OutlinedButton(
@@ -616,7 +532,7 @@ class _LibraryScreenState extends State<LibraryScreen>
                 await intent.launch();
               }
             },
-            child: const Text('Kiểm tra Wifi'),
+            child: const Text('Check WiFi'),
           ),
         ],
       ),

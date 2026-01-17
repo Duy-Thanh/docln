@@ -174,7 +174,7 @@ class LightNovelCard extends StatelessWidget {
                       novel.chapters! > 0) ...[
                     const SizedBox(height: 4),
                     Text(
-                      '${novel.chapters} chương',
+                      '${novel.chapters} chapters',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: Colors.white60,
                         fontSize: 9,

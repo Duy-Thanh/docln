@@ -21,7 +21,6 @@ class _AppearanceSectionState extends State<AppearanceSection> {
       builder: (context, provider, child) {
         return Column(
           children: [
-            _buildSectionHeader(context, 'Appearance'),
             // Dark Mode
             _buildModernSwitchTile(
               context: context,
@@ -60,22 +59,6 @@ class _AppearanceSectionState extends State<AppearanceSection> {
           ],
         );
       },
-    );
-  }
-
-  Widget _buildSectionHeader(BuildContext context, String title) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: Theme.of(context).colorScheme.primary,
-          letterSpacing: 1.2,
-        ),
-      ),
     );
   }
 

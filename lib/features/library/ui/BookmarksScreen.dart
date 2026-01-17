@@ -129,92 +129,110 @@ class _BookmarksScreenState extends State<BookmarksScreen>
     final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: _isSearching
-            ? _buildSearchField()
-            : Text(
-                'Bookmarks',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-        centerTitle: !_isSearching,
-        leading: _isSearching
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: _toggleSearch,
-              )
-            : null,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            tooltip: 'Search bookmarks',
-            onPressed: _toggleSearch,
-          ),
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            tooltip: 'Filter by category',
-            onPressed: _showCategoryFilterDialog,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Category filter chips
-          if (_selectedCategory != null)
-            AnimatedBuilder(
-              animation: _animationController,
-              builder: (context, child) {
-                return SizeTransition(
-                  sizeFactor: _animationHeight,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 8,
-                      horizontal: 16,
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar.large(
+            title: _isSearching ? _buildSearchField() : null,
+            centerTitle: false,
+            expandedHeight: _isSearching
+                ? null
+                : 152, // Standard M3 Large Height
+            leading: _isSearching
+                ? IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: _toggleSearch,
+                  )
+                : null,
+            flexibleSpace: _isSearching
+                ? null
+                : FlexibleSpaceBar(
+                    centerTitle: false,
+                    titlePadding: const EdgeInsetsDirectional.only(
+                      start: 16.0,
+                      bottom: 16.0,
                     ),
-                    color: colorScheme.surfaceVariant.withOpacity(0.5),
-                    child: Row(
-                      children: [
-                        Text('Filter: ', style: theme.textTheme.bodySmall),
-                        Chip(
-                          label: Text(_selectedCategory ?? 'All'),
-                          deleteIcon: const Icon(Icons.close, size: 16),
-                          onDeleted: () {
-                            setState(() {
-                              _selectedCategory = null;
-                            });
-                          },
-                          backgroundColor: colorScheme.primaryContainer,
-                          labelStyle: TextStyle(
-                            color: colorScheme.onPrimaryContainer,
-                          ),
-                        ),
-                      ],
+                    title: Text(
+                      'Bookmarks',
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurface,
+                        fontSize: 32, // FORCE HUGE
+                      ),
                     ),
                   ),
-                );
-              },
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.search),
+                tooltip: 'Search bookmarks',
+                onPressed: _toggleSearch,
+              ),
+              IconButton(
+                icon: const Icon(Icons.filter_list),
+                tooltip: 'Filter by category',
+                onPressed: _showCategoryFilterDialog,
+              ),
+            ],
+          ),
+
+          // Filter chips (SliverToBoxAdapter)
+          if (_selectedCategory != null)
+            SliverToBoxAdapter(
+              child: AnimatedBuilder(
+                animation: _animationController,
+                builder: (context, child) {
+                  return SizeTransition(
+                    sizeFactor: _animationHeight,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 8,
+                        horizontal: 16,
+                      ),
+                      color: colorScheme.surfaceVariant.withOpacity(0.5),
+                      child: Row(
+                        children: [
+                          Text('Filter: ', style: theme.textTheme.bodySmall),
+                          Chip(
+                            label: Text(_selectedCategory ?? 'All'),
+                            deleteIcon: const Icon(Icons.close, size: 16),
+                            onDeleted: () {
+                              setState(() {
+                                _selectedCategory = null;
+                              });
+                            },
+                            backgroundColor: colorScheme.primaryContainer,
+                            labelStyle: TextStyle(
+                              color: colorScheme.onPrimaryContainer,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
 
           // Main content
-          Expanded(
-            child: Consumer<BookmarkServiceV2>(
-              builder: (context, bookmarkService, child) {
-                final allBookmarks = bookmarkService.bookmarkedNovels;
-                final filteredBookmarks = _filterBookmarks(allBookmarks);
+          Consumer<BookmarkServiceV2>(
+            builder: (context, bookmarkService, child) {
+              final allBookmarks = bookmarkService.bookmarkedNovels;
+              final filteredBookmarks = _filterBookmarks(allBookmarks);
 
-                if (allBookmarks.isEmpty) {
-                  return _buildEmptyState(colorScheme);
-                }
+              if (allBookmarks.isEmpty) {
+                return SliverFillRemaining(
+                  child: _buildEmptyState(colorScheme),
+                );
+              }
 
-                if (filteredBookmarks.isEmpty &&
-                    (_searchQuery.isNotEmpty || _selectedCategory != null)) {
-                  return _buildNoSearchResultsState(colorScheme);
-                }
+              if (filteredBookmarks.isEmpty &&
+                  (_searchQuery.isNotEmpty || _selectedCategory != null)) {
+                return SliverFillRemaining(
+                  child: _buildNoSearchResultsState(colorScheme),
+                );
+              }
 
-                return _buildBookmarksList(filteredBookmarks);
-              },
-            ),
+              return _buildSliverBookmarksList(filteredBookmarks);
+            },
           ),
         ],
       ),
@@ -300,40 +318,36 @@ class _BookmarksScreenState extends State<BookmarksScreen>
   }
 
   // Modify _buildBookmarksList to highlight search matches
-  Widget _buildBookmarksList(List<LightNovel> bookmarks) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: GridView.builder(
-          key: ValueKey<int>(bookmarks.length), // Add key for animation
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 0.6,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-          ),
-          itemCount: bookmarks.length,
-          itemBuilder: (context, index) {
-            final novel = bookmarks[index];
-            // Apply search animation for items matching the search
-            final bool isMatched =
-                _searchQuery.isNotEmpty &&
-                novel.title.toLowerCase().contains(_searchQuery.toLowerCase());
-
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              transform: isMatched
-                  ? (Matrix4.identity()..scale(1.05))
-                  : Matrix4.identity(),
-              child: LightNovelCard(
-                novel: novel,
-                onTap: () => _openNovelDetails(novel),
-                onLongPress: () => _showBookmarkOptions(novel),
-              ),
-            );
-          },
+  Widget _buildSliverBookmarksList(List<LightNovel> bookmarks) {
+    return SliverPadding(
+      padding: const EdgeInsets.all(16.0),
+      sliver: SliverGrid(
+        key: ValueKey<int>(bookmarks.length), // Add key for animation
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 0.6,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
         ),
+        delegate: SliverChildBuilderDelegate((context, index) {
+          final novel = bookmarks[index];
+          // Apply search animation for items matching the search
+          final bool isMatched =
+              _searchQuery.isNotEmpty &&
+              novel.title.toLowerCase().contains(_searchQuery.toLowerCase());
+
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            transform: isMatched
+                ? (Matrix4.identity()..scale(1.05))
+                : Matrix4.identity(),
+            child: LightNovelCard(
+              novel: novel,
+              onTap: () => _openNovelDetails(novel),
+              onLongPress: () => _showBookmarkOptions(novel),
+            ),
+          );
+        }, childCount: bookmarks.length),
       ),
     );
   }

@@ -102,57 +102,80 @@ class _HistoryScreenState extends State<HistoryScreen>
     final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: _isSearching
-            ? _buildSearchField()
-            : Text(
-                'Reading History',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-        centerTitle: !_isSearching,
-        leading: _isSearching
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar.large(
+            title: _isSearching ? _buildSearchField() : null,
+            centerTitle: false,
+            expandedHeight: _isSearching ? null : 152,
+            leading: _isSearching
+                ? IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: _toggleSearch,
+                  )
+                : null,
+            flexibleSpace: _isSearching
+                ? null
+                : FlexibleSpaceBar(
+                    centerTitle: false,
+                    titlePadding: const EdgeInsetsDirectional.only(
+                      start: 16.0,
+                      bottom: 16.0,
+                    ),
+                    title: Text(
+                      'Reading History',
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurface,
+                        fontSize:
+                            28, // FORCE HUGE (slightly smaller for longer text)
+                      ),
+                    ),
+                  ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.search),
+                tooltip: 'Search history',
                 onPressed: _toggleSearch,
-              )
-            : null,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            tooltip: 'Search history',
-            onPressed: _toggleSearch,
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline),
+                tooltip: 'Clear history',
+                onPressed: () => _showClearHistoryDialog(),
+              ),
+            ],
           ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            tooltip: 'Clear history',
-            onPressed: () => _showClearHistoryDialog(),
+
+          // Content
+          Consumer<HistoryServiceV2>(
+            builder: (context, historyService, _) {
+              final historyItems = historyService.historyItems;
+              final filteredItems = _filterHistory(historyItems);
+
+              if (historyItems.isEmpty) {
+                return SliverFillRemaining(
+                  child: _buildEmptyState(colorScheme),
+                );
+              }
+
+              if (filteredItems.isEmpty && _searchQuery.isNotEmpty) {
+                return SliverFillRemaining(
+                  child: _buildNoSearchResultsState(colorScheme),
+                );
+              }
+
+              return SliverPadding(
+                padding: const EdgeInsets.all(16),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final item = filteredItems[index];
+                    return _buildHistoryItem(item, colorScheme);
+                  }, childCount: filteredItems.length),
+                ),
+              );
+            },
           ),
         ],
-      ),
-      body: Consumer<HistoryServiceV2>(
-        builder: (context, historyService, _) {
-          final historyItems = historyService.historyItems;
-          final filteredItems = _filterHistory(historyItems);
-
-          if (historyItems.isEmpty) {
-            return _buildEmptyState(colorScheme);
-          }
-
-          if (filteredItems.isEmpty && _searchQuery.isNotEmpty) {
-            return _buildNoSearchResultsState(colorScheme);
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: filteredItems.length,
-            itemBuilder: (context, index) {
-              final item = filteredItems[index];
-              return _buildHistoryItem(item, colorScheme);
-            },
-          );
-        },
       ),
     );
   }
