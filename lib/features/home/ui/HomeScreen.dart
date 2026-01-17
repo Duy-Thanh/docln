@@ -129,22 +129,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               );
             },
-            transitionsBuilder: (
-              context,
-              animation,
-              secondaryAnimation,
-              child,
-            ) {
-              return FadeTransition(
-                opacity: animation,
-                child: ScaleTransition(
-                  scale: Tween<double>(begin: 0.8, end: 1.0).animate(
-                    CurvedAnimation(parent: animation, curve: Curves.easeOut),
-                  ),
-                  child: child,
-                ),
-              );
-            },
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: ScaleTransition(
+                      scale: Tween<double>(begin: 0.8, end: 1.0).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOut,
+                        ),
+                      ),
+                      child: child,
+                    ),
+                  );
+                },
           ),
         );
       }
@@ -158,36 +157,35 @@ class _HomeScreenState extends State<HomeScreen> {
       final result = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
-        builder:
-            (context) => AlertDialog(
-              title: const Row(
-                children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.orange),
-                  SizedBox(width: 8),
-                  Text('Unsaved Changes'),
-                ],
-              ),
-              content: const Text(
-                'Do you want to save your changes before leaving?',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Discard'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, null),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () async {
-                    Navigator.pop(context, true);
-                    await _settingsKey.currentState?.saveSettings();
-                  },
-                  child: const Text('Save'),
-                ),
-              ],
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.orange),
+              SizedBox(width: 8),
+              Text('Unsaved Changes'),
+            ],
+          ),
+          content: const Text(
+            'Do you want to save your changes before leaving?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Discard'),
             ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                Navigator.pop(context, true);
+                await _settingsKey.currentState?.saveSettings();
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
       );
 
       if (result == null) return false; // Cancel navigation
@@ -206,49 +204,46 @@ class _HomeScreenState extends State<HomeScreen> {
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder:
-          (context) => AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.warning_amber_rounded, color: Colors.orange),
-                SizedBox(width: 8),
-                Text('Unsaved Changes'),
-              ],
-            ),
-            content: const Text(
-              'Do you want to save your changes before leaving?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  _settingsKey.currentState?.revertSettings(); // Add this line
-                  Navigator.pop(context, false);
-                  setState(() {
-                    _selectedIndex = newIndex;
-                    _hasUnsavedSettings = false;
-                  });
-                },
-                child: const Text('Discard'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () async {
-                  await _settingsKey.currentState?.saveSettings();
-                  if (context.mounted) {
-                    Navigator.pop(context, true);
-                    setState(() {
-                      _selectedIndex = newIndex;
-                      _hasUnsavedSettings = false;
-                    });
-                  }
-                },
-                child: const Text('Save'),
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Unsaved Changes'),
+          ],
+        ),
+        content: const Text('Do you want to save your changes before leaving?'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _settingsKey.currentState?.revertSettings(); // Add this line
+              Navigator.pop(context, false);
+              setState(() {
+                _selectedIndex = newIndex;
+                _hasUnsavedSettings = false;
+              });
+            },
+            child: const Text('Discard'),
           ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              await _settingsKey.currentState?.saveSettings();
+              if (context.mounted) {
+                Navigator.pop(context, true);
+                setState(() {
+                  _selectedIndex = newIndex;
+                  _hasUnsavedSettings = false;
+                });
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
     );
     return result;
   }
@@ -280,64 +275,57 @@ class _HomeScreenState extends State<HomeScreen> {
       },
       child: Scaffold(
         body: _screens[_selectedIndex],
-        bottomNavigationBar: Container(
-          decoration: BoxDecoration(
-            color: isDarkMode ? Colors.black : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            boxShadow: [
-              BoxShadow(
-                color: (isDarkMode ? Colors.black : Colors.grey).withOpacity(
-                  0.2,
-                ),
-                blurRadius: 8,
-                offset: const Offset(0, -2),
+        bottomNavigationBar: NavigationBarTheme(
+          data: NavigationBarThemeData(
+            labelTextStyle: MaterialStateProperty.resolveWith((states) {
+              if (states.contains(MaterialState.selected)) {
+                return const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                );
+              }
+              return const TextStyle(fontSize: 12, fontWeight: FontWeight.w500);
+            }),
+          ),
+          child: NavigationBar(
+            selectedIndex: _selectedIndex,
+            onDestinationSelected: _onTabSelected,
+            backgroundColor: isDarkMode
+                ? const Color(0xFF1E1E1E)
+                : Colors.white,
+            surfaceTintColor: Colors.transparent,
+            indicatorColor: isDarkMode
+                ? Theme.of(context).colorScheme.primary.withOpacity(0.2)
+                : Theme.of(context).colorScheme.primaryContainer,
+            elevation: 2,
+            shadowColor: Colors.black.withOpacity(0.2),
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.library_books_outlined),
+                selectedIcon: Icon(Icons.library_books),
+                label: 'Library',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.search_outlined),
+                selectedIcon: Icon(Icons.search),
+                label: 'Search',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.bookmark_border_outlined),
+                selectedIcon: Icon(Icons.bookmark),
+                label: 'Bookmarks',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.history_outlined),
+                selectedIcon: Icon(Icons.history),
+                label: 'History',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.settings_outlined),
+                selectedIcon: Icon(Icons.settings),
+                label: 'Settings',
               ),
             ],
-          ),
-          child: ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            child: BottomNavigationBar(
-              currentIndex: _selectedIndex,
-              onTap: _onTabSelected,
-              type: BottomNavigationBarType.fixed,
-              backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
-              selectedItemColor: Colors.deepOrange,
-              unselectedItemColor:
-                  isDarkMode ? Colors.grey[400] : Colors.grey[600],
-              showSelectedLabels: false,
-              showUnselectedLabels: false,
-              elevation: 0,
-              selectedFontSize: 12,
-              unselectedFontSize: 12,
-              iconSize: 24,
-              items: const [
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.menu_book_outlined),
-                  activeIcon: Icon(Icons.menu_book),
-                  label: 'Library',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.search_outlined),
-                  activeIcon: Icon(Icons.search),
-                  label: 'Search',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.bookmark_border_outlined),
-                  activeIcon: Icon(Icons.bookmark),
-                  label: 'Bookmarks',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.history_outlined),
-                  activeIcon: Icon(Icons.history),
-                  label: 'History',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.settings_outlined),
-                  activeIcon: Icon(Icons.settings),
-                  label: 'Settings',
-                ),
-              ],
-            ),
           ),
         ),
       ),

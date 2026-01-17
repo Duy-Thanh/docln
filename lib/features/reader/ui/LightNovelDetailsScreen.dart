@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import 'package:docln/core/models/light_novel.dart';
 import 'package:docln/core/widgets/light_novel_card.dart';
 import 'package:docln/core/widgets/chapter_card.dart';
@@ -51,9 +52,13 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
   double? _rating;
   int? _reviews;
 
+  final ScrollController _scrollController = ScrollController();
+  bool _isScrolled = false;
+
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _loadNovelDetails();
     _loadNotificationStatus();
 
@@ -190,15 +195,61 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
   }
 
   @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.hasClients) {
+      // Threshold increased to 300 to match header height roughly
+      final isScrolled = _scrollController.offset > 300;
+      if (isScrolled != _isScrolled) {
+        setState(() {
+          _isScrolled = isScrolled;
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: Text(
-          widget.novel.title,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          overflow: TextOverflow.ellipsis,
+        title: AnimatedOpacity(
+          opacity: (_isScrolled || _isLoading) ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 200),
+          child: Text(
+            widget.novel.title,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+        flexibleSpace: AnimatedOpacity(
+          opacity: _isScrolled ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 200),
+          child: ClipRRect(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                color:
+                    (theme.appBarTheme.backgroundColor ??
+                            theme.colorScheme.surface)
+                        .withOpacity(0.8),
+              ),
+            ),
+          ),
+        ),
+        elevation: 0,
+        iconTheme: IconThemeData(
+          color: _isScrolled
+              ? theme.iconTheme.color
+              : Colors.white, // Always white on transparent (dark img)
         ),
         actions: [
           // Add the web reading button to the app bar
@@ -215,10 +266,15 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
               icon: const Icon(Icons.language),
               label: const Text('Đọc trên web'),
               style: TextButton.styleFrom(
-                foregroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: _isScrolled
+                    ? theme.colorScheme.primary
+                    : Colors.white,
               ),
             ),
-          BookmarkButton(novel: widget.novel),
+          BookmarkButton(
+            novel: widget.novel,
+            activeColor: _isScrolled ? theme.colorScheme.primary : Colors.white,
+          ),
           IconButton(
             icon: const Icon(Icons.more_vert),
             onPressed: () {
@@ -251,6 +307,7 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
     return RefreshIndicator(
       onRefresh: _loadNovelDetails,
       child: SingleChildScrollView(
+        controller: _scrollController,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -272,346 +329,284 @@ class _LightNovelDetailsScreenState extends State<LightNovelDetailsScreen> {
     final textTheme = Theme.of(context).textTheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Card(
-      margin: const EdgeInsets.all(16),
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Cover image with novel type label
-                Stack(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.3),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Hero(
-                          tag: 'novel_${widget.novel.id}',
-                          child: OptimizedNetworkImage(
-                            imageUrl: widget.novel.coverUrl,
-                            width: 120,
-                            height: 170,
-                            fit: BoxFit.cover,
-                            errorWidget: (context, url, error) {
-                              return Container(
-                                width: 120,
-                                height: 170,
-                                color: Colors.grey[300],
-                                child: const Icon(
-                                  Icons.image_not_supported,
-                                  size: 40,
-                                ),
-                              );
-                            },
+    return Stack(
+      children: [
+        // Background Blur (using CachedNetworkImage directly for stability)
+        Positioned.fill(
+          child: ShaderMask(
+            shaderCallback: (rect) {
+              return LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withOpacity(0.6),
+                  Colors.black.withOpacity(0.9),
+                ],
+              ).createShader(rect);
+            },
+            blendMode: BlendMode.darken,
+            child: OptimizedNetworkImage(
+              imageUrl: widget.novel.coverUrl,
+              fit: BoxFit.cover,
+              width: double.infinity,
+              height: double.infinity,
+              // Use low res for blur background to save RAM
+              maxWidth: 100,
+            ),
+          ),
+        ),
+
+        // Content
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            kToolbarHeight + MediaQuery.of(context).padding.top + 20,
+            20,
+            20,
+          ),
+          child: Column(
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Main Cover
+                  Hero(
+                    tag: 'novel_${widget.novel.id}',
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.4),
+                            blurRadius: 15,
+                            offset: const Offset(0, 8),
                           ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: OptimizedNetworkImage(
+                          imageUrl: widget.novel.coverUrl,
+                          width: 130,
+                          height: 190,
+                          fit: BoxFit.cover,
+                          memCacheHeight: 400, // Optimize RAM
                         ),
                       ),
                     ),
-                    // Novel type label
-                    if (_novelType.isNotEmpty)
-                      Positioned(
-                        top: 0,
-                        left: 0,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black87,
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(12),
-                              bottomRight: Radius.circular(12),
-                            ),
-                          ),
-                          child: Text(
-                            _novelType,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.novel.title,
-                        style: textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 20,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
+                  ),
+                  const SizedBox(width: 20),
 
-                      // Author with icon
-                      if (_author.isNotEmpty)
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.person_outline,
-                              size: 16,
-                              color: colorScheme.primary.withOpacity(0.8),
+                  // Info
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (_novelType.isNotEmpty)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
                             ),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                _author,
-                                style: textTheme.bodyMedium?.copyWith(
-                                  color: colorScheme.onSurface.withOpacity(0.8),
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                            decoration: BoxDecoration(
+                              color: colorScheme.primary,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              _novelType,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
-                          ],
+                          ),
+
+                        Text(
+                          widget.novel.title,
+                          style: textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 22,
+                            color: Colors.white,
+                            height: 1.3,
+                          ),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
                         ),
+                        const SizedBox(height: 12),
 
-                      const SizedBox(height: 6),
-
-                      // Status with icon
-                      if (_status.isNotEmpty)
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.info_outline,
-                              size: 16,
-                              color: colorScheme.primary.withOpacity(0.8),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              _status,
-                              style: textTheme.bodyMedium?.copyWith(
-                                color: colorScheme.onSurface.withOpacity(0.8),
-                              ),
-                            ),
-                          ],
-                        ),
-
-                      const SizedBox(height: 6),
-
-                      // Latest chapter/volume
-                      if (widget.novel.volumeTitle != null ||
-                          widget.novel.latestChapter != null)
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.bookmark_outline,
-                              size: 16,
-                              color: colorScheme.primary.withOpacity(0.8),
-                            ),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                'Latest: ${widget.novel.volumeTitle ?? widget.novel.latestChapter}',
-                                style: textTheme.bodyMedium?.copyWith(
-                                  color: colorScheme.onSurface.withOpacity(0.8),
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-
-                      if (widget.novel.rating != null || _rating != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Row(
+                        if (_author.isNotEmpty)
+                          Row(
                             children: [
-                              ...List.generate(
-                                5,
-                                (index) => Icon(
-                                  index <
-                                          (_rating ??
-                                                  widget.novel.rating ??
-                                                  0) /
-                                              1
-                                      ? Icons.star
-                                      : index <
-                                            (_rating ??
-                                                        widget.novel.rating ??
-                                                        0) /
-                                                    1 +
-                                                0.5
-                                      ? Icons.star_half
-                                      : Icons.star_border,
-                                  color: Colors.amber,
-                                  size: 18,
-                                ),
+                              const Icon(
+                                Icons.person,
+                                size: 14,
+                                color: Colors.white70,
                               ),
-                              const SizedBox(width: 8),
-                              Text(
-                                '${_rating ?? widget.novel.rating ?? 0}/5',
-                                style: textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  _author,
+                                  style: textTheme.bodyMedium?.copyWith(
+                                    color: Colors.white70,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                              ),
-                              Text(
-                                ' (${_reviews ?? widget.novel.reviews ?? 0})',
-                                style: textTheme.bodySmall,
                               ),
                             ],
                           ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
 
-          // Action buttons in a separate card section
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: isDark ? colorScheme.surfaceVariant : colorScheme.surface,
-              border: Border(
-                top: BorderSide(
-                  color: colorScheme.outlineVariant.withOpacity(0.5),
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: ElevatedButton.icon(
-                    onPressed: _chapters.isEmpty && !_isLoading
-                        ? () {
-                            // If no chapters found, open in web view
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    WebViewScreen(url: widget.novelUrl),
+                        const SizedBox(height: 6),
+
+                        if (_status.isNotEmpty)
+                          Row(
+                            children: [
+                              Icon(
+                                _status == 'Đang tiến hành'
+                                    ? Icons.timelapse
+                                    : Icons.check_circle,
+                                size: 14,
+                                color: _status == 'Đang tiến hành'
+                                    ? Colors.greenAccent
+                                    : Colors.blueAccent,
                               ),
-                            );
-                          }
-                        : _isLoading
-                        ? null
-                        : () {
-                            // Navigate to the first chapter
-                            if (_chapters.isNotEmpty) {
-                              final chapterUrl = _chapters.first['url'] ?? '';
-                              final fullChapterUrl = _getFullUrl(chapterUrl);
-                              final chapterTitle =
-                                  _chapters.first['title'] ?? 'Chapter 1';
-
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => ReaderScreen(
-                                    url: fullChapterUrl,
-                                    title: widget.novel.title,
-                                    novel: widget.novel,
-                                    chapterTitle: chapterTitle,
-                                  ),
+                              const SizedBox(width: 6),
+                              Text(
+                                _status,
+                                style: textTheme.bodyMedium?.copyWith(
+                                  color: Colors.white70,
                                 ),
-                              );
-                            }
-                          },
-                    style: ElevatedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      backgroundColor: colorScheme.primary,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Action Buttons
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton.icon(
+                      onPressed: _isLoading
+                          ? null
+                          : () {
+                              if (_chapters.isNotEmpty) {
+                                // Logic to read first chapter
+                                final chapterUrl = _chapters.first['url'] ?? '';
+                                // Assume simpler logic for now to match wrapper expectations
+                                // ... (Existing logic reference will be needed ifcomplex)
+                                // Re-implementing simplified logic
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ReaderScreen(
+                                      url: _getFullUrl(
+                                        chapterUrl,
+                                      ), // Assuming ApiService helper
+                                      title: widget.novel.title,
+                                      novel: widget.novel,
+                                      chapterTitle:
+                                          _chapters.first['title'] ??
+                                          'Chapter 1',
+                                    ),
+                                  ),
+                                );
+                              } else if (!_isLoading) {
+                                // Webview fallback
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        WebViewScreen(url: widget.novelUrl),
+                                  ),
+                                );
+                              }
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: colorScheme.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 4,
+                        shadowColor: colorScheme.primary.withOpacity(0.4),
+                      ),
+                      icon: const Icon(Icons.menu_book_rounded),
+                      label: const Text(
+                        'ĐỌC NGAY',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                        ),
                       ),
                     ),
-                    icon: const Icon(Icons.book, size: 18),
-                    label: const Text('Read Now'),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      // Check if the novel is bookmarked
-                      final bookmarkService = Provider.of<BookmarkServiceV2>(
-                        context,
-                        listen: false,
-                      );
-                      final isBookmarked = bookmarkService.isBookmarked(
-                        widget.novel.id,
-                      );
+                  const SizedBox(width: 12),
 
-                      if (!isBookmarked) {
+                  // Notification/Bookmark Button
+                  Material(
+                    color: Colors.transparent,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: const BorderSide(color: Colors.white24, width: 1.5),
+                    ),
+                    child: InkWell(
+                      onTap: () async {
+                        // Existing notification logic
+                        final bookmarkService = Provider.of<BookmarkServiceV2>(
+                          context,
+                          listen: false,
+                        );
+                        if (!bookmarkService.isBookmarked(widget.novel.id)) {
+                          CustomToast.show(
+                            context,
+                            'Hãy đánh dấu truyện trước!',
+                          );
+                          return;
+                        }
+                        final newStatus = !_notificationEnabled;
+                        await _backgroundService.setNovelNotificationEnabled(
+                          widget.novel.id,
+                          newStatus,
+                        );
+                        setState(() => _notificationEnabled = newStatus);
                         CustomToast.show(
                           context,
-                          'Please bookmark this novel first to enable notifications',
+                          newStatus ? 'Đã bật thông báo' : 'Đã tắt thông báo',
                         );
-                        return;
-                      }
-
-                      // Toggle notification status
-                      final newStatus = !_notificationEnabled;
-                      await _backgroundService.setNovelNotificationEnabled(
-                        widget.novel.id,
-                        newStatus,
-                      );
-
-                      setState(() {
-                        _notificationEnabled = newStatus;
-                      });
-
-                      CustomToast.show(
-                        context,
-                        newStatus
-                            ? '🔔 Notifications enabled for ${widget.novel.title}'
-                            : '🔕 Notifications disabled for ${widget.novel.title}',
-                      );
-                    },
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      foregroundColor: _notificationEnabled
-                          ? colorScheme.primary
-                          : colorScheme.onSurface.withOpacity(0.6),
-                      side: BorderSide(
-                        color: _notificationEnabled
-                            ? colorScheme.primary
-                            : colorScheme.outline,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        child: Icon(
+                          _notificationEnabled
+                              ? Icons.notifications_active
+                              : Icons.notifications_off,
+                          color: _notificationEnabled
+                              ? colorScheme.primary
+                              : Colors.white70,
+                        ),
                       ),
                     ),
-                    icon: Icon(
-                      _notificationEnabled
-                          ? Icons.notifications_active
-                          : Icons.notifications_off,
-                      size: 18,
-                    ),
-                    label: const Text('Thông báo'),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
