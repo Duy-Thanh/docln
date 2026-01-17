@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'services/preferences_service.dart';
+import 'package:docln/core/services/preferences_service.dart';
 
 /// Debug utility to examine backup data and fix migration issues
 class DebugMigration {

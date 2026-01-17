@@ -1,31 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'screens/SplashScreen.dart';
+import 'package:docln/features/intro/ui/SplashScreen.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 // Services
-import 'services/notification_service.dart';
-import 'services/background_notification_service.dart';
-import 'services/theme_services.dart';
-import 'services/language_service.dart';
-import 'services/bookmark_service.dart';
-import 'services/bookmark_service_v2.dart';
-import 'services/history_service_v2.dart';
-import 'services/novel_database_service.dart';
-import 'services/novel_data_migration_service.dart';
-import 'services/proxy_service.dart';
-import 'services/http_client.dart';
-import 'services/dns_service.dart';
-import 'services/server_management_service.dart';
-import 'services/novel_url_migration_service.dart';
-import 'services/deep_link_service.dart'; // Deep linking for custom URL schemes
-import 'screens/HistoryScreen.dart';
+import 'package:docln/core/services/notification_service.dart';
+import 'package:docln/core/services/background_notification_service.dart';
+import 'package:docln/core/services/theme_services.dart';
+import 'package:docln/core/services/language_service.dart';
+import 'package:docln/core/services/bookmark_service.dart';
+import 'package:docln/core/services/bookmark_service_v2.dart';
+import 'package:docln/core/services/history_service_v2.dart';
+import 'package:docln/core/services/novel_database_service.dart';
+import 'package:docln/core/services/novel_data_migration_service.dart';
+import 'package:docln/core/services/proxy_service.dart';
+import 'package:docln/core/services/http_client.dart';
+import 'package:docln/core/services/dns_service.dart';
+import 'package:docln/core/services/server_management_service.dart';
+import 'package:docln/core/services/novel_url_migration_service.dart';
+import 'package:docln/core/services/deep_link_service.dart'; // Deep linking for custom URL schemes
+import 'package:docln/features/library/ui/HistoryScreen.dart';
 import 'handler/system_ui_handler.dart';
-import 'screens/HomeScreen.dart';
-import 'services/crawler_service.dart';
-import 'services/preferences_service.dart';
-import 'services/preferences_recovery_service.dart';
+import 'package:docln/features/home/ui/HomeScreen.dart';
+import 'package:docln/core/services/crawler_service.dart';
+import 'package:docln/core/services/preferences_service.dart';
+import 'package:docln/core/services/preferences_recovery_service.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
