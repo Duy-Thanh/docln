@@ -2,7 +2,7 @@
 
 Light Novel Reader (for Hako sites only) written in Flutter (for Android)
 
-Latest version is **2026.01.16**
+Latest version is **2026.01.17**
 
 Please note that this application **only works** on Hako websites. Hako websites currently have three links:
 
