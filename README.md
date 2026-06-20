@@ -1,4 +1,4 @@
-# ⚠️ THÔNG BÁO CHUYỂN NHÀ ⚠️
+# ⚠️ THÔNG BÁO CHUYỂN ĐỔI HẠ TẦNG LƯU TRỮ MÃ NGUỒN ⚠️
 
 **Dự án này đã chính thức chuyển sang GitLab.**
 Mọi bản cập nhật mới nhất, Issue, và Pull Request sẽ không được xử lý ở đây nữa. Cảm ơn mọi người đã thông cảm!
